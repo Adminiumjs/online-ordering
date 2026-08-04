@@ -1,0 +1,2160 @@
+/*
+ * View-specific rules, imported last so they win a tie with components.css.
+ *
+ * As everywhere in this app, positional properties are LOGICAL: there is no
+ * `left` or `right` in this file. The cart drawer enters from the inline end,
+ * the food tile's filename chip sits at the block-end inline-start corner and
+ * its badge at the opposite one, and money columns are `text-align: end`. That
+ * is the whole of the app's RTL support — there is no second stylesheet.
+ */
+
+/* ------------------------------------------------------------------ layout */
+
+.jk-app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.jk-main {
+  flex: 1;
+  min-height: 58vh;
+  padding-block-end: 40px;
+}
+
+/* The site's measure. Every diner screen sits inside one of these. */
+.jk-site {
+  width: 100%;
+  max-width: 1180px;
+  margin-inline: auto;
+  padding-inline: 22px;
+  padding-block: 22px 10px;
+}
+
+.jk-site--narrow {
+  max-width: 820px;
+}
+
+.jk-skip:focus {
+  position: fixed;
+  inset-block-start: 12px;
+  inset-inline-start: 12px;
+  width: auto;
+  height: auto;
+  clip-path: none;
+  padding: 9px 14px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 700;
+  z-index: 200;
+}
+
+/*
+ * `.jk-iconbtn` sets `display: grid` in components.css, which is loaded after
+ * base.css and therefore beats `.jk-narrow-only`'s `display: none` on a tie.
+ * Raising the specificity here — in the stylesheet that always wins — is what
+ * keeps the hamburger out of the desktop header.
+ */
+.jk-iconbtn.jk-narrow-only {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .jk-iconbtn.jk-narrow-only {
+    display: grid;
+  }
+}
+
+/* --------------------------------------------------------------- demo dock */
+
+.jk-dock__clock {
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.jk-dock__tick {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-inline-start: auto;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.jk-dock__tick:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.jk-dock__tick svg {
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------ site header */
+
+.jk-shead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-shead__row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-block: 11px;
+}
+
+.jk-shead__spacer {
+  flex: 1;
+}
+
+.jk-wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 2px;
+  color: var(--fg);
+}
+
+.jk-wmtile {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--accent-fg);
+  flex: none;
+}
+
+.jk-wmname {
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  white-space: nowrap;
+}
+
+.jk-mainnav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-inline-start: 10px;
+}
+
+.jk-navlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  padding: 7px 11px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg-muted);
+}
+
+.jk-navlink:hover {
+  background: var(--surface-3);
+  color: var(--fg);
+}
+
+.jk-navlink[aria-current="page"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.jk-navlink__live {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--pos);
+}
+
+.jk-cartbtn {
+  position: relative;
+}
+
+.jk-cartbadge {
+  position: absolute;
+  inset-block-start: -4px;
+  inset-inline-end: -4px;
+  min-width: 17px;
+  height: 17px;
+  border-radius: 99px;
+  padding-inline: 4px;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.jk-cartbadge--inline {
+  position: static;
+  margin-inline-start: auto;
+}
+
+/* --------------------------------------------------------------- mobile nav */
+
+.jk-mnav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px 12px;
+}
+
+.jk-mnav__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-block-end: 10px;
+}
+
+.jk-mnav__item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  border-radius: 11px;
+  padding: 12px;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--fg);
+  text-align: start;
+}
+
+.jk-mnav__item:hover {
+  background: var(--surface-3);
+}
+
+.jk-mnav__item svg {
+  color: var(--fg-subtle);
+}
+
+.jk-mnav__foot {
+  margin-block-start: auto;
+  padding: 14px 12px 4px;
+  border-block-start: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------------ footer */
+
+.jk-foot {
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+  margin-block-start: 30px;
+}
+
+.jk-footgrid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr 1fr;
+  gap: 26px;
+  padding-block: 30px 34px;
+}
+
+.jk-foot__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.jk-foot__blurb {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  max-width: 320px;
+  margin: 0;
+}
+
+.jk-foot__copy {
+  font-size: 11px;
+  color: var(--fg-subtle);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.jk-foot__col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+
+.jk-foot__col .jk-seclab {
+  margin-block-end: 7px;
+}
+
+.jk-footlink {
+  border: 0;
+  background: transparent;
+  padding: 4px 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  text-align: start;
+}
+
+.jk-footlink:hover {
+  color: var(--accent);
+}
+
+.jk-foot__fact {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.jk-foot__note {
+  font-size: 12px;
+  color: var(--fg-subtle);
+  margin-block-start: 6px;
+}
+
+/* ------------------------------------------------------- shared small bits */
+
+.jk-seclab {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-subtle);
+}
+
+.jk-mchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 7px;
+  padding: 4px 9px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
+.jk-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 99px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.jk-pill--muted {
+  background: var(--surface-3);
+  color: var(--fg-subtle);
+}
+.jk-pill--accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.jk-pill--pos {
+  background: var(--pos-soft);
+  color: var(--pos);
+}
+.jk-pill--warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.jk-pill--danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.jk-pill--info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.jk-linkbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.jk-linkbtn:hover {
+  background: var(--accent-soft);
+}
+
+.jk-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.jk-fineprint {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.jk-fielderr {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--warn);
+  margin: -6px 0 0;
+}
+
+.jk-field__hint {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-subtle);
+}
+
+.jk-wide {
+  width: 100%;
+  justify-content: center;
+  padding-block: 12px;
+}
+
+.jk-ordernum {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.jk-cardhead {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 16px;
+  border-block-end: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--fg);
+}
+
+.jk-cardhead svg {
+  color: var(--accent);
+}
+
+.jk-cardhead__title {
+  min-width: 0;
+}
+
+.jk-cardhead__meta {
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-subtle);
+}
+
+/* ------------------------------------------------------------- food tiles */
+
+.jk-foodtile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: 100%;
+  border-radius: 12px;
+  flex: none;
+}
+
+.jk-foodtile__icon {
+  position: relative;
+  z-index: 1;
+  opacity: 0.9;
+  display: inline-flex;
+}
+
+/* The seed's fictional filename, block-end + inline-START. */
+.jk-foodtile__file {
+  position: absolute;
+  inset-block-end: 7px;
+  inset-inline-start: 8px;
+  z-index: 2;
+  border-radius: 5px;
+  padding: 2px 6px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border: 1px solid var(--border);
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  max-width: calc(100% - 16px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * House layout rule 2: a floating badge sits in the corner OPPOSITE that
+ * filename chip — block-START + inline-END — so the two can never collide,
+ * in either writing direction.
+ */
+.jk-foodtile__badge {
+  position: absolute;
+  inset-block-start: -12px;
+  inset-inline-end: 14px;
+  z-index: 3;
+}
+
+/* -------------------------------------------------------------------- home */
+
+.jk-hero {
+  display: grid;
+  grid-template-columns: 1.04fr 0.96fr;
+  gap: 30px;
+  align-items: center;
+  padding-block: 34px 30px;
+}
+
+.jk-hero__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.jk-h1 {
+  margin: 0;
+  font-size: clamp(28px, 4.4vw, 42px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.jk-lede {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--fg-muted);
+  line-height: 1.65;
+  max-width: 44ch;
+}
+
+.jk-hero__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.jk-hero__tile {
+  position: relative;
+  overflow: visible;
+}
+
+/* The tile clips its own gradient; the badge must not be clipped with it. */
+.jk-hero__tile .jk-foodtile__icon {
+  opacity: 0.85;
+}
+
+.jk-nextpickup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pop, 0 10px 30px rgba(0, 0, 0, 0.12));
+  white-space: nowrap;
+}
+
+.jk-nextpickup__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: var(--pos-soft);
+  color: var(--pos);
+  flex: none;
+}
+
+.jk-nextpickup__title {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.jk-nextpickup__sub {
+  display: block;
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+  margin-block-start: 1px;
+}
+
+.jk-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr));
+  gap: 12px;
+  margin-block-start: 20px;
+}
+
+.jk-infocard {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: start;
+}
+
+.jk-infocard__tile {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-3);
+  color: var(--fg-subtle);
+  flex: none;
+}
+
+.jk-infocard__tile--pos {
+  background: var(--pos-soft);
+  color: var(--pos);
+}
+
+.jk-infocard__tile--accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.jk-infocard__foodtile {
+  width: 38px;
+  flex: none;
+}
+
+.jk-infocard__foodtile .jk-foodtile__icon {
+  color: var(--info);
+}
+
+.jk-infocard__body {
+  min-width: 0;
+}
+
+.jk-infocard__title {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.jk-infocard__sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  margin-block-start: 2px;
+}
+
+.jk-band {
+  margin-block-start: 32px;
+  scroll-margin-block-start: 80px;
+}
+
+.jk-band__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-block-end: 12px;
+}
+
+.jk-band__note {
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+  margin-block-start: 10px;
+}
+
+.jk-featrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr));
+  gap: 14px;
+}
+
+.jk-catgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: 12px;
+  margin-block-start: 12px;
+}
+
+.jk-cattile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  text-align: start;
+}
+
+.jk-cattile .jk-foodtile {
+  width: 40px;
+}
+
+.jk-cattile__name {
+  font-size: 13.5px;
+  font-weight: 800;
+}
+
+.jk-cattile__count {
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+}
+
+.jk-hourcard {
+  max-width: 560px;
+  margin-block-start: 12px;
+}
+
+.jk-hourrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-hourrow:last-child {
+  border-block-end: 0;
+}
+
+.jk-hourrow--today {
+  background: var(--accent-soft);
+}
+
+.jk-hourrow__day {
+  flex: 1;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.jk-hourrow--today .jk-hourrow__day {
+  font-weight: 800;
+}
+
+/* A time column reads as a column: aligned to the inline END, never "right". */
+.jk-hourrow__time {
+  font-size: 12px;
+  color: var(--fg-muted);
+  text-align: end;
+}
+
+.jk-mapcard {
+  max-width: 560px;
+  margin-block-start: 12px;
+  overflow: hidden;
+}
+
+.jk-mapcard__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+}
+
+.jk-mapcard__addr {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.jk-mapcard__note {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.jk-mapcard__extra {
+  font-size: 12px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+/* -------------------------------------------------------------------- menu */
+
+.jk-catbar {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 4px 18px;
+}
+
+.jk-menusec {
+  margin-block-end: 24px;
+}
+
+.jk-menusec__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-block: 6px 12px;
+}
+
+.jk-menusec__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.jk-menugrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(230px, 100%), 1fr));
+  gap: 14px;
+}
+
+.jk-menucard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.jk-menucard--sold {
+  opacity: 0.86;
+}
+
+/*
+ * The tile and the title block are one button. A card that only responds on
+ * its small "Build" chip is a card people tap three times before it works.
+ * `flex: 1` pushes the footer to the bottom so a two-line description does not
+ * knock its row's buttons out of alignment.
+ */
+.jk-menucard__hit {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: start;
+  color: inherit;
+}
+
+.jk-menucard__hit:disabled {
+  cursor: not-allowed;
+}
+
+.jk-menucard__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 13px 14px 6px;
+  width: 100%;
+}
+
+.jk-menucard__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+}
+
+.jk-menucard__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Prices align to the inline END of the row, which mirrors under RTL. */
+.jk-menucard__price {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: end;
+}
+
+.jk-menucard__plus {
+  color: var(--fg-subtle);
+  font-weight: 400;
+}
+
+.jk-menucard__desc {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  line-height: 1.5;
+  min-height: 34px;
+}
+
+.jk-menucard__foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px 13px;
+}
+
+.jk-menucard__soldnote {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg-subtle);
+}
+
+.jk-menucard__veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--surface) 42%, transparent);
+  pointer-events: none;
+}
+
+.jk-buildbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 9px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.jk-buildbtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.jk-menuskel {
+  padding-block-end: 13px;
+  overflow: hidden;
+}
+
+.jk-menuskel__tile {
+  height: 132px;
+  border-radius: 0;
+}
+
+.jk-menuskel__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 13px 14px 0;
+}
+
+.jk-menuskel__l1 {
+  height: 15px;
+  width: 70%;
+}
+.jk-menuskel__l2 {
+  height: 11px;
+  width: 92%;
+}
+.jk-menuskel__l3 {
+  height: 11px;
+  width: 45%;
+}
+
+/* -------------------------------------------------------------- item sheet */
+
+.jk-isheet {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  pointer-events: none;
+}
+
+.jk-isheet--top {
+  z-index: 150;
+}
+
+/* The card sheet stacks over the item sheet, so its scrim must too. */
+.jk-scrim--top {
+  z-index: 140;
+}
+
+.jk-ipanel {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  width: min(620px, 100%);
+  max-height: min(84vh, 760px);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-pop, 0 24px 60px rgba(0, 0, 0, 0.28));
+  overflow: hidden;
+  animation: jk-pop 0.22s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.jk-ipanel--narrow {
+  width: min(440px, 100%);
+}
+
+.jk-ipanel__head {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 16px 20px;
+  border-block-end: 1px solid var(--border);
+  flex: none;
+}
+
+.jk-ipanel__tile {
+  width: 52px;
+  flex: none;
+}
+
+.jk-ipanel__id {
+  flex: 1;
+  min-width: 0;
+}
+
+.jk-ipanel__name {
+  margin: 0;
+  font-size: 16.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.jk-ipanel__desc {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.jk-ibody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 18px 20px;
+}
+
+.jk-modgroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.jk-modgroup__head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  margin-block-end: 9px;
+}
+
+.jk-modgroup__name {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.jk-modgroup__optional {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-subtle);
+}
+
+.jk-modgroup__rule {
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+}
+
+.jk-modgroup__rule--full {
+  color: var(--warn);
+}
+
+.jk-modgroup__cap {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--warn);
+  margin: 8px 0 0;
+}
+
+.jk-optgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: 8px;
+}
+
+.jk-optrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  padding: 10px 12px;
+  text-align: start;
+  color: var(--fg);
+}
+
+.jk-optrow:hover:not(:disabled) {
+  border-color: var(--border-strong);
+}
+
+.jk-optrow[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.jk-optrow:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.jk-optmark {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--accent-fg);
+}
+
+.jk-optmark--sq {
+  border-radius: 6px;
+}
+
+.jk-optrow[aria-pressed="true"] .jk-optmark {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.jk-optrow__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.jk-optrow__delta {
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  text-align: end;
+}
+
+.jk-ifoot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+  flex: none;
+}
+
+.jk-ifoot__money {
+  flex: 1;
+  min-width: 0;
+}
+
+.jk-ifoot__reason {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warn);
+}
+
+.jk-ifoot__reason--quiet {
+  color: var(--fg-subtle);
+  font-weight: 500;
+}
+
+.jk-ifoot__total {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* ------------------------------------------------------------- cart drawer */
+
+.jk-drawer {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  z-index: 120;
+  width: min(400px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: var(--shadow-pop, -18px 0 50px rgba(0, 0, 0, 0.22));
+  animation: jk-drawer 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes jk-drawer {
+  from {
+    opacity: 0;
+    transform: translateX(calc(102% * var(--jk-dir, 1)));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.jk-drawer__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 18px;
+  border-block-end: 1px solid var(--border);
+  flex: none;
+}
+
+.jk-drawer__head svg {
+  color: var(--accent);
+}
+
+.jk-drawer__title {
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.jk-drawer__count {
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+
+.jk-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.jk-drawer__foot {
+  flex: none;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.jk-drawer__actions {
+  display: flex;
+  gap: 9px;
+  padding: 0 18px 16px;
+}
+
+/* -------------------------------------------------------------- cart lines */
+
+.jk-line {
+  display: flex;
+  gap: 12px;
+  padding: 13px 16px;
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-line:last-child {
+  border-block-end: 0;
+}
+
+.jk-line__tile {
+  width: 44px;
+  flex: none;
+}
+
+.jk-line__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.jk-line__top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.jk-line__name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jk-line__price {
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: end;
+}
+
+.jk-line__mods {
+  font-size: 11px;
+  color: var(--fg-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.jk-line__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.jk-line__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-block-start: 5px;
+  flex-wrap: wrap;
+}
+
+.jk-line__each {
+  margin-inline-start: auto;
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+  text-align: end;
+}
+
+/* ----------------------------------------------------------------- stepper */
+
+.jk-qty {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  overflow: hidden;
+  flex: none;
+}
+
+.jk-qty__btn {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 8px 11px;
+  color: var(--fg);
+}
+
+.jk-qty__btn:hover {
+  background: var(--surface-3);
+}
+
+.jk-qty--sm .jk-qty__btn {
+  padding: 6px 9px;
+}
+
+.jk-qty__n {
+  min-width: 26px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  border-inline: 1px solid var(--border);
+  padding-block: 6px;
+}
+
+/* ------------------------------------------------------------------ totals */
+
+.jk-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 18px;
+}
+
+.jk-totals__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  color: var(--fg-muted);
+}
+
+.jk-totals__row .jk-mono {
+  color: var(--fg);
+  text-align: end;
+}
+
+.jk-totals__row--total {
+  align-items: baseline;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--fg);
+  border-block-start: 1px solid var(--border);
+  padding-block-start: 9px;
+}
+
+.jk-totals__big {
+  font-size: 16px;
+}
+
+/* -------------------------------------------------------------- cart page */
+
+.jk-stack {
+  margin-block-end: 16px;
+  overflow: hidden;
+}
+
+.jk-stack__action {
+  padding: 0 16px 16px;
+}
+
+.jk-addmore {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-2);
+  border-block-start: 1px solid var(--border);
+  color: var(--fg-subtle);
+}
+
+.jk-slotwrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+}
+
+.jk-slotrow {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-block: 2px;
+}
+
+.jk-slot__soonest {
+  font-size: 10px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+
+/* --------------------------------------------------- checkout + recap rows */
+
+.jk-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(330px, 100%), 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.jk-formbody {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  padding: 16px;
+}
+
+.jk-pickupline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.jk-pickupline__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.jk-recap {
+  display: flex;
+  gap: 10px;
+  padding: 11px 16px;
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-recap__qty {
+  min-width: 26px;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+
+.jk-recap__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.jk-recap__name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.jk-recap__mods {
+  display: block;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  line-height: 1.45;
+  margin-block-start: 2px;
+}
+
+.jk-recap__note {
+  display: block;
+  font-size: 10.5px;
+  color: var(--fg-subtle);
+  margin-block-start: 2px;
+}
+
+.jk-recap__price {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: end;
+}
+
+/* ------------------------------------------------------------- card sheet */
+
+.jk-callout {
+  display: flex;
+  gap: 9px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: var(--info-soft);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.jk-callout svg {
+  color: var(--info);
+  flex: none;
+  margin-block-start: 1px;
+}
+
+.jk-lockfield {
+  position: relative;
+  display: block;
+}
+
+.jk-lockfield .jk-input {
+  padding-inline-end: 42px;
+}
+
+.jk-lockfield svg {
+  position: absolute;
+  inset-inline-end: 13px;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-subtle);
+}
+
+.jk-paygrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* ---------------------------------------------------------- confirmation */
+
+.jk-confirmwrap {
+  display: flex;
+  justify-content: center;
+  padding-block: 34px 10px;
+}
+
+.jk-confirm {
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: jk-pop 0.28s cubic-bezier(0.2, 0.7, 0.3, 1);
+  overflow: hidden;
+}
+
+.jk-confirm__check {
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  background: var(--pos-soft);
+  color: var(--pos);
+  margin-block: 32px 12px;
+}
+
+.jk-confirm__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.jk-confirm__num {
+  font-size: 13px;
+  padding: 5px 12px;
+  margin-block-start: 12px;
+}
+
+.jk-confirm__body {
+  font-size: 13px;
+  color: var(--fg-muted);
+  line-height: 1.65;
+  max-width: 380px;
+  margin: 12px 22px 22px;
+}
+
+.jk-confirm__addr {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.jk-confirm__foot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 22px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.jk-confirm__actions {
+  display: flex;
+  gap: 9px;
+}
+
+/* ------------------------------------------------------------------ track */
+
+.jk-head--row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.jk-tlpad {
+  padding: 16px 20px;
+}
+
+.jk-tl-dot--done {
+  background: var(--pos-soft);
+  color: var(--pos);
+  border-color: color-mix(in srgb, var(--pos) 35%, transparent);
+}
+
+.jk-tl-dot--now {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+  animation: jk-pulse 1.9s ease-in-out infinite;
+}
+
+.jk-tl-dot--pos {
+  background: var(--pos);
+  border-color: var(--pos);
+  color: var(--surface);
+}
+
+@keyframes jk-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 6px var(--accent-soft);
+  }
+}
+
+.jk-tl-type--todo {
+  color: var(--fg-subtle);
+  font-weight: 600;
+}
+
+.jk-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 11px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.jk-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  margin-block-end: 14px;
+}
+
+.jk-banner--pos {
+  border-color: var(--pos);
+  background: var(--pos-soft);
+}
+
+.jk-banner__icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: var(--pos-soft);
+  color: var(--pos);
+  flex: none;
+}
+
+.jk-banner--pos .jk-banner__icon {
+  background: var(--pos);
+  color: var(--surface);
+}
+
+.jk-banner__title {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.jk-banner--pos .jk-banner__title {
+  color: var(--pos);
+}
+
+.jk-banner__sub {
+  display: block;
+  font-size: 11.5px;
+  color: var(--fg-muted);
+  margin-block-start: 2px;
+}
+
+/* ---------------------------------------------------------------- kitchen */
+
+.jk-kwrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.jk-khead {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 50;
+  background: var(--surface);
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-khead__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 22px;
+}
+
+.jk-khead__title {
+  min-width: 0;
+}
+
+.jk-khead__name {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.jk-khead__sub {
+  display: block;
+  font-size: 11px;
+  color: var(--fg-subtle);
+  margin-block-start: 1px;
+}
+
+.jk-khead__clock {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.jk-khead__agg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 22px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.jk-khead__quiet {
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+}
+
+.jk-aggrow {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.jk-aggrow .jk-mchip {
+  flex: none;
+}
+
+.jk-kmain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.jk-kcols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  gap: 14px;
+  padding: 18px 22px 0;
+  align-items: start;
+}
+
+.jk-kcol {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.jk-kcol__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--fg-muted);
+  padding-block-end: 2px;
+}
+
+.jk-kcol__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.jk-kcol__n {
+  margin-inline-start: auto;
+  color: var(--fg-subtle);
+}
+
+.jk-kcol__empty {
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 14px;
+  padding: 22px 14px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.jk-kcard {
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  overflow: hidden;
+  animation: jk-pop 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+.jk-kcard__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 13px;
+  border-block-end: 1px solid var(--border);
+}
+
+.jk-kcard__who {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jk-kcard__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+}
+
+.jk-kline {
+  display: flex;
+  gap: 8px;
+}
+
+.jk-kline__qty {
+  min-width: 24px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.jk-kline__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.jk-kline__name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 800;
+}
+
+.jk-kline__mods {
+  display: block;
+  font-size: 10.5px;
+  color: var(--fg-muted);
+  line-height: 1.45;
+  margin-block-start: 1px;
+}
+
+/* A customer's own words, tinted so a cook's eye lands on them first. */
+.jk-kcard__note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 13px 11px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.jk-kcard__foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 13px;
+  border-block-start: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.jk-kcard__pickup {
+  font-size: 11px;
+  color: var(--fg-subtle);
+}
+
+.jk-kfoot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 22px 22px 30px;
+  margin-block-start: auto;
+}
+
+/* The honest line carries a leading icon, so it needs to be a flex row. */
+.jk-kfoot .jk-honest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.jk-kfoot .jk-honest svg {
+  flex: none;
+}
+
+/* -------------------------------------------------------------------- 404 */
+
+.jk-nf {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  min-height: 52vh;
+}
+
+.jk-nf__code {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: var(--fg-subtle);
+}
+
+.jk-nf__title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.jk-nf__body {
+  font-size: 12.5px;
+  color: var(--fg-muted);
+  line-height: 1.6;
+  max-width: 380px;
+  margin: 0;
+}
+
+.jk-nf__actions {
+  display: flex;
+  gap: 9px;
+  margin-block-start: 6px;
+}
+
+/* -------------------------------------------------------------- responsive */
+
+@media (max-width: 899.98px) {
+  .jk-site {
+    padding-inline: 16px;
+  }
+
+  .jk-hero {
+    grid-template-columns: 1fr;
+    padding-block: 24px 26px;
+  }
+
+  .jk-hero__tile {
+    order: -1;
+  }
+
+  .jk-footgrid {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+
+  .jk-main {
+    padding-block-end: 110px;
+  }
+
+  .jk-kcols {
+    padding-inline: 16px;
+  }
+
+  .jk-khead__row,
+  .jk-khead__agg {
+    padding-inline: 16px;
+  }
+
+  .jk-kfoot {
+    padding-inline: 16px;
+    padding-block-end: 120px;
+  }
+
+  /* Under 900px the item sheet becomes a bottom sheet. */
+  .jk-isheet {
+    place-items: end center;
+    padding: 0;
+  }
+
+  .jk-ipanel {
+    width: 100%;
+    max-height: 88vh;
+    border-radius: 20px 20px 0 0;
+    border-block-end: 0;
+    animation: jk-bottomsheet 0.24s cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  @keyframes jk-bottomsheet {
+    from {
+      opacity: 0;
+      transform: translateY(28px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .jk-drawer {
+    width: 100%;
+  }
+}
+
+@media (max-width: 519.98px) {
+  .jk-hero__actions .jk-button {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .jk-paygrid {
+    grid-template-columns: 1fr;
+  }
+
+  .jk-nextpickup {
+    padding: 8px 11px;
+  }
+
+  .jk-line__each {
+    display: none;
+  }
+
+  /*
+   * At phone widths the sheet's footer cannot hold a stepper, a blocking
+   * reason, a total and a button on one line without shrinking the button
+   * below a comfortable target. The money block takes its own row instead.
+   */
+  .jk-ifoot {
+    flex-wrap: wrap;
+  }
+
+  .jk-ifoot__money {
+    order: -1;
+    flex-basis: 100%;
+  }
+
+  .jk-ifoot .jk-button {
+    flex: 1;
+    justify-content: center;
+  }
+}
