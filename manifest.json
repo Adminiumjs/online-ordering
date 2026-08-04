@@ -1,0 +1,409 @@
+{
+  "manifestVersion": 1,
+  "key": "ordering",
+  "name": "Online Ordering",
+  "version": "1.0.0",
+  "publisher": {
+    "id": "adminium",
+    "name": "Adminium",
+    "url": "https://adminium.dev"
+  },
+  "license": "AGPL-3.0-only",
+  "description": {
+    "key": "mft.ordering.desc",
+    "fallback": "An order-ahead site with real modifier rules, pickup slots and a live kitchen queue — backed by your own database."
+  },
+  "categories": ["hospitality"],
+
+  "compatibility": {
+    "minAdminiumVersion": "1.0.0",
+    "engines": ["postgres", "mysql", "sqlite"],
+    "requires": ["realtime"]
+  },
+
+  "requiredSchema": {
+    "tables": [
+      {
+        "ref": "menu_categories",
+        "table": "menu_categories",
+        "label": { "key": "mft.ordering.tbl.menu_categories", "fallback": "Menu categories" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "slug", "type": "text", "required": true, "unique": true },
+          { "name": "name", "type": "text", "required": true, "display": "title" },
+          { "name": "position", "type": "int", "default": 0 },
+          { "name": "icon", "type": "text" },
+          { "name": "tint", "type": "text" }
+        ]
+      },
+      {
+        "ref": "menu_items",
+        "table": "menu_items",
+        "label": { "key": "mft.ordering.tbl.menu_items", "fallback": "Menu items" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "category_id", "type": "fk", "references": "menu_categories", "required": true },
+          { "name": "slug", "type": "text", "required": true, "unique": true },
+          { "name": "name", "type": "text", "required": true, "display": "title" },
+          { "name": "short_name", "type": "text" },
+          { "name": "description", "type": "text" },
+          { "name": "price", "type": "money", "required": true },
+          { "name": "image", "type": "image" },
+          { "name": "available", "type": "boolean", "default": true },
+          { "name": "featured", "type": "boolean", "default": false },
+          { "name": "tags", "type": "text" },
+          { "name": "position", "type": "int", "default": 0 }
+        ]
+      },
+      {
+        "ref": "modifier_groups",
+        "table": "modifier_groups",
+        "label": { "key": "mft.ordering.tbl.modifier_groups", "fallback": "Modifier groups" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "item_id", "type": "fk", "references": "menu_items", "required": true },
+          { "name": "slug", "type": "text", "required": true },
+          { "name": "name", "type": "text", "required": true, "display": "title" },
+          {
+            "name": "kind",
+            "type": "enum",
+            "required": true,
+            "values": ["radio", "check"],
+            "default": "radio"
+          },
+          { "name": "min", "type": "int", "default": 0 },
+          { "name": "max", "type": "int", "default": 1 },
+          { "name": "hint", "type": "text" },
+          { "name": "position", "type": "int", "default": 0 }
+        ]
+      },
+      {
+        "ref": "modifiers",
+        "table": "modifiers",
+        "label": { "key": "mft.ordering.tbl.modifiers", "fallback": "Modifiers" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "group_id", "type": "fk", "references": "modifier_groups", "required": true },
+          { "name": "slug", "type": "text", "required": true },
+          { "name": "name", "type": "text", "required": true, "display": "title" },
+          { "name": "price_delta", "type": "money", "default": 0 },
+          { "name": "available", "type": "boolean", "default": true },
+          { "name": "position", "type": "int", "default": 0 }
+        ]
+      },
+      {
+        "ref": "orders",
+        "table": "orders",
+        "label": { "key": "mft.ordering.tbl.orders", "fallback": "Orders" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "number", "type": "text", "required": true, "unique": true, "display": "title" },
+          { "name": "customer_name", "type": "text", "required": true },
+          { "name": "phone", "type": "text" },
+          {
+            "name": "status",
+            "type": "enum",
+            "required": true,
+            "values": ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"],
+            "default": "placed"
+          },
+          { "name": "pickup_at", "type": "timestamp", "required": true },
+          { "name": "total", "type": "money", "required": true },
+          { "name": "note", "type": "text" },
+          { "name": "status_at", "type": "timestamp" },
+          { "name": "placed_at", "type": "timestamp", "default": "now", "role": "created" }
+        ]
+      },
+      {
+        "ref": "order_items",
+        "table": "order_items",
+        "label": { "key": "mft.ordering.tbl.order_items", "fallback": "Order lines" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "order_id", "type": "fk", "references": "orders", "required": true },
+          { "name": "item_id", "type": "fk", "references": "menu_items", "required": true },
+          { "name": "qty", "type": "int", "required": true, "default": 1 },
+          { "name": "unit_price", "type": "money", "required": true },
+          { "name": "note", "type": "text" },
+          { "name": "position", "type": "int", "default": 0 }
+        ]
+      },
+      {
+        "ref": "order_item_modifiers",
+        "table": "order_item_modifiers",
+        "label": { "key": "mft.ordering.tbl.order_item_modifiers", "fallback": "Line modifiers" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "order_item_id", "type": "fk", "references": "order_items", "required": true },
+          { "name": "modifier_id", "type": "fk", "references": "modifiers", "required": true },
+          { "name": "price_delta", "type": "money", "default": 0 }
+        ]
+      },
+      {
+        "ref": "hours",
+        "table": "hours",
+        "label": { "key": "mft.ordering.tbl.hours", "fallback": "Opening hours" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          {
+            "name": "weekday",
+            "type": "enum",
+            "required": true,
+            "values": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+          },
+          { "name": "opens", "type": "text", "required": true },
+          { "name": "closes", "type": "text", "required": true },
+          { "name": "position", "type": "int", "default": 0 }
+        ]
+      }
+    ]
+  },
+
+  "pages": [
+    {
+      "key": "ordering-dashboard",
+      "title": { "key": "mft.ordering.page.dashboard", "fallback": "Dashboard" },
+      "path": "/",
+      "type": "page-dashboard",
+      "icon": "layout-dashboard",
+      "nav": { "group": "manifest:ordering", "order": 1 },
+      "blocks": [
+        {
+          "kind": "kpi-stat-card",
+          "key": "orders-today",
+          "label": { "key": "mft.ordering.kpi.orders_today", "fallback": "Orders today" },
+          "source": "orders",
+          "metric": "count",
+          "format": "number",
+          "filter": { "placed_at": "today" }
+        },
+        {
+          "kind": "kpi-stat-card",
+          "key": "avg-order",
+          "label": { "key": "mft.ordering.kpi.avg_order", "fallback": "Average order" },
+          "source": "orders",
+          "metric": "avg",
+          "field": "total",
+          "format": "money",
+          "filter": { "status": ["placed", "confirmed", "preparing", "ready", "picked_up"] }
+        },
+        {
+          "kind": "kpi-stat-card",
+          "key": "in-flight",
+          "label": { "key": "mft.ordering.kpi.in_flight", "fallback": "On the board" },
+          "source": "orders",
+          "metric": "count",
+          "format": "number",
+          "filter": { "status": ["placed", "confirmed", "preparing", "ready"] }
+        },
+        {
+          "kind": "chart-line-area",
+          "key": "orders-by-hour",
+          "label": { "key": "mft.ordering.chart.by_hour", "fallback": "Orders by hour" },
+          "source": "orders",
+          "chart": "line-area",
+          "x": { "field": "placed_at", "bucket": "hour" },
+          "y": { "agg": "count" },
+          "format": "number"
+        },
+        {
+          "kind": "chart-bar",
+          "key": "item-mix",
+          "label": { "key": "mft.ordering.chart.item_mix", "fallback": "Item mix" },
+          "source": "order_items",
+          "chart": "bar",
+          "x": { "field": "item_id" },
+          "y": { "agg": "sum", "field": "qty" },
+          "format": "number"
+        },
+        {
+          "kind": "mini-table",
+          "key": "recent-orders",
+          "label": { "key": "mft.ordering.block.recent", "fallback": "Latest orders" },
+          "source": "orders",
+          "limit": 8,
+          "orderBy": { "field": "placed_at", "dir": "desc" },
+          "columns": ["number", "customer_name", "status", "pickup_at", "total", "placed_at"]
+        }
+      ]
+    },
+    {
+      "key": "ordering-queue",
+      "title": { "key": "mft.ordering.page.queue", "fallback": "Queue" },
+      "path": "/queue",
+      "type": "page-queue-inbox",
+      "icon": "concierge-bell",
+      "source": "orders",
+      "nav": { "group": "manifest:ordering", "order": 2 },
+      "realtime": true,
+      "tabs": {
+        "field": "status",
+        "values": ["placed", "confirmed", "preparing", "ready", "picked_up"],
+        "default": "placed",
+        "control": "segmented-control"
+      },
+      "list": {
+        "title": "number",
+        "subtitle": "customer_name",
+        "timestamp": "placed_at",
+        "badge": "pickup_at"
+      },
+      "detail": {
+        "title": "number",
+        "fields": ["customer_name", "phone", "status", "pickup_at", "note", "total", "placed_at"],
+        "children": [
+          {
+            "key": "lines",
+            "label": { "key": "mft.ordering.tab.lines", "fallback": "Lines" },
+            "source": "order_items",
+            "foreignKey": "order_id",
+            "columns": ["qty", "item_id", "unit_price", "note"],
+            "orderBy": { "field": "position", "dir": "asc" }
+          }
+        ],
+        "actions": [
+          {
+            "key": "advance",
+            "label": "Advance",
+            "set": { "status": "next", "status_at": "now" },
+            "undo": true
+          }
+        ],
+        "undo": { "view": "toast-stack" }
+      }
+    },
+    {
+      "key": "ordering-menu",
+      "title": { "key": "mft.ordering.page.menu", "fallback": "Menu" },
+      "path": "/menu",
+      "type": "page-crud",
+      "icon": "utensils",
+      "source": "menu_items",
+      "nav": { "group": "manifest:ordering", "order": 3 },
+      "view": "card-gallery",
+      "gallery": { "title": "name", "subtitle": "description", "image": "image", "badge": "available" },
+      "columns": ["name", "category_id", "price", "tags", "available", "featured", "position"],
+      "search": ["name", "short_name", "description"],
+      "filters": ["category_id", "available", "featured"],
+      "orderBy": { "field": "position", "dir": "asc" },
+      "children": [
+        {
+          "key": "modifier-groups",
+          "label": { "key": "mft.ordering.tab.modifier_groups", "fallback": "Modifier groups" },
+          "source": "modifier_groups",
+          "foreignKey": "item_id",
+          "columns": ["position", "name", "kind", "min", "max", "hint"],
+          "orderBy": { "field": "position", "dir": "asc" }
+        },
+        {
+          "key": "modifiers",
+          "label": { "key": "mft.ordering.tab.modifiers", "fallback": "Options" },
+          "source": "modifiers",
+          "through": { "table": "modifier_groups", "foreignKey": "item_id", "localKey": "group_id" },
+          "columns": ["position", "name", "price_delta", "available"],
+          "orderBy": { "field": "position", "dir": "asc" }
+        }
+      ]
+    },
+    {
+      "key": "ordering-hours",
+      "title": { "key": "mft.ordering.page.hours", "fallback": "Hours" },
+      "path": "/hours",
+      "type": "page-crud",
+      "icon": "clock",
+      "source": "hours",
+      "nav": { "group": "manifest:ordering", "order": 4 },
+      "columns": ["position", "weekday", "opens", "closes"],
+      "orderBy": { "field": "position", "dir": "asc" }
+    }
+  ],
+
+  "roles": [
+    {
+      "key": "kitchen-staff",
+      "name": { "key": "mft.ordering.role.kitchen_staff", "fallback": "Kitchen staff" },
+      "description": {
+        "key": "mft.ordering.role.kitchen_staff.desc",
+        "fallback": "Work the queue: read orders, advance them through the statuses, and mark an item or an option sold out. Cannot edit the menu, the prices, the hours or the settings."
+      },
+      "permissions": [
+        { "resource": "orders", "actions": ["read", "update"] },
+        { "resource": "order_items", "actions": ["read"] },
+        { "resource": "order_item_modifiers", "actions": ["read"] },
+        { "resource": "menu_items", "actions": ["read", "update"], "fields": ["available"] },
+        { "resource": "modifiers", "actions": ["read", "update"], "fields": ["available"] },
+        { "resource": "menu_categories", "actions": ["read"] },
+        { "resource": "modifier_groups", "actions": ["read"] },
+        { "resource": "hours", "actions": ["read"] }
+      ]
+    }
+  ],
+
+  "settings": [
+    {
+      "key": "restaurant_name",
+      "type": "text",
+      "label": { "key": "mft.ordering.set.restaurant_name", "fallback": "Restaurant name" },
+      "default": "Juniper Kitchen",
+      "required": true
+    },
+    {
+      "key": "time_zone",
+      "type": "text",
+      "label": { "key": "mft.ordering.set.time_zone", "fallback": "Time zone" },
+      "default": "America/Los_Angeles",
+      "required": true,
+      "help": {
+        "key": "mft.ordering.set.time_zone.help",
+        "fallback": "Pickup slots and the posted hours resolve against this zone. One counter, one zone."
+      }
+    },
+    {
+      "key": "prep_minutes",
+      "type": "int",
+      "label": { "key": "mft.ordering.set.prep_minutes", "fallback": "Lead time (minutes)" },
+      "default": 20,
+      "required": true,
+      "help": {
+        "key": "mft.ordering.set.prep_minutes.help",
+        "fallback": "How far ahead the earliest pickup slot sits. A slot inside this window is never offered."
+      }
+    },
+    {
+      "key": "order_prefix",
+      "type": "text",
+      "label": { "key": "mft.ordering.set.order_prefix", "fallback": "Order number prefix" },
+      "default": "#"
+    },
+    {
+      "key": "pickup_slot_minutes",
+      "type": "int",
+      "label": { "key": "mft.ordering.set.pickup_slot_minutes", "fallback": "Pickup slot step (minutes)" },
+      "default": 15,
+      "required": true
+    }
+  ],
+
+  "capabilities": ["payments", "realtime", "email-delivery"],
+
+  "frontend": {
+    "kind": "spa",
+    "root": ".",
+    "buildCommand": "npm run build",
+    "buildOutput": "dist",
+    "entry": "index.html",
+    "routes": {
+      "menu": "/",
+      "track": "/",
+      "kitchen": "/"
+    }
+  }
+}

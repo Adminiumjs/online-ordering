@@ -132,6 +132,43 @@ min** twice and watch it reach Ready → switch to **Kitchen** and hand it over.
 | `npm run preview` | Preview a production build locally. |
 | `npm test` | Run the ordering engine suite. |
 
+## Full implementation (self-host)
+
+There are two tiers to running this restaurant.
+
+**Tier 1 — the frontend, one click.** The Vercel / DigitalOcean options above
+deploy the ordering site on its own, running on the bundled demo service. No
+database, no dashboard — a fully static preview.
+
+**Tier 2 — the whole stack, one command.**
+[`docker-compose.yml`](docker-compose.yml) stands up Postgres (seeded with the
+*same* menu, the *same* modifier rules and the *same* twelve orders), an
+auto-generated Adminium dashboard that runs that real database, and the
+ordering site:
+
+```bash
+cp .env.example .env      # then set ADMINIUM_SECRET — e.g. openssl rand -hex 32
+docker compose up
+```
+
+- **Ordering site** → http://localhost:8080
+- **Adminium dashboard** → http://localhost:4600
+
+On first boot, `ordering-db` applies [`db/schema.sql`](db/schema.sql) then
+[`db/seed.sql`](db/seed.sql), and Adminium imports the restaurant database as
+its first source connection, introspects the schema, and generates the back
+office. Finish the ~1-minute first-run wizard at `:4600` — it's pre-pointed at
+the seeded `juniper` database. The install spec Adminium reads to configure
+itself is [`manifest.json`](manifest.json).
+
+The seed is the same Tuesday the app is pinned to. Open the dashboard and
+you'll find Tamar B.'s **#2117** still sitting in Placed, Marisol G.'s two grain
+bowls at $37.26, and the White Pie marked unavailable — the service you just
+worked through on :8080, as records.
+
+The manifest scaffolds 8 tables, 4 dashboard pages, 1 access preset
+(`kitchen-staff`) and 5 settings into your connected database.
+
 ## The split: the storefront and the back office
 
 The app you deploy is **the storefront and the queue**. The dashboard Adminium
