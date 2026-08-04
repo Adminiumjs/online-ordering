@@ -163,6 +163,17 @@
           { "name": "closes", "type": "text", "required": true },
           { "name": "position", "type": "int", "default": 0 }
         ]
+      },
+      {
+        "ref": "delivery_zones",
+        "table": "delivery_zones",
+        "label": { "key": "mft.ordering.tbl.delivery_zones", "fallback": "Delivery zones" },
+        "primaryKey": ["id"],
+        "columns": [
+          { "name": "id", "type": "int", "role": "pk" },
+          { "name": "name", "type": "text", "required": true, "unique": true, "display": "title" },
+          { "name": "active", "type": "bool", "required": true, "default": false }
+        ]
       }
     ]
   },

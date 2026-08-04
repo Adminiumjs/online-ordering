@@ -21,6 +21,7 @@
 --     posted opening time is "HH:MM" text, because posted hours are a sign in a
 --     window, not a moment.
 
+DROP TABLE IF EXISTS delivery_zones CASCADE;
 DROP TABLE IF EXISTS hours CASCADE;
 DROP TABLE IF EXISTS order_item_modifiers CASCADE;
 DROP TABLE IF EXISTS order_items CASCADE;
@@ -183,6 +184,23 @@ CREATE TABLE hours (
   position integer NOT NULL DEFAULT 0
 );
 
+-- The zones a future delivery mode would serve.
+--
+-- Nothing in the ordering site reads this table, and nothing should: v1 is
+-- PICKUP ONLY, and the word does not appear anywhere a diner can see it. The
+-- table is here because the generated dashboard is a different surface from
+-- the storefront — it is where an operator would draw the map before any of it
+-- is switched on, and a schema that omits it forces a migration on the day
+-- that happens. Every seeded row is `active = false` for the same reason: the
+-- shape is real, the service is not running.
+--
+-- 21 §7 and §11.4 both put this table in the contract deliberately.
+CREATE TABLE delivery_zones (
+  id     serial  PRIMARY KEY,
+  name   text    NOT NULL UNIQUE,
+  active boolean NOT NULL DEFAULT false
+);
+
 -- Indexes the dashboard's pages lean on --------------------------------------
 
 CREATE INDEX ON menu_categories (position);
@@ -197,6 +215,8 @@ CREATE INDEX ON orders (status, placed_at)
 -- The day's takings and the orders-by-hour chart.
 CREATE INDEX ON orders (placed_at DESC);
 CREATE INDEX ON orders (pickup_at);
+-- Only ever queried for the handful that are switched on.
+CREATE INDEX ON delivery_zones (active) WHERE active;
 CREATE INDEX ON order_items (order_id, position);
 -- Item mix: which dishes actually sold.
 CREATE INDEX ON order_items (item_id);

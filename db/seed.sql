@@ -271,6 +271,14 @@ INSERT INTO order_item_modifiers (id, order_item_id, modifier_id, price_delta) V
   (36, 22, 49, 4.00),                                                                         -- 13" Classic
   (37, 23, 57, 0.50);                                                                         -- garlic aioli
 
+-- The zones a future delivery mode would serve. All three are switched OFF —
+-- Juniper Kitchen is pickup only, and these rows exist so the shape is visible
+-- in the dashboard, not because anything delivers.
+INSERT INTO delivery_zones (id, name, active) VALUES
+  (1, 'Old Mill District', false),
+  (2, 'Alder Street & the canal', false),
+  (3, 'University quarter',       false);
+
 -- Hand the sequences back. The seeded morning ends at #2117, so the next order
 -- taken through the site is #2118 — the same number the SPA's first checkout
 -- shows, which is the whole point of seeding the history rather than starting
@@ -283,5 +291,6 @@ SELECT setval(pg_get_serial_sequence('orders',               'id'), (SELECT max(
 SELECT setval(pg_get_serial_sequence('order_items',          'id'), (SELECT max(id) FROM order_items));
 SELECT setval(pg_get_serial_sequence('order_item_modifiers', 'id'), (SELECT coalesce(max(id), 1) FROM order_item_modifiers));
 SELECT setval(pg_get_serial_sequence('hours',                'id'), (SELECT max(id) FROM hours));
+SELECT setval(pg_get_serial_sequence('delivery_zones',       'id'), (SELECT max(id) FROM delivery_zones));
 
 COMMIT;

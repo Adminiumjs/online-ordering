@@ -166,7 +166,7 @@ you'll find Tamar B.'s **#2117** still sitting in Placed, Marisol G.'s two grain
 bowls at $37.26, and the White Pie marked unavailable — the service you just
 worked through on :8080, as records.
 
-The manifest scaffolds 8 tables, 4 dashboard pages, 1 access preset
+The manifest scaffolds 9 tables, 4 dashboard pages, 1 access preset
 (`kitchen-staff`) and 5 settings into your connected database.
 
 ## The split: the storefront and the back office
