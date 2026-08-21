@@ -141,10 +141,10 @@ deploy the ordering site on its own, running on the bundled demo service. No
 database, no dashboard — a fully static preview.
 
 **Tier 2 — the whole stack, one command.**
-[`docker-compose.yml`](docker-compose.yml) stands up Postgres (seeded with the
-*same* menu, the *same* modifier rules and the *same* twelve orders), an
-auto-generated Adminium dashboard that runs that real database, and the
-ordering site:
+[`docker-compose.yml`](docker-compose.yml) stands up Postgres (seeded by
+default with the *same* menu, the *same* modifier rules and the *same* twelve
+orders), an auto-generated Adminium dashboard that runs that real database, and
+the ordering site:
 
 ```bash
 cp .env.example .env      # then set ADMINIUM_SECRET — e.g. openssl rand -hex 32
@@ -154,12 +154,14 @@ docker compose up
 - **Ordering site** → http://localhost:8080
 - **Adminium dashboard** → http://localhost:4600
 
-On first boot, `ordering-db` applies [`db/schema.sql`](db/schema.sql) then
-[`db/seed.sql`](db/seed.sql), and Adminium imports the restaurant database as
-its first source connection, introspects the schema, and generates the back
-office. Finish the ~1-minute first-run wizard at `:4600` — it's pre-pointed at
-the seeded `juniper` database. The install spec Adminium reads to configure
-itself is [`manifest.json`](manifest.json).
+On first boot, `ordering-db` applies [`db/schema.sql`](db/schema.sql), installs
+the demo bookkeeping, and then runs a hook that loads
+[`db/seed.sql`](db/seed.sql) — see **Demo data** below for opting out of that
+last step. Adminium imports the restaurant database as its first source
+connection, introspects the schema, and generates the back office. Finish the
+~1-minute first-run wizard at `:4600` — it's pre-pointed at the `juniper`
+database. The install spec Adminium reads to configure itself is
+[`manifest.json`](manifest.json).
 
 The seed is the same Tuesday the app is pinned to. Open the dashboard and
 you'll find Tamar B.'s **#2117** still sitting in Placed, Marisol G.'s two grain
@@ -168,6 +170,35 @@ worked through on :8080, as records.
 
 The manifest scaffolds 9 tables, 4 dashboard pages, 1 access preset
 (`kitchen-staff`) and 5 settings into your connected database.
+
+### Demo data
+
+Juniper Kitchen arrives already trading: the stack comes up seeded, exactly as
+it always has. If you would rather start with your own menu — the same schema,
+no rows — set `DEMO_DATA=0` in `.env` before the first `docker compose up`.
+
+Neither choice is permanent. The demo service can be loaded and taken back out
+whenever you like:
+
+| Command | What it does |
+| --- | --- |
+| `npm run demo:status` | What is loaded right now, table by table |
+| `npm run demo:import` | Load `db/seed.sql` |
+| `npm run demo:wipe` | Remove the demo rows — the schema and your own rows stay |
+| `npm run demo:reset` | Wipe, then import a fresh copy |
+
+`wipe` and `reset` ask before they do anything. Pass `--yes` to skip the
+question (`npm run demo:wipe -- --yes`), which is also what a script needs:
+with no terminal to ask, the command stops instead of guessing.
+
+A wipe removes only the rows the seed put there, and it will not delete a demo
+row your own data depends on — that one is left where it is and reported under
+`kept`. `ON DELETE CASCADE` still applies, though: `db/schema.sql` hangs
+`order_items` off `orders` that way, so a line you added to a demo order goes
+when the order does, and rows removed like that are counted separately as
+`cascaded`. [`db/README.md`](db/README.md) covers the rest: how the wipe knows
+which rows are which, what it does to id sequences, and how to point these
+commands at a Postgres somewhere else with `DATABASE_URL`.
 
 ## The split: the storefront and the back office
 
@@ -225,6 +256,7 @@ src/
   styles/      tokens.css (canonical design tokens + food tints), base.css,
                components.css, screens.css
 public/fonts/  self-hosted Manrope + JetBrains Mono (woff2)
+db/            schema.sql, seed.sql and the demo-data toolkit (see db/README.md)
 ```
 
 ## License
