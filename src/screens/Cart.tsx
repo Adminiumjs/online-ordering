@@ -8,7 +8,7 @@
 
 import { ArrowRight, Clock, Plus, ShoppingBag, Utensils } from "lucide-react";
 
-import { SLOT_STEP, TAX_RATE } from "../data/demo.ts";
+import { SLOT_STEP, TAX_RATE } from "../state/store.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { clock } from "../lib/format.ts";
 import { cartTotals } from "../lib/order.ts";

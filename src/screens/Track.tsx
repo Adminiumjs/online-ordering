@@ -13,7 +13,7 @@
 
 import { BellRing, CheckCheck, ChefHat, Circle, Check, Inbox, ReceiptText, Sparkles, Timer, Utensils } from "lucide-react";
 
-import { TAX_RATE } from "../data/demo.ts";
+import { TAX_RATE } from "../state/store.ts";
 import type { OrderStatus } from "../data/types.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { clock } from "../lib/format.ts";

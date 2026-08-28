@@ -18,14 +18,7 @@ import { create } from "zustand";
 
 import {
   CLOCK_STEP,
-  CLOSE_AT,
-  FIRST_LIVE_NUMBER,
-  FIRST_SLOT,
-  OPEN_AT,
-  PINNED_NOW,
   SLOT_STEP,
-  TAX_RATE,
-  itemById,
 } from "../data/demo.ts";
 import { source, type DayHours, type Venue } from "../data/source.ts";
 import type {
@@ -98,6 +91,8 @@ interface State {
 
   /* --- chrome --- */
   theme: Theme;
+  /** Theme pushed by the Adminium host frame; never persisted (29 D8). */
+  setHostTheme: (theme: Theme) => void;
   navOpen: boolean;
   dockOpen: boolean;
   /** True while any overlay owns the bottom corner, so the dock steps aside. */
@@ -175,6 +170,42 @@ interface State {
 
 let toastSeq = 0;
 
+/*
+ * THE VENUE'S OWN NUMBERS, READ ONCE THROUGH THE SEAM.
+ *
+ * Every one of these used to be imported straight from `data/demo.ts` — here
+ * and, for the first four, in five screens as well. A connected build kept the
+ * seed's tax rate, the seed's opening hours and the seed's next order number
+ * while every row around them came from the tenant's database, and nothing
+ * about that looks wrong on screen.
+ *
+ * Read at module scope, like the rest of the seeded state, which is why
+ * `main.tsx` imports `App` dynamically — see the seam's own tripwire.
+ */
+const HOURS = source.weekHours();
+const TODAY_HOURS = HOURS.find((d) => d.today === true) ?? HOURS[0];
+/** The venue's own opening and closing, today. */
+const OPEN_AT = TODAY_HOURS?.open ?? 0;
+const CLOSE_AT = TODAY_HOURS?.close ?? 0;
+const TAX_RATE = source.taxRate();
+const FIRST_SLOT = source.firstSlot();
+const FIRST_LIVE_NUMBER = source.nextNumber();
+const START_NOW = source.now();
+
+/**
+ * An item by id, from the MENU THE STORE IS HOLDING.
+ *
+ * This replaced `demo.ts`'s own lookup, which searches the seeded array — and
+ * that is §5.1's caveat (a) in the flesh: putting rows behind the seam does
+ * nothing for code that reaches around it. Against a connected menu every
+ * lookup returned `undefined`, so tapping a real dish opened nothing, the
+ * modifier sheet did nothing, and the cart silently refused every line. No
+ * error, no empty state, just a menu that does not respond.
+ */
+function findItem(items: readonly Item[], id: string): Item | undefined {
+  return items.find((i) => i.id === id);
+}
+
 /* ------------------------------------------------------------- derivations */
 
 /** Today's pickup slots at a given clock reading. */
@@ -239,7 +270,7 @@ export const useStore = create<State>((set, get) => ({
   dockOpen: true,
   overlayOpen: false,
 
-  now: PINNED_NOW,
+  now: START_NOW,
 
   categories: source.categories(),
   items: source.items(),
@@ -315,6 +346,17 @@ export const useStore = create<State>((set, get) => ({
     set({ theme });
   },
 
+  /*
+   * The HOST owns the theme while blended: it is the dashboard's setting, not
+   * this app's, so this does not write the app's own storage key. Persisting it
+   * would leave the app stuck in the host's theme once opened standalone.
+   */
+  setHostTheme: (theme) => {
+    if (get().theme === theme) return;
+    document.documentElement.setAttribute("data-theme", theme);
+    set({ theme });
+  },
+
   toggleTheme: () => {
     const theme: Theme = get().theme === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", theme);
@@ -360,7 +402,7 @@ export const useStore = create<State>((set, get) => ({
   },
 
   openSheet: (itemId) => {
-    const item = itemById(itemId);
+    const item = findItem(get().items, itemId);
     if (item === undefined || item.soldOut === true) return;
     set({
       sheet: { itemId, selection: emptySelection(), note: "", qty: 1, editKey: null },
@@ -395,7 +437,7 @@ export const useStore = create<State>((set, get) => ({
   sheetToggle: (groupId, optionId) => {
     const { sheet } = get();
     if (sheet === null) return;
-    const item = itemById(sheet.itemId);
+    const item = findItem(get().items, sheet.itemId);
     if (item === undefined) return;
     const group = item.mods.find((g) => g.id === groupId);
     if (group === undefined) return;
@@ -425,7 +467,7 @@ export const useStore = create<State>((set, get) => ({
   submitSheet: () => {
     const { sheet, cart } = get();
     if (sheet === null) return;
-    const item = itemById(sheet.itemId);
+    const item = findItem(get().items, sheet.itemId);
     if (item === undefined || !isComplete(item, sheet.selection)) return;
 
     const next =
@@ -449,7 +491,7 @@ export const useStore = create<State>((set, get) => ({
     const line = get().cart.find((l) => l.key === key);
     set({ cart: setQty(get().cart, key, qty) });
     if (qty <= 0 && line !== undefined) {
-      const item = itemById(line.item);
+      const item = findItem(get().items, line.item);
       get().toast(
         t("chrome.toast.removed", { item: item === undefined ? "" : label(item.name) }),
         "info",
@@ -574,7 +616,7 @@ export const useStore = create<State>((set, get) => ({
   reset: () => {
     const orders = freshOrders();
     set({
-      now: PINNED_NOW,
+      now: START_NOW,
       orders,
       history: seedHistory(orders),
       cart: [],

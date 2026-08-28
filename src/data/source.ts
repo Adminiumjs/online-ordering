@@ -7,17 +7,37 @@
  * rather than a rewrite — the store loads through this interface and the
  * screens read what it handed over.
  *
- * When `@adminium/manifest` lands (Phase B), a second implementation of
- * `DataSource` backed by `AdminiumDataSource` slots in here and `demoSource`
- * becomes the fallback used when no `adm_pub_` key is configured.
+ * That second implementation now exists: `adminiumSource.ts` reads a real
+ * Adminium instance through `@adminiumjs/public-client` and is swapped in by
+ * `main.tsx` before React mounts. `demoSource` remains the fallback whenever
+ * either build-time env var is absent — which is the case for every
+ * marketplace demo, and is why that fallback is structural rather than a catch.
  *
  * Two facts live here rather than in `demo.ts`: the address and the week's
  * hours. They are properties of the VENUE, not of the menu or the order book,
  * and in a real deployment they arrive from a settings record rather than from
  * the same table as the food.
+ *
+ * SIX MORE JOINED THEM WHEN CONNECTED MODE LANDED, and each was a real hole
+ * rather than tidying. The clock, the service date, the tax rate, the first
+ * pickup slot and the next order number were all imported STRAIGHT FROM THE
+ * SEED by the store and by five screens — so a connected kitchen would have
+ * charged the demo's tax, opened at the demo's hours, printed a date two
+ * months stale and re-issued an order number the venue had already used, with
+ * every row on the screen real.
  */
 
-import { CATEGORIES, ITEMS, SEED_ORDERS, at } from "./demo.ts";
+import {
+  CATEGORIES,
+  FIRST_LIVE_NUMBER,
+  FIRST_SLOT,
+  ITEMS,
+  PINNED_DATE,
+  PINNED_NOW,
+  SEED_ORDERS,
+  TAX_RATE,
+  at,
+} from "./demo.ts";
 import type { Category, Item, Order } from "./types.ts";
 
 export interface Venue {
@@ -65,6 +85,16 @@ export interface DataSource {
   orders(): Order[];
   venue(): Venue;
   weekHours(): DayHours[];
+  /** The clock the app runs on, as minutes since midnight in the VENUE's zone. */
+  now(): number;
+  /** The service date as `YYYY-MM-DD` — the header line, and nothing else. */
+  today(): string;
+  /** Sales tax, as a percentage. */
+  taxRate(): number;
+  /** The earliest pickup slot offered, minutes since midnight. */
+  firstSlot(): number;
+  /** The next order number to mint, so a reload does not re-issue one. */
+  nextNumber(): number;
 }
 
 /**
@@ -99,7 +129,61 @@ export const demoSource: DataSource = {
   venue: () => ({ ...VENUE }),
 
   weekHours: () => WEEK_HOURS.map((d) => ({ ...d })),
+
+  now: () => PINNED_NOW,
+  today: () => PINNED_DATE.toISOString().slice(0, 10),
+  taxRate: () => TAX_RATE,
+  firstSlot: () => FIRST_SLOT,
+  nextNumber: () => FIRST_LIVE_NUMBER,
 };
 
-/** The source the app is currently wired to. */
-export const source: DataSource = demoSource;
+let current: DataSource = demoSource;
+let read = false;
+
+/**
+ * The source the app is currently wired to.
+ *
+ * An indirection rather than a re-export, because `state/store.ts` reads it at
+ * MODULE SCOPE — a re-exported binding would be captured at import time and a
+ * later swap would change nothing.
+ */
+export const source: DataSource = {
+  categories: () => ((read = true), current.categories()),
+  items: () => ((read = true), current.items()),
+  orders: () => ((read = true), current.orders()),
+  venue: () => ((read = true), current.venue()),
+  weekHours: () => ((read = true), current.weekHours()),
+  now: () => ((read = true), current.now()),
+  today: () => ((read = true), current.today()),
+  taxRate: () => ((read = true), current.taxRate()),
+  firstSlot: () => ((read = true), current.firstSlot()),
+  nextNumber: () => ((read = true), current.nextNumber()),
+};
+
+/**
+ * Swap the backing source. Must happen before any module-scope read.
+ *
+ * The tripwire is the whole reason this is a function and not an assignment:
+ * the ordering it depends on is invisible, and getting it wrong fails SILENTLY
+ * — the app renders demo data against a configured backend and looks fine. A
+ * thrown error at boot is the only way that mistake announces itself.
+ */
+export function setDataSource(next: DataSource): void {
+  if (read) {
+    throw new Error(
+      "setDataSource() called after the store already read — import App dynamically, after the snapshot resolves.",
+    );
+  }
+  current = next;
+}
+
+/**
+ * True once a real backend is behind the seam.
+ *
+ * Read by the demo dock, which resets the service, advances the clock and
+ * fakes kitchen progress: against real orders those controls either lie or do
+ * damage, so it does not render.
+ */
+export function isConnected(): boolean {
+  return current !== demoSource;
+}

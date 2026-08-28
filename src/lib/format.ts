@@ -7,8 +7,8 @@
  * only place it turns into something a person reads.
  */
 
-import { PINNED_DATE } from "../data/demo.ts";
-import { locale, number as ambientNumber, t, tOr } from "../i18n/ambient.ts";
+import { source } from "../data/source.ts";
+import { tenantCurrency, locale, number as ambientNumber, t, tOr } from "../i18n/ambient.ts";
 import type { MessageKey } from "../i18n/messages/index.ts";
 
 /** Resolve a seed field that stores an i18n key; pass literal text through. */
@@ -16,7 +16,7 @@ export function label(key: string): string {
   return tOr(key, key);
 }
 
-export function money(cents: number, currency = "USD"): string {
+export function money(cents: number, currency = tenantCurrency()): string {
   return new Intl.NumberFormat(locale(), {
     style: "currency",
     currency,
@@ -57,7 +57,16 @@ export function clockRange(from: number, to: number): string {
   return t("chrome.range", { from: clock(from), to: clock(to) });
 }
 
-/** "Tuesday, 28 July 2026" — the header line. */
+/**
+ * "Tuesday, 28 July 2026" — the header line.
+ *
+ * The date comes through the seam rather than from the seed: a connected
+ * kitchen would otherwise have printed the demo's pinned Tuesday above a
+ * board of today's real orders. It arrives as `YYYY-MM-DD` already resolved in
+ * the VENUE's zone, which is why it is parsed and formatted as UTC — doing
+ * either in the reader's zone is how a service ends up dated yesterday for
+ * anyone west of it.
+ */
 export function today(): string {
   return new Intl.DateTimeFormat(locale(), {
     weekday: "long",
@@ -65,7 +74,7 @@ export function today(): string {
     month: "long",
     year: "numeric",
     timeZone: "UTC",
-  }).format(PINNED_DATE);
+  }).format(new Date(`${source.today()}T00:00:00Z`));
 }
 
 /** "12 min" — an elapsed chip on a kitchen card. */

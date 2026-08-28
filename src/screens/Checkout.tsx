@@ -9,7 +9,7 @@
 
 import { ArrowLeft, CheckCheck, Clock, CreditCard, Lock, MapPin, ReceiptText, Sparkles, Timer, UserRound, Utensils } from "lucide-react";
 
-import { TAX_RATE } from "../data/demo.ts";
+import { TAX_RATE } from "../state/store.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { clock, money } from "../lib/format.ts";
 import { cartTotals, isNameish, isPhoneish } from "../lib/order.ts";

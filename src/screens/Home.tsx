@@ -11,7 +11,7 @@
 import { useEffect, useRef } from "react";
 import { ArrowRight, Clock, MapPin, ShoppingBag, Timer, Utensils } from "lucide-react";
 
-import { CLOSE_AT, OPEN_AT, SLOT_STEP } from "../data/demo.ts";
+import { CLOSE_AT, OPEN_AT, SLOT_STEP } from "../state/store.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { clock, clockRange, label } from "../lib/format.ts";
 import { chosenPickup, kitchenOpen, slotsAt, useStore } from "../state/store.ts";

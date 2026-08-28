@@ -14,7 +14,7 @@
 
 import { ArrowRight, Check, CreditCard, Hand, Info, Lock, Plus, ShieldCheck, ShoppingBag, Utensils, X } from "lucide-react";
 
-import { TAX_RATE } from "../data/demo.ts";
+import { TAX_RATE } from "../state/store.ts";
 import type { ModifierGroup } from "../data/types.ts";
 import { tOr } from "../i18n/ambient.ts";
 import { useI18n } from "../i18n/index.tsx";
