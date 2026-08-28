@@ -15,6 +15,7 @@ import { useEffect } from "react";
 import type { ComponentType } from "react";
 
 import DemoDock from "../components/DemoDock.tsx";
+import { DEMO, SURFACE_SIDE } from "../surface.ts";
 import { CartDrawer, ItemSheet, PaySheet, ToastLayer } from "../components/Overlays.tsx";
 import Shell from "../components/Shell.tsx";
 import type { View } from "../data/types.ts";
@@ -30,16 +31,32 @@ import Menu from "../screens/Menu.tsx";
 import NotFound from "../screens/NotFound.tsx";
 import Track from "../screens/Track.tsx";
 
-const SCREENS: Record<View, ComponentType> = {
+const KITCHEN_SCREENS = {
+  kitchen: Kitchen,
+} satisfies Partial<Record<View, ComponentType>>;
+
+const DINER_SCREENS = {
   home: Home,
   menu: Menu,
   cart: Cart,
   checkout: Checkout,
   confirm: Confirm,
   track: Track,
-  kitchen: Kitchen,
-  notfound: NotFound,
-};
+} satisfies Partial<Record<View, ComponentType>>;
+
+/*
+ * A surface build ships ONE side's screens. `SURFACE_SIDE` folds to a literal,
+ * so the branch not taken is eliminated and every screen only it referenced
+ * goes with it — which is what stops the PUBLIC bundle from carrying the kitchen display.
+ *
+ * `notfound` is in every build: an unknown view has to land somewhere.
+ */
+const SCREENS: Partial<Record<View, ComponentType>> =
+  SURFACE_SIDE === "staff"
+    ? { ...KITCHEN_SCREENS, notfound: NotFound }
+    : SURFACE_SIDE === "customer"
+      ? { ...DINER_SCREENS, notfound: NotFound }
+      : { ...KITCHEN_SCREENS, ...DINER_SCREENS, notfound: NotFound };
 
 function CurrentScreen() {
   const view = useStore((s) => s.view);
@@ -84,7 +101,11 @@ export default function App() {
       <Shell>
         <CurrentScreen />
       </Shell>
-      <DemoDock />
+      {/*
+        Build-time, not runtime. `DEMO` folds to a literal, so a hosted or
+        connected build does not CONTAIN the dock — it is not merely hidden.
+      */}
+      {DEMO && <DemoDock />}
       <CartDrawer />
       <ItemSheet />
       <PaySheet />
