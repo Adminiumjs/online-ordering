@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "name": "@adminiumjs/app-ordering",
+      "version": "0.1.0",
+      "integrity": "sha512-z0t0+4LTKsHRm2RNSG2Z2b5ok3VRf32XWEKyoLLdItQbokcUkKxB9jy5o0ir7io7RHfDgn5bpFMnNVhD5Sb1mw==",
+      "publishedAt": "2026-09-13T09:52:20.234Z"
+    }
+  ]
+}
