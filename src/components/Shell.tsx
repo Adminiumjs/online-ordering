@@ -11,6 +11,7 @@
  */
 
 import { isEmbedded } from "../embed.ts";
+import { DEMO } from "../surface.ts";
 import type { ReactNode } from "react";
 import {
   ChefHat,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 
 import { TAX_RATE } from "../state/store.ts";
-import { timezoneNotice } from "../i18n/ambient.ts";
+import { appName } from "../i18n/ambient.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { clock, clockRange, label } from "../lib/format.ts";
 import { allDayCounts, cartTotals, liveOrders } from "../lib/order.ts";
@@ -35,14 +36,31 @@ import { Mono, Pill, SectionLabel } from "./Primitives.tsx";
 
 /* ------------------------------------------------------------------- brand */
 
-function Wordmark({ onClick, label: text }: { onClick?: () => void; label?: string }) {
+/**
+ * What this app is CALLED on screen.
+ *
+ * The operator's name from Adminium when they set one, else the name this
+ * build ships with. One helper rather than a `??` at each render site: a
+ * sidebar, a wordmark and a dialog label that disagree about the name of the
+ * app is a worse bug than any of them being wrong alone.
+ *
+ * Not localized, deliberately — an operator types one business name and it is
+ * not Adminium's to translate. `chrome.brand` still is, for the apps that keep
+ * the shipped one.
+ */
+function useBrand(): string {
   const { t } = useI18n();
+  return appName() ?? t("chrome.brand");
+}
+
+function Wordmark({ onClick, label: text }: { onClick?: () => void; label?: string }) {
+  const brand = useBrand();
   const inner = (
     <>
       <span className="jk-wmtile" aria-hidden="true">
         <Utensils size={17} />
       </span>
-      <span className="jk-wmname">{t("chrome.brand")}</span>
+      <span className="jk-wmname">{brand}</span>
     </>
   );
   if (onClick === undefined) return <span className="jk-wordmark">{inner}</span>;
@@ -288,8 +306,14 @@ function DinerFooter() {
         <div className="jk-foot__brand">
           <Wordmark />
           <p className="jk-foot__blurb">{t("chrome.footer.blurb")}</p>
-          <p className="jk-foot__copy">{t("chrome.footer.copy")}</p>
-          <span className="jk-mchip jk-mono">{t("chrome.footer.chip")}</span>
+          {/* Demo-only. The blurb above and the links beside it are the
+              restaurant's real footer and stay in every build. */}
+          {DEMO && (
+            <>
+              <p className="jk-foot__copy">{t("chrome.footer.copy")}</p>
+              <span className="jk-mchip jk-mono">{t("chrome.footer.chip")}</span>
+            </>
+          )}
         </div>
 
         <div className="jk-foot__col">
@@ -341,32 +365,20 @@ function DinerShell({ children }: { children: ReactNode }) {
 
 /* ---------------------------------------------------------- kitchen header */
 
-/**
- * The one VISIBLE trace of a zone nobody confirmed (data/sessionSource.ts).
+/*
+ * THE ZONE CHIP IS GONE, and the warning it carried now lives in Adminium.
  *
- * Two states, one chip. `fallback` — no zone on the connection at all, so every
- * date renders in UTC. `host` — a real zone, but the one Adminium took from the
- * machine it runs on, which is plausible and unverified and therefore the more
- * dangerous of the two: UTC announces itself, a wrong city does not.
+ * It rendered "Dates shown in UTC" — or a city nobody confirmed — permanently,
+ * in the header of every screen, for everyone. But an unset timezone is the
+ * OPERATOR's to fix, on the connection, in Adminium; staff and customers
+ * reading this app can do nothing about it and were shown it on every page
+ * anyway. Studio's Connections card now names the zone dates actually render
+ * in whenever a connection has none, which is both where the fix is and the
+ * only audience that can apply it.
  *
- * A chip and not a banner because the state is degraded, not broken; the fix
- * lives in the tooltip. Renders nothing for an operator-set zone, which is what
- * nearly every boot should be.
+ * `timezoneNotice()` stays in `i18n/ambient.ts`: the claim is still worth
+ * carrying and still logged at boot. Nothing renders it.
  */
-function ZoneNotice() {
-  const { t } = useI18n();
-  const notice = timezoneNotice();
-  if (notice === null) return null;
-  return notice.source === "fallback" ? (
-    <span className="jk-chip" title={t("chrome.utc.why")}>
-      {t("chrome.utc.notice")}
-    </span>
-  ) : (
-    <span className="jk-chip" title={t("chrome.zone.why", { zone: notice.zone })}>
-      {t("chrome.zone.notice", { zone: notice.zone })}
-    </span>
-  );
-}
 
 /**
  * The Kitchen's sticky header, including the all-day aggregate strip.
@@ -400,7 +412,6 @@ function KitchenHeader() {
           </span>
         </span>
         <span className="jk-shead__spacer" />
-        <ZoneNotice />
         <Pill tone="accent">{t("kitchen.onBoard", { count: live }, live)}</Pill>
         <span className="jk-wide-only">
           <Pill tone="pos">{t("kitchen.pickedUp", { count: done }, done)}</Pill>

@@ -17,11 +17,11 @@ import "./styles/screens.css";
 
 import { I18nProvider } from "./i18n/index.tsx";
 import { setDataSource } from "./data/source.ts";
-import { clientFromEnv, loadSnapshot, snapshotFailure, snapshotSource } from "./data/adminiumSource.ts";
+import { clientFromConfig, loadSnapshot, snapshotFailure, snapshotSource } from "./data/adminiumSource.ts";
 import { createSessionTransport } from "./data/sessionSource.ts";
 import { TABLE_OF_REF } from "./data/tableOfRef.ts";
 import { resolveStaffConnectionId } from "./staffConnection.ts";
-import { setTenantCurrency, setTimezoneClaim } from "./i18n/ambient.ts";
+import { appName, setTenantCurrency, setTimezoneClaim } from "./i18n/ambient.ts";
 import { DEMO, HOSTED, SURFACE_SIDE } from "./surface.ts";
 
 const container = document.getElementById("root");
@@ -150,7 +150,10 @@ async function boot(): Promise<void> {
             tableOfRef: TABLE_OF_REF,
             connectionId: boundConnection ?? undefined,
           }).port
-        : clientFromEnv();
+        : // Baked vars first, then — hosted customer — the SERVED config
+          // (surface-config.json, 29 D10): the key an operator bound in Studio,
+          // fetched at boot, so rotation is Studio + reload with no rebuild.
+          await clientFromConfig();
     const snap = client === null ? null : await loadSnapshot(client);
     if (snap === null) {
       // `client === null` is the no-backend path: nothing was ever attempted,
@@ -162,8 +165,9 @@ async function boot(): Promise<void> {
         // sentence over a specific one is how an operator ends up checking a
         // key that does not exist in a build that never had one.
         reason?.message ??
-          "This build has no backend configured. Set VITE_ADMINIUM_API_BASE_URL " +
-            "and VITE_ADMINIUM_PUBLISHABLE_KEY at build time.",
+          "This build has no backend configured. A hosted customer surface needs " +
+            "a key bound to it in Studio (or VITE_ADMINIUM_PUBLISHABLE_KEY baked at " +
+            "build time); a standalone build needs that and VITE_ADMINIUM_API_BASE_URL.",
         client === null ? "NO_BACKEND" : codeOf(reason),
       );
       return;
@@ -239,6 +243,21 @@ async function boot(): Promise<void> {
 
     useStore.subscribe(sync.reflect);
   }
+
+  /*
+   * THE BROWSER TAB carries the operator's name too.
+   *
+   * Everything on screen resolves through `useBrand()`, but the tab is not on
+   * screen — it is the static `<title>` in index.html, which is the name this
+   * app was BUILT with. Rename the app in Adminium and every heading changes
+   * while the tab still says "Client Portal", which is the same half-applied
+   * rename this whole change exists to remove.
+   *
+   * Only when an override is set: with none, index.html's own title is already
+   * the right answer and rewriting it with the same string is noise.
+   */
+  const named = appName();
+  if (named !== null) document.title = named;
 
   createRoot(container as HTMLElement).render(
     <StrictMode>

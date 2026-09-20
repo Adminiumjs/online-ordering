@@ -70,6 +70,7 @@ import type {
   OrderStatus,
   Selection,
 } from "./types.ts";
+import { resolveSurfaceConfig } from "../publicConfig.ts";
 import type { SnapshotPort } from "./snapshotPort.ts";
 import type { DataSource, DayHours, Venue } from "./source.ts";
 
@@ -237,6 +238,21 @@ export interface Snapshot {
  * treats a missing or empty value as "this build has no server", and a second
  * copy of that rule is a second place for it to drift.
  */
+/**
+ * The customer client, from the SERVED config (29 D10).
+ *
+ * Baked vars still win — see `resolveSurfaceConfig` — so a standalone build
+ * pointed at an Adminium elsewhere is untouched. What this adds is the hosted
+ * case: a key an operator bound in Studio, fetched at boot, so rotating it is
+ * Studio + reload instead of a rebuild. It is also how this surface learns the
+ * name the operator gave the app.
+ */
+export async function clientFromConfig(): Promise<PublicClient | null> {
+  const config = await resolveSurfaceConfig();
+  if (config === null) return null;
+  return createPublicClient({ baseUrl: config.baseUrl, publishableKey: config.publishableKey });
+}
+
 export function clientFromEnv(): PublicClient | null {
   return createPublicClient({
     baseUrl: import.meta.env.VITE_ADMINIUM_API_BASE_URL,
