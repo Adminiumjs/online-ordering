@@ -391,6 +391,9 @@
         "group": "manifest:ordering",
         "icon": "concierge-bell",
         "order": 2
+      },
+      "bindings": {
+        "rows": "orders"
       }
     },
     {
@@ -404,6 +407,9 @@
         "group": "manifest:ordering",
         "icon": "utensils",
         "order": 3
+      },
+      "bindings": {
+        "rows": "menu_items"
       }
     },
     {
@@ -417,6 +423,9 @@
         "group": "manifest:ordering",
         "icon": "clock",
         "order": 4
+      },
+      "bindings": {
+        "rows": "hours"
       }
     }
   ],
