@@ -1,5 +1,5 @@
 /**
- * `resolveSurfaceConfig` (29-app-surfaces.md D10, 29-T16) — the resolution
+ * `resolveSurfaceConfig` — the resolution
  * order is the contract: baked wins outright; only a hosted CUSTOMER build
  * fetches; every malformed answer degrades to null (the app's hard-stop),
  * never to a thrown boot.
@@ -34,11 +34,11 @@ describe("resolveSurfaceConfig", () => {
     const config = await resolveSurfaceConfig({
       baked: {},
       hostedCustomer: true,
-      base: "/apps/ordering/customer/",
+      base: "/apps/clients/customer/",
       origin: "https://shop.example.com",
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
-    expect(fetchImpl).toHaveBeenCalledWith("/apps/ordering/customer/surface-config.json", {
+    expect(fetchImpl).toHaveBeenCalledWith("/apps/clients/customer/surface-config.json", {
       cache: "no-store",
     });
     // The served "" baseUrl means THIS origin, normalized here once.
@@ -48,6 +48,20 @@ describe("resolveSurfaceConfig", () => {
     });
   });
 
+  it("carries the tables' real names when Adminium sends them, and nothing that is not a name", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonRes(200, { ...CONFIG, tables: { reservations: "pos_reservations", settings: "pos_settings", bad: 7, empty: "" } }));
+    const config = await resolveSurfaceConfig({
+      baked: {},
+      hostedCustomer: true,
+      base: "/apps/pos/customer/",
+      origin: "https://book.example.com",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    });
+    expect(config?.tables).toEqual({ reservations: "pos_reservations", settings: "pos_settings" });
+  });
+
   it("a served absolute baseUrl passes through untouched", async () => {
     const fetchImpl = vi
       .fn()
@@ -55,7 +69,7 @@ describe("resolveSurfaceConfig", () => {
     const config = await resolveSurfaceConfig({
       baked: {},
       hostedCustomer: true,
-      base: "/apps/ordering/customer/",
+      base: "/apps/clients/customer/",
       origin: "https://shop.example.com",
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
@@ -92,7 +106,7 @@ describe("resolveSurfaceConfig", () => {
       await resolveSurfaceConfig({
         baked: {},
         hostedCustomer: true,
-        base: "/apps/ordering/customer/",
+        base: "/apps/clients/customer/",
         origin: "https://shop.example.com",
         fetchImpl: fetchImpl as unknown as typeof fetch,
       }),
