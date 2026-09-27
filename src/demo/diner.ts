@@ -69,6 +69,8 @@ export class DemoDiner implements DinerPort {
   private readonly keys = new Map<string, Id>();
   /** A fault the demo card arms for the next placing (the network drops, the slot fills, a price moves). */
   fault: "offline" | null = null;
+  /** Something the demo card makes happen just before the next placing lands (another diner takes the time, a price moves). */
+  beforePlace: ((body: OrderBody) => void) | null = null;
 
   readonly engine: Engine;
   readonly latency: Latency;
@@ -200,6 +202,9 @@ export class DemoDiner implements DinerPort {
       this.fault = null;
       throw new ApiError(0, "PUBLIC_NETWORK_UNAVAILABLE", "could not reach the kitchen");
     }
+    const first = this.beforePlace;
+    this.beforePlace = null;
+    first?.(body);
     // A retry of an order already made answers that order, whatever it sends now — without its link.
     const replayed = this.keys.get(clientKey);
     if (replayed !== undefined) return { ...this.reply(replayed), replayed: true };

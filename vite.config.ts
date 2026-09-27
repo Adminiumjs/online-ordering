@@ -1,4 +1,6 @@
 import { surfaceJsonPlugin } from "./surface-emit.ts";
+import { demoJsonPlugin } from "./demo-emit.ts";
+import { CARD_MESSAGES, DEMO_CARD } from "./src/demo/card.ts";
 import { APP_KEY, APP_LABEL_KEY, SURFACE_NAV } from "./src/surface-nav.ts";
 import { MESSAGES } from "./src/i18n/messages/index.ts";
 
@@ -86,6 +88,12 @@ export default defineConfig({
       nav: SURFACE_NAV,
       messages: MESSAGES,
     }),
+    /*
+     * `demo.json` beside the demo build's `index.html`, for the website's demo
+     * card: this app's screens, shortcuts, people, clock and add-ons, in the
+     * card's eight languages. Only a `/demo/` build writes it.
+     */
+    demoJsonPlugin({ ...DEMO_CARD, messages: CARD_MESSAGES }),
   ],
   build: {
     rollupOptions: {

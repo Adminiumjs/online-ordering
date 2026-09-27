@@ -331,8 +331,8 @@ export default function KitchenApp() {
               {t("kitchen.tapSound")}
             </button>
           )}
-          <main id="jn-kpanel" role="tabpanel" aria-labelledby={`jn-ktab-${k.tab}`} tabIndex={-1} className="jn-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "clamp(12px,2vw,20px) clamp(14px,2.2vw,24px) clamp(80px,8vw,96px)", opacity: k.conn === "reconnecting" ? 0.55 : 1, transition: "opacity .2s ease" }}>
-            {k.load === "busy" && <div aria-busy="true" aria-label={t("shell.loading")} className="jn-skel" style={{ height: 240, borderRadius: 16 }} />}
+          <main id="jn-kpanel" role="tabpanel" aria-labelledby={`jn-ktab-${k.tab}`} tabIndex={-1} className="jn-scroll" style={{ flex: 1, minHeight: 0, overflow: "auto", padding: "clamp(12px,2vw,20px) clamp(14px,2.2vw,24px) clamp(80px,8vw,96px)", filter: k.conn === "reconnecting" ? "grayscale(.85)" : "none", transition: "filter .2s ease" }}>
+            {k.load === "busy" && <div role="status" aria-busy="true" aria-label={t("shell.loading")} className="jn-skel" style={{ height: 240, borderRadius: 16 }} />}
             {k.load === "err" && (
               <div role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: "20px 22px", borderRadius: 16, border: "1px dashed var(--border-strong)", background: "var(--surface)" }}>
                 <Icon name="wifi-off" size={18} style={{ color: "var(--fg-subtle)" }} />

@@ -160,7 +160,7 @@ function SheetBody() {
             style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 10, paddingInline: 22, height: 46, borderRadius: 12, border: "none", background: reason !== null ? "var(--surface-3)" : "var(--accent)", color: reason !== null ? "var(--fg-subtle)" : "var(--accent-fg)", fontSize: 14.5, fontWeight: 800, cursor: reason !== null ? "not-allowed" : "pointer", flex: narrow ? 1 : undefined }}
           >
             <span>{sheet.editKey === null ? t("sheet.add") : t("sheet.update")}</span>
-            <span className="jk-mono" style={{ fontSize: 14, fontWeight: 600, opacity: 0.82 }}>{fmt.money(total)}</span>
+            <span className="jk-mono" style={{ fontSize: 14, fontWeight: 600 }}>{fmt.money(total)}</span>
           </button>
         </div>
       </div>

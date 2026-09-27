@@ -217,7 +217,7 @@ function Featured({ load }: { load: "busy" | "ok" | "err" }) {
           </div>
         )}
         {load === "busy" && (
-          <div aria-busy="true" aria-label={t("home.loading")} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
+          <div role="status" aria-busy="true" aria-label={t("home.loading")} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 16 }}>
             {[1, 2, 3].map((n) => (
               <div key={n} style={{ border: "1px solid var(--border)", borderRadius: 18, background: "var(--surface)", overflow: "hidden" }}>
                 <div className="jn-skel" style={{ aspectRatio: "16/10" }} />

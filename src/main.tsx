@@ -102,11 +102,16 @@ async function boot(): Promise<void> {
    * only behind the build-time `DEMO` flag, so a hosted or connected bundle
    * does not contain it at all.
    */
+  let preset: string | null = null;
   if (DEMO) {
     const { demoSources } = await import("./data/demo.ts");
     setSources(demoSources());
     const { attachDemoBridge } = await import("./demoBridge.ts");
     attachDemoBridge();
+    // `#state=<preset>`: a frame of the design's States canvases, for looking and for screenshots.
+    const presets = await import("./demo/presets.ts");
+    preset = presets.presetFromHash();
+    if (preset !== null) await presets.prepareWorld(preset);
   } else {
     const live = await liveSources();
     if (live instanceof Error) {
@@ -123,7 +128,7 @@ async function boot(): Promise<void> {
    * The link the page was opened with: an order's own (`/o#<code>`) or an
    * emailed sign-in (`/c#<code>`). Read before anything rewrites the address.
    */
-  const code = window.location.hash.slice(1);
+  const code = preset === null ? window.location.hash.slice(1) : "";
   const last = window.location.pathname.replace(/\/+$/, "").split("/").pop();
   const link: BootLink | null = code === "" ? null : last === "o" ? { kind: "track", token: code } : last === "c" ? { kind: "signin", token: code } : null;
   if (link?.kind === "track") goView("track");
@@ -169,6 +174,11 @@ async function boot(): Promise<void> {
       </I18nProvider>
     </StrictMode>,
   );
+
+  if (DEMO && preset !== null) {
+    const { prepareScreen } = await import("./demo/presets.ts");
+    await prepareScreen(preset);
+  }
 }
 
 void boot();

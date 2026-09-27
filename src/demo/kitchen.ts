@@ -13,7 +13,6 @@ import { venueDay } from "../lib/venueTime.ts";
 import { Engine, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
-/** The holidays Holiday calendars offers the demo's kitchen (US, the rest of 2026). */
 type Limit = { writable: readonly string[]; writableValues?: Record<string, readonly unknown[]> };
 
 export class DemoKitchen implements KitchenPort {

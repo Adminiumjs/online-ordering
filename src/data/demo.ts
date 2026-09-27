@@ -9,7 +9,7 @@ import { DemoAdminium } from "../demo/adminium.ts";
 import { DEMO_LATENCY } from "../demo/diner.ts";
 import { DEMO_ZONE } from "../sample/juniper.ts";
 
-/** The public holidays the holiday-calendars add-on lends the kitchen's hours, in the demo. */
+/** The holidays Holiday calendars offers the demo's kitchen (US, the rest of 2026). */
 export const DEMO_HOLIDAYS = [
   { date: "2026-09-07", name: "Labor Day" },
   { date: "2026-10-12", name: "Columbus Day" },

@@ -65,7 +65,7 @@ function Loading() {
   const { t } = useI18n();
   return (
     <div className="jn-view jk-shell">
-      <div aria-busy="true" aria-label={t("shell.loading")} style={{ maxWidth: 980, marginInline: "auto", paddingBlock: "clamp(24px,4vw,44px)", display: "flex", flexDirection: "column", gap: 16 }}>
+      <div role="status" aria-busy="true" aria-label={t("shell.loading")} style={{ maxWidth: 980, marginInline: "auto", paddingBlock: "clamp(24px,4vw,44px)", display: "flex", flexDirection: "column", gap: 16 }}>
         <div className="jn-skel" style={{ height: 40, width: 180, borderRadius: 10 }} />
         <div className="jn-skel" style={{ height: 260, borderRadius: 20 }} />
       </div>
