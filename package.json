@@ -15,7 +15,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "dev:hosted": "VITE_ADMINIUM_SURFACE_SIDE=staff vite",
-    "manifest": "vite-node scripts/write-manifest.ts"
+    "manifest": "vite-node scripts/write-manifest.ts",
+    "sample": "vite-node scripts/write-sample.ts && vite-node scripts/write-sample-columns.ts"
   },
   "dependencies": {
     "@adminiumjs/public-client": "^0.2.2",

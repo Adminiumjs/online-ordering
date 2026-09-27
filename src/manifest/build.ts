@@ -87,6 +87,15 @@ export function buildManifest(): Record<string, unknown> {
     publicAccess: PUBLIC_ACCESS,
     outbox: OUTBOX,
     emailTemplates: emailTemplates(KINDS),
+    // Over a menu shared with Point of Sale that already holds real dishes,
+    // the sample's menu and every order of it are left out.
+    sampleData: {
+      file: "seeds/ordering.sample.json",
+      skipWhenShared: {
+        table: "menu_items",
+        skip: ["menu_categories", "menu_items", "modifier_groups", "modifiers", "orders", "order_items", "order_item_modifiers", "messages"],
+      },
+    },
   };
 }
 
