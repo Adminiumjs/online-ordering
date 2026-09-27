@@ -1,0 +1,531 @@
+/**
+ * THE DEMO'S ADMINIUM — what the server decides on every write, in memory.
+ *
+ * The website's demo has no server, so a write in the demo goes through this
+ * instead of the APIs, and comes out as Adminium would have left it:
+ *
+ *   1. a pickup time judged by the slot limit: the opening hours of its day,
+ *      the closures, the quarter-hour grid, what the slot already holds — and,
+ *      for a diner only, the paused slots, the notice and how far ahead;
+ *   2. a dish's portions judged for the pickup's day (none left, or fewer
+ *      than asked, is sold out);
+ *   3. an order with its lines and options: each dish and option one the
+ *      diner may read, each option of the line's own dish, each group within
+ *      its least and most, no more items than an online order holds;
+ *   4. the prices copied from the menu, each line's options summed, the
+ *      subtotal, tax and total worked out — and a total other than the one
+ *      the diner was shown written nowhere;
+ *   5. the states: one listed move at a time, a repeat refused with when and
+ *      by whom it got there, a cancel only with its reason, a finished order
+ *      locked with its lines; the moves the clock makes at closing;
+ *   6. the stamps (when, and who), the running number, the order's own link;
+ *   7. the emails the producers queue.
+ *
+ * Refusals carry the server's own status, code and params (`PUBLIC_SLOT_FULL`,
+ * `PUBLIC_SOLD_OUT`, `PUBLIC_PRICE_CHANGED`, `STATE_UNCHANGED` …), so a screen
+ * says the same words it would against Adminium. The rules are the manifest's
+ * (`rules.ts`, written from it, and the sample loader's `RULES`), each held to
+ * it by a test; the few the demo plays ahead of the manifest are listed in
+ * `AHEAD` below, and a test holds that list too.
+ *
+ * DEMO BUILD ONLY — nothing in a real build imports it.
+ */
+import { RULES, workOut } from "../data/sampleRows.ts";
+import { ApiError, type DishState, type Id, type Row, type SlotCount, type SlotTime } from "../data/wire.ts";
+import { addDays, daysBetween, hhmm, instantOf, minutesOf, toMs, venueDay, venueMinutes, weekdayOf, type Day } from "../lib/venueTime.ts";
+import { MANIFEST_RULES } from "./rules.ts";
+import type { Table, World } from "./world.ts";
+
+/** Who is writing, and through which door — what the stamps and the moves read. */
+export interface Writer {
+  /** `public`: a diner's page; `staff`: a person in the kitchen; `automation`: the clock. */
+  origin: "public" | "staff" | "automation";
+  name: string | null;
+  roles: readonly string[];
+}
+
+export const CLOCK: Writer = { origin: "automation", name: "Timed move", roles: [] };
+
+/**
+ * What the demo plays ahead of the manifest: the moves and rules the release
+ * carries that the Adminium the manifest is checked against cannot read yet.
+ * Each goes into the manifest the day its Adminium reads it, and leaves here.
+ */
+export const AHEAD = {
+  /** At closing plus half an hour, an order still new, confirmed or cooking is cancelled with the reason `closed`. */
+  closingCancel: { from: ["placed", "confirmed", "preparing"], to: "cancelled", plusMinutes: 30, set: { cancel_code: "closed" } },
+  /** A kitchen's Undo: the backward moves, only from the state the screen showed and within a minute of the move. */
+  undo: {
+    moves: { confirmed: "placed", preparing: "confirmed", ready: "preparing" } as Record<string, string>,
+    /** The forward stamps each undo clears; the state it returns to keeps its own. */
+    clears: { confirmed: ["confirmed_at", "confirmed_by"], preparing: ["preparing_at"], ready: ["ready_at", "ready_by"] } as Record<string, string[]>,
+    withinMs: 60_000,
+    roles: ["kitchen", "manager"],
+  },
+  /** A manager puts back a hand-off made by mistake: ready again, unpaid. */
+  handOffBack: { from: "picked_up", to: "ready", roles: ["manager"], clears: ["picked_up_at", "picked_up_by", "paid_method"] },
+  /** The ready and receipt emails wait this long, and are dropped when the order leaves the state. */
+  holdMs: { "order-ready": 20_000, "order-receipt": 20_000 } as Record<string, number>,
+  /** The two availability entries of the order page. */
+  availability: ["orders", "order_items"],
+} as const;
+
+const COUNTED = ["placed", "confirmed", "preparing", "ready", "picked_up"];
+const iso = (ms: number) => new Date(ms).toISOString();
+const empty = (value: unknown) => value === null || value === undefined || (typeof value === "string" && value.trim() === "");
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+type StampRule = { set: unknown; on: unknown };
+type Trigger = "create" | { column: string; values: unknown[] } | { column: string; filled: true } | { columns: string[] };
+
+export class Engine {
+  readonly world: World;
+  constructor(world: World) {
+    this.world = world;
+  }
+
+  get now(): number {
+    return this.world.now;
+  }
+
+  private setting(column: string): unknown {
+    return this.world.settings()[column];
+  }
+  private num(column: string): number {
+    return Number(this.setting(column));
+  }
+
+  today(): Day {
+    return venueDay(this.now, this.world.zone);
+  }
+
+  // ── the slot limit ─────────────────────────────────────────────────────────
+
+  /** A day's opening, from the hours and the closures. */
+  dayHours(day: Day): { open: boolean; opens: string; closes: string; closure: Row | null } {
+    const hours = this.world.all("hours").find((h) => h["weekday"] === weekdayOf(day));
+    const closure =
+      this.world.all("closures").find((c) => c["active"] === true && String(c["from_date"]) <= day && day <= String(c["to_date"] ?? c["from_date"])) ?? null;
+    return {
+      open: hours !== undefined && hours["open"] === true && closure === null,
+      opens: String(hours?.["opens"] ?? "00:00"),
+      closes: String(hours?.["closes"] ?? "00:00"),
+      closure,
+    };
+  }
+
+  /** The pickup times of a day: from opening, every slot, the last one a slot before closing. */
+  grid(day: Day): { time: string; at: number }[] {
+    const h = this.dayHours(day);
+    if (!h.open) return [];
+    const step = this.num("slot_minutes");
+    const out: { time: string; at: number }[] = [];
+    for (let m = minutesOf(h.opens); m <= minutesOf(h.closes) - step; m += step) out.push({ time: hhmm(m), at: instantOf(day, hhmm(m), this.world.zone) });
+    return out;
+  }
+
+  /** How many orders a pickup time holds (one leaving it out). */
+  taken(at: number, except?: Id): number {
+    return this.world.where("orders", (o) => o.id !== except && COUNTED.includes(String(o["status"])) && toMs(String(o["pickup_at"])) === at).length;
+  }
+
+  pauseAt(at: number): Row | undefined {
+    return this.world.all("slot_pauses").find((p) => p["active"] === true && toMs(String(p["slot_at"])) === at);
+  }
+
+  /** Whether a diner may still take a time: not past, with the notice given, inside the days ahead. */
+  private takeable(at: number, day: Day): boolean {
+    if (at < this.now) return false;
+    if (this.now + this.num("lead_minutes") * 60_000 > at) return false;
+    return daysBetween(this.today(), day) <= this.num("preorder_days");
+  }
+
+  /** `GET /public/availability/orders?date=`: each time of the day, free, full or paused. */
+  slotAnswer(day: Day): SlotTime[] {
+    const size = this.num("slot_capacity");
+    return this.grid(day).map(({ time, at }) => {
+      if (this.pauseAt(at) !== undefined) return { time, state: "paused" };
+      return { time, state: this.taken(at) + 1 <= size && this.takeable(at, day) ? "free" : "full" };
+    });
+  }
+
+  /** The kitchen's counts: each slot of a day, what it holds, and its pause. */
+  slotCounts(day: Day): SlotCount[] {
+    const size = this.num("slot_capacity");
+    return this.grid(day).map(({ time, at }) => {
+      const pause = this.pauseAt(at);
+      return { time, at: iso(at), taken: this.taken(at), size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null } };
+    });
+  }
+
+  /**
+   * A pickup time judged for a write: its day open, on the grid, not past,
+   * inside the days ahead, with room — and, for a diner, not paused and with
+   * the notice given.
+   */
+  judgeSlot(pickupAt: unknown, origin: Writer["origin"], except?: Id): void {
+    const at = toMs(String(pickupAt));
+    if (Number.isNaN(at)) throw refusedValue("pickup_at", "invalid");
+    const day = venueDay(at, this.world.zone);
+    const h = this.dayHours(day);
+    if (!h.open) throw refusedValue("pickup_at", "closed");
+    const onGrid = this.grid(day).some((slot) => slot.at === at);
+    if (!onGrid || at < this.now || daysBetween(this.today(), day) > this.num("preorder_days")) throw refusedValue("pickup_at", "out-of-range");
+    if (origin === "public") {
+      if (this.pauseAt(at) !== undefined) throw refusedValue("pickup_at", "paused");
+      if (!this.takeable(at, day)) throw refusedValue("pickup_at", "out-of-range");
+    }
+    if (this.taken(at, except) + 1 > this.num("slot_capacity")) {
+      throw new ApiError(409, origin === "public" ? "PUBLIC_SLOT_FULL" : "CAPACITY_FULL", "That time is full.", { column: "pickup_at" });
+    }
+  }
+
+  // ── a dish's portions for a day ─────────────────────────────────────────────
+
+  /** How many of a dish the orders of a day hold. */
+  ordered(dishId: Id, day: Day, exceptOrder?: Id): number {
+    let n = 0;
+    for (const order of this.world.where("orders", (o) => o.id !== exceptOrder && COUNTED.includes(String(o["status"])))) {
+      if (venueDay(String(order["pickup_at"]), this.world.zone) !== day) continue;
+      for (const line of this.world.where("order_items", (l) => l["order_id"] === order.id && l["menu_item_id"] === dishId)) n += Number(line["qty"]);
+    }
+    return n;
+  }
+
+  /** A dish's portions on a day: its limit (none when it is set for another day) and what is left. */
+  portions(dish: Row, day: Day, exceptOrder?: Id): { size: number | null; left: number | null } {
+    const size = dish["stock_today"] === null || dish["stock_today"] === undefined || dish["stock_on"] !== day ? null : Number(dish["stock_today"]);
+    return { size, left: size === null ? null : size - this.ordered(dish.id, day, exceptOrder) };
+  }
+
+  /** `GET /public/availability/order_items?date=&qty=`: each dish a diner may read, on sale or sold out. */
+  dishAnswer(day: Day, qty = 1, readable: (dish: Row) => boolean): DishState[] {
+    // A page may ask about no more than it is shown: "fewer than five left".
+    const asked = Math.max(1, Math.min(qty, 5));
+    return this.world.where("menu_items", readable).map((dish) => {
+      const { left } = this.portions(dish, day);
+      const soldout = left !== null && left < asked;
+      const shown = left !== null && left < 5 ? Math.max(0, left) : undefined;
+      return { id: String(dish.id), state: soldout ? "soldout" : "on", ...(shown === undefined || soldout ? {} : { left: shown }) };
+    });
+  }
+
+  // ── writing an order with its lines ─────────────────────────────────────────
+
+  /**
+   * An order and its lines and options, judged and worked out — written, or
+   * (with `dry`) only quoted. The order row comes back with its figures, each
+   * line with its own and its options.
+   */
+  orderTree(
+    values: Record<string, unknown>,
+    lines: { values: Record<string, unknown>; options: Record<string, unknown>[] }[],
+    writer: Writer,
+    opts: { dry: boolean; readableDish: (dish: Row) => boolean; readableOption: (option: Row) => boolean; except?: Id },
+  ): { order: Record<string, unknown>; lines: { line: Record<string, unknown>; options: Record<string, unknown>[] }[] } {
+    const pub = writer.origin === "public";
+    if (lines.length === 0) throw treeRefused({ child: "order_items", reason: "too-few" });
+    if (lines.length > 20) throw treeRefused({ child: "order_items", reason: "too-many" });
+    const at = (i: number) => ({ child: "order_items", index: i, path: ["order_items", i] });
+    const optionAt = (i: number, j: number) => ({ child: "order_item_modifiers", index: j, path: ["order_items", i, "order_item_modifiers", j] });
+
+    // Each line: a dish the writer may read, a whole quantity of 1 to 20.
+    const built = lines.map((line, i) => {
+      const dish = this.world.get("menu_items", Number(line.values["menu_item_id"]));
+      if (dish === undefined || !opts.readableDish(dish)) throw treeRefused({ ...at(i), column: "menu_item_id", reason: "not-offered" });
+      const qty = Number(line.values["qty"] ?? 1);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw treeRefused({ ...at(i), column: "qty", reason: "invalid" });
+      if (line.options.length > 20) throw treeRefused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], reason: "too-many" });
+      const seen = new Set<Id>();
+      const options = line.options.map((option, j) => {
+        const modifier = this.world.get("modifiers", Number(option["modifier_id"]));
+        if (modifier === undefined || !opts.readableOption(modifier)) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "not-offered" });
+        const group = this.world.get("modifier_groups", Number(modifier["group_id"]));
+        if (group === undefined || group["item_id"] !== dish.id) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "disagrees" });
+        if (seen.has(modifier.id)) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "duplicate" });
+        seen.add(modifier.id);
+        return { modifier, group };
+      });
+      // Every group of the dish, chosen within its least and its most.
+      for (const group of this.world.where("modifier_groups", (g) => g["item_id"] === dish.id)) {
+        const n = options.filter((o) => o.group.id === group.id).length;
+        if (n < Number(group["min"] ?? 0) || n > Number(group["max"] ?? Infinity)) {
+          throw treeRefused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], column: "modifier_id", reason: n < Number(group["min"] ?? 0) ? "too-few" : "too-many" });
+        }
+      }
+      return { dish, qty, note: line.values["note"] ?? null, options };
+    });
+
+    // No more items than an online order holds.
+    const items = built.reduce((n, line) => n + line.qty, 0);
+    if (items > this.num("max_items")) throw treeRefused({ child: "order_items", column: "qty", reason: "too-many" });
+
+    // The pickup time, then each dish's portions on its day.
+    this.judgeSlot(values["pickup_at"], writer.origin, opts.except);
+    const day = venueDay(String(values["pickup_at"]), this.world.zone);
+    const wanted = new Map<Id, number>();
+    built.forEach((line, i) => {
+      wanted.set(line.dish.id, (wanted.get(line.dish.id) ?? 0) + line.qty);
+      const { left } = this.portions(line.dish, day, opts.except);
+      if (left !== null && wanted.get(line.dish.id)! > left) {
+        throw new ApiError(409, pub ? "PUBLIC_SOLD_OUT" : "CAPACITY_FULL", "That is sold out.", { ...at(i), column: "qty" });
+      }
+    });
+
+    // The figures, as the copies, the rollups and the formulas leave them.
+    const lineRows = built.map((line, i) => {
+      const optionRows = line.options.map(({ modifier }) => ({ modifier_id: modifier.id, name: modifier["name"], price_delta: Number(modifier["price_delta"]) }));
+      const row: Record<string, unknown> = {
+        position: i + 1,
+        menu_item_id: line.dish.id,
+        qty: line.qty,
+        note: empty(line.note) ? null : line.note,
+        name: line.dish["name"],
+        unit_price: Number(line.dish["price"]),
+        options_total: round2(optionRows.reduce((sum, o) => sum + o.price_delta, 0)),
+      };
+      settleFormulas("order_items", row);
+      return { line: row, options: optionRows };
+    });
+    const order: Record<string, unknown> = {
+      ...values,
+      tax_rate: values["tax_rate"] ?? this.setting("tax_rate"),
+      item_count: items,
+      subtotal: round2(lineRows.reduce((sum, l) => sum + Number(l.line["line_total"]), 0)),
+    };
+    settleFormulas("orders", order);
+    return { order, lines: lineRows };
+  }
+
+  /** Writes a judged order and its rows; stamps, number and emails as a create leaves them. */
+  writeOrder(tree: ReturnType<Engine["orderTree"]>, writer: Writer, extra: Record<string, unknown> = {}): { order: Row; lines: (Row & { options: Row[] })[] } {
+    const values: Record<string, unknown> = {
+      status: "placed",
+      channel: "online",
+      link_stopped: false,
+      ...tree.order,
+      ...extra,
+      number_seq: this.world.nextNumber("orders", "number_seq"),
+    };
+    values["number"] = String(values["number_seq"]);
+    Object.assign(values, this.stampsFor("orders", null, values, writer));
+    const order = this.world.insert("orders", values);
+    const lines = tree.lines.map(({ line, options }) => {
+      const written = this.world.insert("order_items", { ...line, order_id: order.id });
+      const optionRows = options.map((o) => this.world.insert("order_item_modifiers", { ...o, order_item_id: written.id }));
+      return Object.assign(written, { options: optionRows });
+    });
+    this.produce("orders", null, order);
+    return { order, lines };
+  }
+
+  // ── the states of an order ──────────────────────────────────────────────────
+
+  /**
+   * A change of an order: a move by its listed moves (and the few the demo
+   * plays ahead), strict — a move to the state it holds is refused, naming
+   * when and by whom it got there — and nothing but its exceptions once it
+   * is finished.
+   */
+  updateOrder(id: Id, values: Record<string, unknown>, writer: Writer, opts: { from?: string } = {}): Row {
+    const stored = this.world.get("orders", id);
+    if (stored === undefined) throw new ApiError(404, "NOT_FOUND", "No such order.");
+    const before = { ...stored };
+    const states = MANIFEST_RULES.states.orders;
+    const was = String(stored["status"]);
+    const to = values["status"] === undefined ? was : String(values["status"]);
+    const lock = states.lock.when as readonly string[];
+    if (to === was && values["status"] !== undefined) {
+      // Once means once: the stamps of the move into this state say when, and who.
+      const at = stored[`${was}_at`] ?? null;
+      const by = stored[`${was}_by`] ?? null;
+      throw new ApiError(409, "STATE_UNCHANGED", `Already ${was}.`, { column: "status", state: was, at, by });
+    }
+    if (to !== was) {
+      if (opts.from !== undefined && opts.from !== was) throw new ApiError(409, "STATE_MOVE_REFUSED", `It is ${was} now.`, { from: was, to });
+      const listed = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => (typeof m === "string" ? m : (m as { to: string }).to) === to) as
+        | string
+        | { to: string; roles?: readonly string[]; requires?: { where?: readonly { column: string; isNull?: boolean }[] } }
+        | undefined;
+      const undo = AHEAD.undo.moves[was] === to;
+      const back = was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to;
+      const closing = writer.origin === "automation" && (AHEAD.closingCancel.from as readonly string[]).includes(was) && to === AHEAD.closingCancel.to;
+      if (listed === undefined && !undo && !back && !closing) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { from: was, to });
+      const roles = typeof listed === "object" ? listed.roles : undo ? AHEAD.undo.roles : back ? AHEAD.handOffBack.roles : undefined;
+      if (roles !== undefined && writer.origin !== "automation" && !writer.roles.some((r) => roles.includes(r))) {
+        throw new ApiError(409, "STATE_MOVE_REFUSED", `Not yours to move from ${was} to ${to}.`, { from: was, to, roles });
+      }
+      if (undo) {
+        // Only from the state the screen showed, and within a minute of the move it takes back.
+        const stamp = stored[`${was}_at`];
+        if (opts.from !== was || stamp === null || stamp === undefined || this.now > toMs(String(stamp)) + AHEAD.undo.withinMs) {
+          throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to undo.", { from: was, to });
+        }
+      }
+      const after = { ...stored, ...values };
+      for (const condition of typeof listed === "object" ? (listed.requires?.where ?? []) : []) {
+        if (condition.isNull === false && empty(after[condition.column])) {
+          throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { from: was, to, requires: { column: condition.column } });
+        }
+      }
+      if (to === "cancelled" && empty(after["cancel_code"])) {
+        throw new ApiError(409, "STATE_MOVE_REFUSED", "A cancel needs its reason.", { from: was, to, requires: { column: "cancel_code" } });
+      }
+    } else if (lock.includes(was)) {
+      const except = (states.lock.except ?? []) as readonly string[];
+      const locked = Object.keys(values).filter((c) => !except.includes(c));
+      if (locked.length > 0) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { columns: locked, state: was });
+    }
+    let change: Record<string, unknown> = { ...values };
+    if (AHEAD.undo.moves[was] === to) for (const column of AHEAD.undo.clears[was] ?? []) change[column] = null;
+    if (was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to) for (const column of AHEAD.handOffBack.clears) change[column] = null;
+    const backward = AHEAD.undo.moves[was] === to || (was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to);
+    // A backward move never stamps the state it returns to again.
+    if (!backward) change = { ...change, ...this.stampsFor("orders", stored, { ...stored, ...change }, writer) };
+    const row = this.world.update("orders", id, change);
+    if (to !== was) this.produce("orders", before, row);
+    return row;
+  }
+
+  /** The moves the clock makes: at closing, a ready order not collected; half an hour on, an unfinished one cancelled. */
+  runTimed(): Row[] {
+    const moved: Row[] = [];
+    for (const order of this.world.all("orders")) {
+      const status = String(order["status"]);
+      const day = venueDay(String(order["pickup_at"]), this.world.zone);
+      const h = this.dayHours(day);
+      // A closed day ends at midnight.
+      const closes = h.open || h.closure === null ? instantOf(day, h.closes, this.world.zone) : instantOf(addDays(day, 1), "00:00", this.world.zone);
+      for (const timed of MANIFEST_RULES.states.orders.timed) {
+        if (timed.from === status && this.now >= closes) moved.push(this.updateOrder(order.id, { status: timed.to }, CLOCK));
+      }
+      if ((AHEAD.closingCancel.from as readonly string[]).includes(status) && this.now >= closes + AHEAD.closingCancel.plusMinutes * 60_000) {
+        moved.push(this.updateOrder(order.id, { status: AHEAD.closingCancel.to, ...AHEAD.closingCancel.set }, CLOCK));
+      }
+    }
+    this.sendDue();
+    return moved;
+  }
+
+  // ── stamps ─────────────────────────────────────────────────────────────────
+
+  /** The stamps a write fires: on create, or when a watched column changes. */
+  stampsFor(table: Table, stored: Row | null, after: Record<string, unknown>, writer: Writer): Record<string, unknown> {
+    const rules = ((MANIFEST_RULES.stamps as Record<string, Record<string, StampRule>>)[table] ?? {}) as Record<string, StampRule>;
+    const out: Record<string, unknown> = {};
+    for (const [column, rule] of Object.entries(rules)) {
+      const triggers = (Array.isArray(rule.on) ? rule.on : [rule.on]) as Trigger[];
+      const fires = triggers.some((trigger) => {
+        if (trigger === "create") return stored === null;
+        if ("columns" in trigger) return stored === null || trigger.columns.some((c) => after[c] !== stored[c]);
+        if ("filled" in trigger) return empty(stored?.[trigger.column]) && !empty(after[trigger.column]);
+        const changed = stored === null || after[trigger.column] !== stored[trigger.column];
+        return changed && trigger.values.includes(after[trigger.column]);
+      });
+      if (fires) out[column] = this.stampValue(rule.set, after, writer);
+    }
+    return out;
+  }
+
+  private stampValue(set: unknown, row: Record<string, unknown>, writer: Writer): unknown {
+    if (set === "now") return iso(this.now);
+    if (set === "today") return this.today();
+    // A public write never stamps a person: a browser key is nobody.
+    if (set === "user-name") return writer.origin === "public" ? null : writer.name;
+    const object = set as Record<string, Record<string, unknown>>;
+    if (object["byOrigin"] !== undefined) return writer.origin === "public" ? object["byOrigin"]["public"] : writer.name;
+    if (object["moment"] !== undefined) {
+      const moment = object["moment"] as { column: string; plus?: { days?: number } };
+      const base = row[moment.column];
+      return empty(base) ? null : iso(toMs(String(base)) + (moment.plus?.days ?? 0) * 86_400_000);
+    }
+    return null;
+  }
+
+  // ── emails ────────────────────────────────────────────────────────────────
+
+  /** Queues what the producers queue for a write (a create when `before` is null). */
+  produce(table: Table, before: Row | null, after: Row): void {
+    for (const producer of MANIFEST_RULES.producers as readonly Record<string, unknown>[]) {
+      const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
+      if (source.table !== table) continue;
+      if (producer["onCreate"] !== undefined && before !== null) continue;
+      if (producer["onChange"] !== undefined && (before === null || before[source.column!] === after[source.column!] || after[source.column!] !== source.to)) continue;
+      if (source.where !== undefined && after[source.where.column] !== source.where.eq) continue;
+      const gate = producer["gate"] as { setting: { column: string } } | undefined;
+      if (gate !== undefined && this.setting(gate.setting.column) !== true) continue;
+      const kind = String(producer["kind"]);
+      const link = String(producer["link"]);
+      if (this.world.where("messages", (m) => m["kind"] === kind && m[link] === after.id && m["status"] !== "skipped").length > 0) continue;
+      const recipient = producer["recipient"] as { column: string } | undefined;
+      const customer = table === "orders" && !empty(after["customer_id"]) ? this.world.get("customers", Number(after["customer_id"])) : undefined;
+      const to = recipient !== undefined ? after[recipient.column] : (customer?.["email"] ?? after["email"]);
+      const hold = AHEAD.holdMs[kind];
+      this.world.insert("messages", {
+        kind,
+        status: empty(to) ? "skipped" : "queued",
+        to_address: empty(to) ? null : to,
+        language: after["language"] ?? null,
+        order_id: table === "orders" ? after.id : null,
+        enquiry_id: table === "enquiries" ? after.id : null,
+        customer_id: customer?.id ?? null,
+        due: iso(this.now + (hold ?? 0)),
+        created_at: iso(this.now),
+        sent_at: null,
+        error: null,
+        skip_reason: empty(to) ? "no-longer-needed" : null,
+      });
+    }
+    this.sendDue();
+  }
+
+  /** Sends what has come due; a held ready or receipt email whose order left the state is dropped. */
+  sendDue(): void {
+    for (const message of this.world.where("messages", (m) => m["status"] === "queued")) {
+      const order = message["order_id"] === null ? undefined : this.world.get("orders", Number(message["order_id"]));
+      const needs = message["kind"] === "order-ready" ? "ready" : message["kind"] === "order-receipt" ? "picked_up" : null;
+      if (needs !== null && order !== undefined && order["status"] !== needs) {
+        this.world.update("messages", message.id, { status: "skipped", skip_reason: "no-longer-needed" });
+        continue;
+      }
+      if (toMs(String(message["due"])) <= this.now) this.world.update("messages", message.id, { status: "sent", sent_at: iso(this.now) });
+    }
+  }
+
+  /** Every figure of a changed order, again (a line added or changed by staff). */
+  settleOrder(id: Id): void {
+    const order = this.world.get("orders", id)!;
+    const lines = this.world.where("order_items", (l) => l["order_id"] === id);
+    for (const line of lines) {
+      const options = this.world.where("order_item_modifiers", (o) => o["order_item_id"] === line.id);
+      line["options_total"] = round2(options.reduce((sum, o) => sum + Number(o["price_delta"]), 0));
+      settleFormulas("order_items", line);
+    }
+    order["item_count"] = lines.reduce((n, l) => n + Number(l["qty"]), 0);
+    order["subtotal"] = round2(lines.reduce((sum, l) => sum + Number(l["line_total"]), 0));
+    settleFormulas("orders", order);
+  }
+
+  /** Minutes after the kitchen's midnight, now. */
+  minutesNow(): number {
+    return venueMinutes(this.now, this.world.zone);
+  }
+}
+
+/** A table's formulas, worked out over the row in the order they read each other. */
+function settleFormulas(table: string, row: Record<string, unknown>): void {
+  const own = RULES.formulas.filter((f) => f.table === table);
+  for (let pass = 0; pass < own.length; pass += 1) {
+    for (const formula of own) row[formula.column] = workOut(formula.expr, row, typeof formula.scale === "number" ? formula.scale : 2);
+  }
+}
+
+/** A diner's value refused: which column, and why. */
+export function refusedValue(column: string, reason: string): ApiError {
+  return new ApiError(400, "PUBLIC_WRITE_REFUSED", `${column}: ${reason}`, { column, reason });
+}
+
+/** A row of an order's tree refused: its list, its place, and why. */
+export function treeRefused(params: Record<string, unknown>): ApiError {
+  return new ApiError(400, "PUBLIC_WRITE_REFUSED", `refused: ${String(params["reason"])}`, params);
+}
