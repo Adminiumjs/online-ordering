@@ -1,262 +1,116 @@
 # Online Ordering
 
-A complete, production-shaped order-ahead site — built with Vite + React +
-TypeScript, no CSS framework, no backend required. It's an example app that
-ships with [Adminium](https://adminium.dev): build a pizza with real modifier
-rules, pick a slot, check out, then switch to the kitchen and work the same
-order across the board.
+A pickup kitchen's order page and its kitchen screens, installed into
+[Adminium](https://adminium.dev). Diners order from the menu, pick a pickup
+time and pay at the counter; the kitchen confirms, cooks, shelves and hands
+over each order on a tablet. Adminium decides every price, total, order
+number, pickup slot and status — the pages only ask.
 
-**Pickup only.** There is no delivery in this product and no delivery language
-anywhere in it — no couriers, no tracking a driver, no address at checkout. The
-order is handed over a counter.
+**Pickup only, and pay at pickup.** There is no delivery, no card form and no
+text message anywhere in it. An order is handed over a counter, and paid for
+there.
 
-It is **not** an admin database UI. Menu records, sales reports and staff
-administration live in the dashboard Adminium generates from your schema; this
-is the customer's order and the kitchen's queue. The kitchen board says so in
-as many words rather than pretending to be a full display system.
-
-The demo is dressed as **Juniper Kitchen**, a fictional fast-casual shop on
-Alder Street serving bowls and pizza, so the menu, the notes and the board read
-like a Tuesday lunch rush already in progress rather than lorem ipsum.
+The demo is dressed as **Juniper Kitchen**, a fictional pickup kitchen on
+Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 **Live demo → [adminium.dev/demo/online-ordering](https://adminium.dev/demo/online-ordering)**
 
+## What it needs
+
+- Adminium **0.3.4** or later, on SQLite, Postgres or MySQL.
+- Nothing else. **Invoices & Receipts** is offered at install: with it, a diner
+  is emailed a receipt when they pick up and the dashboard prints one.
+  **Holiday calendars** is offered too: with it, the kitchen's Hours tab lists
+  the coming public holidays, each a closure in a tap.
+
 ## What it does
 
-- **Two personas in one build.** The demo dock switches between the Diner and
-  the Kitchen. The loop closes across the switch: check out as a diner, switch
-  to the Kitchen, and your order is the newest card in the New column — advance
-  it there and the diner's tracker has already moved.
+**For diners** (the app's customer side):
+- The menu, with each dish's options — a size to choose, up to five toppings —
+  and its allergens. A dish with few portions left says so; a sold-out one
+  says so and cannot be ordered.
+- A pickup time from the kitchen's own slots: inside the opening hours, far
+  enough ahead, never in a full or paused slot, today or tomorrow.
+- Checkout with a name, an email and an optional phone. The prices, tax and
+  total come from Adminium before the order is placed, and again as it is
+  placed: a price that changed in between is shown, never charged blind.
+- A confirmation email with a link to follow the order, and a page that follows
+  it from "waiting for the kitchen" to "ready". While the kitchen has not taken
+  it, the diner can cancel it there.
+- Signing in with a link emailed to them, to see and reorder past orders.
+- A large-order enquiry the kitchen calls back about.
 
-- **A real ordering engine.** [`src/lib/order.ts`](src/lib/order.ts) is a pure,
-  React-free module: the composite line key, per-unit pricing from modifier
-  deltas, min/max group validation, cap-aware option toggling, cart merge and
-  edit-in-place, tax on the rounded subtotal, pickup-slot generation with a
-  lead time, the status chain, elapsed time and the all-day aggregate. 50 tests
-  and 75 assertions in [`order.test.ts`](src/lib/order.test.ts) run against the
-  shipped seed.
+**For the kitchen** (the app's staff side, on a tablet):
+- The board: new, confirmed, preparing and ready orders, each one tap from the
+  next, with a chime for a new order.
+- The shelf and the hand-off: the amount to collect, and cash or card.
+- Slots: how full each pickup slot is, pausing one, or stopping online orders
+  for the rest of the day.
+- Today's menu: switching a dish or an option off, setting today's portions,
+  marking a dish sold out.
+- Phone orders, taken on the same menu and the same slots.
 
-  The load-bearing idea is the line's identity: `item | options | note`. Two
-  lines merge into one only when all three match. That is what stops "no
-  onions" being folded into somebody else's pizza — and it is asserted from
-  several directions, because it is easy to get subtly wrong and impossible to
-  notice until a customer is handed the wrong box.
+**In the dashboard** (the Online ordering section): the Overview, the orders
+and enquiries, the menu, the hours, closures and paused slots, the customers,
+the emails sent, and the settings — the kitchen's name, words and photos, its
+tax rate, its slot size and whether it takes online orders.
 
-- **Modifier rules that actually enforce.** The build-your-own pizza has a
-  required size, a required crust and up to five toppings; the grain bowl has
-  a required base, a required protein and up to three extras. At the cap the
-  remaining options disable while the chosen ones stay removable, a live
-  "5 of 5" counter turns amber, and the add button stays disabled carrying a
-  plain-language reason — "Choose a base." — rather than silently ignoring the
-  tap.
+With Point of Sale installed, the two apps can share one menu.
 
-- **Eight languages, including a right-to-left one.** English, German, French,
-  Czech, Danish, Simplified and Traditional Chinese, and Egyptian Arabic. The
-  menu itself is translated too, not just the chrome, so a locale switch does
-  not leave an English island inside a translated screen. Plurals go through
-  `Intl.PluralRules` in each locale's own CLDR order — Czech gets its three
-  forms, Arabic its six.
+## Installing it
 
-- **RTL by construction.** Every positional rule in the stylesheets is a CSS
-  logical property, so stamping `dir="rtl"` on `<html>` mirrors the header, the
-  cart drawer, the timeline gutter and the demo dock with no second stylesheet.
-  Prices, times and order numbers are isolated so the bidi algorithm cannot
-  reorder their digits.
+Install Online Ordering from Adminium's app catalog and pick the database it
+should use. Adminium creates the app's tables, the dashboard pages, the
+`kitchen` and `manager` roles, the diners' browser key and the emails. Tick
+sample data at the install step to start with Juniper Kitchen's Tuesday, or
+add it later from the app's settings.
 
-- **Light / dark themes** via CSS custom properties. The app follows your
-  operating system on first load; the header's sun/moon toggle latches it.
+Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
+and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
+the diners' side a domain of its own.
 
-- **A pinned clock.** Nothing user-visible reads `Date.now()`. "Now" is Tuesday
-  28 July 2026, 11:40, so every machine shows the same five orders on the
-  board, the same first pickup slot at 12:00 and the same elapsed chips. The
-  dock's **+10 min** chip is the only thing that moves time: each tap steps
-  every in-flight order one status forward and stops at Ready, because only a
-  person handing over a bag knows an order was collected.
-
-- **No bitmaps, no external requests.** Food photography is layered gradients
-  tinted per category, carrying an oversized Lucide glyph and a mono filename
-  chip. Fonts are self-hosted woff2. The app works offline and behind a
-  firewall.
+**Coming from 0.1.x?** 0.2.0 is a different app on new tables, and it cannot
+update a 0.1.x install in place. Uninstall 0.1.x first (its tables stay unless
+you choose to drop them), then install 0.2.0. Nothing is carried over from the
+old tables.
 
 ## Local development
 
 ```bash
 npm install
-```
-
-```bash
 npm run dev
 ```
 
 Then open the URL Vite prints (default http://localhost:5173).
 
-### Driving the demo
-
-The dock in the corner is the demo. Everything else is the product.
-
-| Control | What it does |
-| --- | --- |
-| **Diner / Kitchen** | Switches persona. The loop closes across it — this is the thing to show. |
-| **+10 min** | Advances the pinned clock and steps every in-flight order forward one status. |
-| **Language** | Eight locales, including Arabic, which flips the whole layout to RTL. |
-| **Theme** | Latches light or dark over the OS preference. |
-| **Reset** | Puts the service back to 11:40 the way it started. |
-
-A ninety-second tour: Menu → open **Build-Your-Own Pizza** → pick a size and a
-crust, then add five toppings and watch the sixth disable → add a note → Add to
-order → open the cart and pick a pickup slot → Checkout → **Pay** → the card
-sheet says out loud that nothing is charged → confirmation shows **#2118**,
-because the seeded morning ends at #2117 → **Track your order** → tap **+10
-min** twice and watch it reach Ready → switch to **Kitchen** and hand it over.
-
-## Deploy
-
-- **Vercel** — import the repo. Build command `npm run build`, output `dist`.
-- **DigitalOcean App Platform** — import the repo; it builds with the same
-  command.
-- **Host anywhere** — `npm run build` produces a fully static `dist/` you can
-  drop on any static host (Netlify, Cloudflare Pages, S3, GitHub Pages…). Or
-  build the container:
-
-  ```bash
-  docker build -t online-ordering .
-  ```
-
-### Build scripts
-
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Start the Vite dev server. |
-| `npm run build` | Type-check + build to `dist/` at base `/` (root deploys). |
-| `npm run build:demo` | Build to `dist/` at base `/demo/online-ordering/` (Adminium demo). |
-| `npm run preview` | Preview a production build locally. |
-| `npm test` | Run the ordering engine suite. |
+| `npm run build` | Type-check and build to `dist/`. |
+| `npm run build:demo` | Build the website's demo, at base `/demo/online-ordering/app/`. |
+| `npm run build:surface` | Build the two sides Adminium serves (`dist-surface/`). |
+| `npm run manifest` | Write `manifest.json` from `src/manifest/`. |
+| `npm test` | Run the suite. |
 
-## Full implementation (self-host)
-
-There are two tiers to running this restaurant.
-
-**Tier 1 — the frontend, one click.** The Vercel / DigitalOcean options above
-deploy the ordering site on its own, running on the bundled demo service. No
-database, no dashboard — a fully static preview.
-
-**Tier 2 — the whole stack, one command.**
-[`docker-compose.yml`](docker-compose.yml) stands up Postgres (seeded by
-default with the *same* menu, the *same* modifier rules and the *same* twelve
-orders), an auto-generated Adminium dashboard that runs that real database, and
-the ordering site:
-
-```bash
-cp .env.example .env      # then set ADMINIUM_SECRET — e.g. openssl rand -hex 32
-docker compose up
-```
-
-- **Ordering site** → http://localhost:8080
-- **Adminium dashboard** → http://localhost:4600
-
-On first boot, `ordering-db` applies [`db/schema.sql`](db/schema.sql), installs
-the demo bookkeeping, and then runs a hook that loads
-[`db/seed.sql`](db/seed.sql) — see **Demo data** below for opting out of that
-last step. Adminium imports the restaurant database as its first source
-connection, introspects the schema, and generates the back office. Finish the
-~1-minute first-run wizard at `:4600` — it's pre-pointed at the `juniper`
-database. The install spec Adminium reads to configure itself is
-[`manifest.json`](manifest.json).
-
-The seed is the same Tuesday the app is pinned to. Open the dashboard and
-you'll find Tamar B.'s **#2117** still sitting in Placed, Marisol G.'s two grain
-bowls at $37.26, and the White Pie marked unavailable — the service you just
-worked through on :8080, as records.
-
-The manifest scaffolds 9 tables, 4 dashboard pages, 1 access preset
-(`kitchen-staff`) and 5 settings into your connected database.
-
-### Demo data
-
-Juniper Kitchen arrives already trading: the stack comes up seeded, exactly as
-it always has. If you would rather start with your own menu — the same schema,
-no rows — set `DEMO_DATA=0` in `.env` before the first `docker compose up`.
-
-Neither choice is permanent. The demo service can be loaded and taken back out
-whenever you like:
-
-| Command | What it does |
-| --- | --- |
-| `npm run demo:status` | What is loaded right now, table by table |
-| `npm run demo:import` | Load `db/seed.sql` |
-| `npm run demo:wipe` | Remove the demo rows — the schema and your own rows stay |
-| `npm run demo:reset` | Wipe, then import a fresh copy |
-
-`wipe` and `reset` ask before they do anything. Pass `--yes` to skip the
-question (`npm run demo:wipe -- --yes`), which is also what a script needs:
-with no terminal to ask, the command stops instead of guessing.
-
-A wipe removes only the rows the seed put there, and it will not delete a demo
-row your own data depends on — that one is left where it is and reported under
-`kept`. `ON DELETE CASCADE` still applies, though: `db/schema.sql` hangs
-`order_items` off `orders` that way, so a line you added to a demo order goes
-when the order does, and rows removed like that are counted separately as
-`cascaded`. [`db/README.md`](db/README.md) covers the rest: how the wipe knows
-which rows are which, what it does to id sequences, and how to point these
-commands at a Postgres somewhere else with `DATABASE_URL`.
-
-## The split: the storefront and the back office
-
-The app you deploy is **the storefront and the queue**. The dashboard Adminium
-generates from your schema is **the back office**. That is the product story,
-not a limitation:
-
-| In this app | In the generated dashboard |
-| --- | --- |
-| Browsing the menu and building an order | Every table as records, with full CRUD |
-| Checking out and tracking a pickup | Editing the menu, prices and modifier groups |
-| The kitchen's live queue | Sales reports, day parts and item mix |
-| Advancing an order to Ready | Opening hours, tax rates and staff accounts |
-
-## Connecting to Adminium
-
-All data access goes through a thin `DataSource` interface
-([`src/data/source.ts`](src/data/source.ts)) with a single `demoSource`
-implementation backed by the bundled menu and order book. **Today the deployed
-demo is demo data only — nothing is persisted, no card is charged and no text
-message is sent.** Once Adminium's browser-safe publishable key (`adm_pub_…`)
-ships, the frontend will read and write live data through the Adminium records
-API via a second `DataSource` implementation, without touching any of the
-screens or the store. The seam is already in place; the key is the only missing
-piece.
-
-### What is deliberately out of scope
-
-- **Taking payment.** The card sheet is a mock with prefilled read-only fields
-  and a callout saying so. Real card handling needs a payment processor and a
-  server this version does not have.
-- **Texting the customer.** Checkout says a text goes out when the order is
-  ready; the demo does not send one. Outbound messaging needs a job runner.
-- **Delivery.** Not "not yet" — this product is pickup only, and there is no
-  type in the codebase that could carry a delivery.
-- **The full kitchen display.** Bump bars, prep stations and course firing ship
-  with the Point of Sale. This is the ordering queue, and the board says so.
-- **Menu administration.** Editing items, prices and modifier groups belongs in
-  the generated dashboard, on purpose.
+`manifest.json` is written from the typed modules in `src/manifest/`; edit
+those and run `npm run manifest`. A test fails when the two disagree.
 
 ## Project structure
 
 ```
+manifest.json  what Adminium installs (written from src/manifest/)
 src/
-  app/         App shell + the exhaustive 8-view switch
-  state/       Zustand store (persona, clock, cart, orders, overlays, toasts)
-  data/        demo.ts (the seeded menu + order book), types.ts,
-               source.ts (DataSource seam, venue facts)
-  i18n/        8-locale runtime, locale registry, ambient bridge,
-               strings/ (chrome, screens, seeded prose)
-  lib/         order.ts (the engine) + tests, format.ts (locale-aware output)
-  screens/     home, menu, cart, checkout, confirmation, track, kitchen, 404
-  components/  two shells, demo dock, overlays (item sheet, cart drawer,
-               card sheet, toasts), order-line pieces, primitives
-  styles/      tokens.css (canonical design tokens + food tints), base.css,
-               components.css, screens.css
+  manifest/    the tables and their rules, the pages, the roles, the diners'
+               doors, the emails, the add-ons the app works better with
+  app/         the app shell
+  data/        the data the screens read, through one DataSource seam
+  i18n/        the 8-locale runtime and the keyed strings
+  lib/         formatting and the order helpers
+  screens/     the diner's screens and the kitchen's
+  components/  shells, overlays, order-line pieces, primitives
+  styles/      design tokens and stylesheets
+  testing/     the product's manifest validator, vendored for the tests
 public/fonts/  self-hosted Manrope + JetBrains Mono (woff2)
-db/            schema.sql, seed.sql and the demo-data toolkit (see db/README.md)
 ```
 
 ## License

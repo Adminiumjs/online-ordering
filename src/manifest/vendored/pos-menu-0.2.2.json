@@ -1,0 +1,645 @@
+{
+  "source": "point-of-sale 0.2.2, requiredSchema.tables (released)",
+  "shape": "menu@1",
+  "tables": [
+    {
+      "ref": "menu_categories",
+      "shape": "menu@1",
+      "columns": [
+        {
+          "ref": "id",
+          "type": "int",
+          "role": "pk"
+        },
+        {
+          "ref": "slug",
+          "type": "text",
+          "maxLength": 48,
+          "label": {
+            "en-US": "Key",
+            "de-DE": "Schlüssel",
+            "fr-FR": "Clé",
+            "da-DK": "Nøgle",
+            "cs-CZ": "Klíč",
+            "ar-EG": "المفتاح",
+            "zh-CN": "标识",
+            "zh-TW": "識別碼"
+          },
+          "nullable": true
+        },
+        {
+          "ref": "name",
+          "type": "text",
+          "maxLength": 80,
+          "semantic": "name",
+          "label": {
+            "en-US": "Name",
+            "de-DE": "Name",
+            "fr-FR": "Nom",
+            "da-DK": "Navn",
+            "cs-CZ": "Název",
+            "ar-EG": "الاسم",
+            "zh-CN": "名称",
+            "zh-TW": "名稱"
+          }
+        },
+        {
+          "ref": "position",
+          "type": "int",
+          "default": 0,
+          "label": {
+            "en-US": "Position",
+            "de-DE": "Reihenfolge",
+            "fr-FR": "Ordre",
+            "da-DK": "Rækkefølge",
+            "cs-CZ": "Pořadí",
+            "ar-EG": "الترتيب",
+            "zh-CN": "排序",
+            "zh-TW": "排序"
+          }
+        },
+        {
+          "ref": "icon",
+          "type": "text",
+          "maxLength": 40,
+          "nullable": true,
+          "label": {
+            "en-US": "Icon",
+            "de-DE": "Symbol",
+            "fr-FR": "Icône",
+            "da-DK": "Ikon",
+            "cs-CZ": "Ikona",
+            "ar-EG": "الأيقونة",
+            "zh-CN": "图标",
+            "zh-TW": "圖示"
+          }
+        },
+        {
+          "ref": "tint",
+          "type": "text",
+          "maxLength": 32,
+          "nullable": true,
+          "label": {
+            "en-US": "Color",
+            "de-DE": "Farbe",
+            "fr-FR": "Couleur",
+            "da-DK": "Farve",
+            "cs-CZ": "Barva",
+            "ar-EG": "اللون",
+            "zh-CN": "颜色",
+            "zh-TW": "顏色"
+          }
+        }
+      ],
+      "label": {
+        "en-US": "Category",
+        "de-DE": "Kategorie",
+        "fr-FR": "Catégorie",
+        "da-DK": "Kategori",
+        "cs-CZ": "Kategorie",
+        "ar-EG": "فئة",
+        "zh-CN": "分类",
+        "zh-TW": "分類"
+      },
+      "labelPlural": {
+        "en-US": "Categories",
+        "de-DE": "Kategorien",
+        "fr-FR": "Catégories",
+        "da-DK": "Kategorier",
+        "cs-CZ": "Kategorie",
+        "ar-EG": "الفئات",
+        "zh-CN": "分类",
+        "zh-TW": "分類"
+      },
+      "keyField": "name"
+    },
+    {
+      "ref": "menu_items",
+      "shape": "menu@1",
+      "columns": [
+        {
+          "ref": "id",
+          "type": "int",
+          "role": "pk"
+        },
+        {
+          "ref": "category_id",
+          "type": "fk",
+          "references": "menu_categories",
+          "nullable": true,
+          "label": {
+            "en-US": "Category",
+            "de-DE": "Kategorie",
+            "fr-FR": "Catégorie",
+            "da-DK": "Kategori",
+            "cs-CZ": "Kategorie",
+            "ar-EG": "فئة",
+            "zh-CN": "分类",
+            "zh-TW": "分類"
+          }
+        },
+        {
+          "ref": "slug",
+          "type": "text",
+          "maxLength": 64,
+          "label": {
+            "en-US": "Key",
+            "de-DE": "Schlüssel",
+            "fr-FR": "Clé",
+            "da-DK": "Nøgle",
+            "cs-CZ": "Klíč",
+            "ar-EG": "المفتاح",
+            "zh-CN": "标识",
+            "zh-TW": "識別碼"
+          },
+          "nullable": true
+        },
+        {
+          "ref": "name",
+          "type": "text",
+          "maxLength": 80,
+          "semantic": "name",
+          "label": {
+            "en-US": "Name",
+            "de-DE": "Name",
+            "fr-FR": "Nom",
+            "da-DK": "Navn",
+            "cs-CZ": "Název",
+            "ar-EG": "الاسم",
+            "zh-CN": "名称",
+            "zh-TW": "名稱"
+          }
+        },
+        {
+          "ref": "short_name",
+          "type": "text",
+          "maxLength": 24,
+          "nullable": true,
+          "label": {
+            "en-US": "Short name",
+            "de-DE": "Kurzname",
+            "fr-FR": "Nom court",
+            "da-DK": "Kort navn",
+            "cs-CZ": "Krátký název",
+            "ar-EG": "الاسم المختصر",
+            "zh-CN": "简称",
+            "zh-TW": "簡稱"
+          }
+        },
+        {
+          "ref": "description",
+          "type": "text",
+          "maxLength": 280,
+          "nullable": true,
+          "label": {
+            "en-US": "Description",
+            "de-DE": "Beschreibung",
+            "fr-FR": "Description",
+            "da-DK": "Beskrivelse",
+            "cs-CZ": "Popis",
+            "ar-EG": "الوصف",
+            "zh-CN": "描述",
+            "zh-TW": "描述"
+          }
+        },
+        {
+          "ref": "price",
+          "type": "money",
+          "default": 0,
+          "semantic": "money",
+          "label": {
+            "en-US": "Price",
+            "de-DE": "Preis",
+            "fr-FR": "Prix",
+            "da-DK": "Pris",
+            "cs-CZ": "Cena",
+            "ar-EG": "السعر",
+            "zh-CN": "价格",
+            "zh-TW": "價格"
+          }
+        },
+        {
+          "ref": "image",
+          "type": "text",
+          "semantic": "image",
+          "nullable": true,
+          "label": {
+            "en-US": "Photo",
+            "de-DE": "Foto",
+            "fr-FR": "Photo",
+            "da-DK": "Foto",
+            "cs-CZ": "Fotka",
+            "ar-EG": "الصورة",
+            "zh-CN": "图片",
+            "zh-TW": "圖片"
+          }
+        },
+        {
+          "ref": "available",
+          "type": "bool",
+          "default": true,
+          "label": {
+            "en-US": "Available",
+            "de-DE": "Verfügbar",
+            "fr-FR": "Disponible",
+            "da-DK": "Tilgængelig",
+            "cs-CZ": "Dostupné",
+            "ar-EG": "متاح",
+            "zh-CN": "可售",
+            "zh-TW": "可售"
+          }
+        },
+        {
+          "ref": "featured",
+          "type": "bool",
+          "default": false,
+          "label": {
+            "en-US": "Featured",
+            "de-DE": "Hervorgehoben",
+            "fr-FR": "À la une",
+            "da-DK": "Fremhævet",
+            "cs-CZ": "Doporučené",
+            "ar-EG": "مميز",
+            "zh-CN": "推荐",
+            "zh-TW": "推薦"
+          }
+        },
+        {
+          "ref": "tags",
+          "type": "text",
+          "maxLength": 120,
+          "nullable": true,
+          "label": {
+            "en-US": "Tags",
+            "de-DE": "Schlagwörter",
+            "fr-FR": "Étiquettes",
+            "da-DK": "Mærker",
+            "cs-CZ": "Štítky",
+            "ar-EG": "الوسوم",
+            "zh-CN": "标签",
+            "zh-TW": "標籤"
+          }
+        },
+        {
+          "ref": "position",
+          "type": "int",
+          "default": 0,
+          "label": {
+            "en-US": "Position",
+            "de-DE": "Reihenfolge",
+            "fr-FR": "Ordre",
+            "da-DK": "Rækkefølge",
+            "cs-CZ": "Pořadí",
+            "ar-EG": "الترتيب",
+            "zh-CN": "排序",
+            "zh-TW": "排序"
+          }
+        },
+        {
+          "ref": "barcode",
+          "type": "text",
+          "maxLength": 64,
+          "nullable": true,
+          "label": {
+            "en-US": "Barcode",
+            "de-DE": "Barcode",
+            "fr-FR": "Code-barres",
+            "da-DK": "Stregkode",
+            "cs-CZ": "Čárový kód",
+            "ar-EG": "الباركود",
+            "zh-CN": "条形码",
+            "zh-TW": "條碼"
+          }
+        }
+      ],
+      "label": {
+        "en-US": "Menu item",
+        "de-DE": "Artikel",
+        "fr-FR": "Article",
+        "da-DK": "Menupunkt",
+        "cs-CZ": "Položka menu",
+        "ar-EG": "صنف",
+        "zh-CN": "菜品",
+        "zh-TW": "菜品"
+      },
+      "labelPlural": {
+        "en-US": "Menu items",
+        "de-DE": "Artikel",
+        "fr-FR": "Articles",
+        "da-DK": "Menupunkter",
+        "cs-CZ": "Položky menu",
+        "ar-EG": "الأصناف",
+        "zh-CN": "菜品",
+        "zh-TW": "菜品"
+      },
+      "keyField": "name"
+    },
+    {
+      "ref": "modifier_groups",
+      "shape": "menu@1",
+      "columns": [
+        {
+          "ref": "id",
+          "type": "int",
+          "role": "pk"
+        },
+        {
+          "ref": "item_id",
+          "type": "fk",
+          "references": "menu_items",
+          "label": {
+            "en-US": "Menu item",
+            "de-DE": "Artikel",
+            "fr-FR": "Article",
+            "da-DK": "Menupunkt",
+            "cs-CZ": "Položka menu",
+            "ar-EG": "صنف",
+            "zh-CN": "菜品",
+            "zh-TW": "菜品"
+          }
+        },
+        {
+          "ref": "slug",
+          "type": "text",
+          "maxLength": 48,
+          "label": {
+            "en-US": "Key",
+            "de-DE": "Schlüssel",
+            "fr-FR": "Clé",
+            "da-DK": "Nøgle",
+            "cs-CZ": "Klíč",
+            "ar-EG": "المفتاح",
+            "zh-CN": "标识",
+            "zh-TW": "識別碼"
+          },
+          "nullable": true
+        },
+        {
+          "ref": "name",
+          "type": "text",
+          "maxLength": 80,
+          "label": {
+            "en-US": "Name",
+            "de-DE": "Name",
+            "fr-FR": "Nom",
+            "da-DK": "Navn",
+            "cs-CZ": "Název",
+            "ar-EG": "الاسم",
+            "zh-CN": "名称",
+            "zh-TW": "名稱"
+          }
+        },
+        {
+          "ref": "kind",
+          "type": "enum",
+          "enum": [
+            "radio",
+            "check"
+          ],
+          "default": "radio",
+          "label": {
+            "en-US": "Choice",
+            "de-DE": "Auswahl",
+            "fr-FR": "Choix",
+            "da-DK": "Valg",
+            "cs-CZ": "Výběr",
+            "ar-EG": "نوع الاختيار",
+            "zh-CN": "选择方式",
+            "zh-TW": "選擇方式"
+          },
+          "rules": {
+            "enumLabels": {
+              "labels": {
+                "radio": {
+                  "en-US": "Pick one",
+                  "de-DE": "Eine Auswahl",
+                  "fr-FR": "Un seul choix",
+                  "da-DK": "Vælg én",
+                  "cs-CZ": "Vybrat jednu",
+                  "ar-EG": "اختيار واحد",
+                  "zh-CN": "单选",
+                  "zh-TW": "單選"
+                },
+                "check": {
+                  "en-US": "Pick any",
+                  "de-DE": "Mehrfachauswahl",
+                  "fr-FR": "Plusieurs choix",
+                  "da-DK": "Vælg flere",
+                  "cs-CZ": "Vybrat více",
+                  "ar-EG": "اختيار متعدد",
+                  "zh-CN": "多选",
+                  "zh-TW": "多選"
+                }
+              }
+            }
+          }
+        },
+        {
+          "ref": "min",
+          "type": "int",
+          "default": 0,
+          "label": {
+            "en-US": "At least",
+            "de-DE": "Mindestens",
+            "fr-FR": "Au moins",
+            "da-DK": "Mindst",
+            "cs-CZ": "Nejméně",
+            "ar-EG": "الحد الأدنى",
+            "zh-CN": "至少",
+            "zh-TW": "至少"
+          }
+        },
+        {
+          "ref": "max",
+          "type": "int",
+          "default": 1,
+          "label": {
+            "en-US": "At most",
+            "de-DE": "Höchstens",
+            "fr-FR": "Au plus",
+            "da-DK": "Højst",
+            "cs-CZ": "Nejvýše",
+            "ar-EG": "الحد الأقصى",
+            "zh-CN": "至多",
+            "zh-TW": "至多"
+          }
+        },
+        {
+          "ref": "hint",
+          "type": "text",
+          "maxLength": 120,
+          "nullable": true,
+          "label": {
+            "en-US": "Hint",
+            "de-DE": "Hinweis",
+            "fr-FR": "Indication",
+            "da-DK": "Hjælpetekst",
+            "cs-CZ": "Nápověda",
+            "ar-EG": "تلميح",
+            "zh-CN": "提示",
+            "zh-TW": "提示"
+          }
+        },
+        {
+          "ref": "position",
+          "type": "int",
+          "default": 0,
+          "label": {
+            "en-US": "Position",
+            "de-DE": "Reihenfolge",
+            "fr-FR": "Ordre",
+            "da-DK": "Rækkefølge",
+            "cs-CZ": "Pořadí",
+            "ar-EG": "الترتيب",
+            "zh-CN": "排序",
+            "zh-TW": "排序"
+          }
+        }
+      ],
+      "label": {
+        "en-US": "Option group",
+        "de-DE": "Optionsgruppe",
+        "fr-FR": "Groupe d’options",
+        "da-DK": "Valggruppe",
+        "cs-CZ": "Skupina možností",
+        "ar-EG": "مجموعة خيارات",
+        "zh-CN": "选项组",
+        "zh-TW": "選項組"
+      },
+      "labelPlural": {
+        "en-US": "Option groups",
+        "de-DE": "Optionsgruppen",
+        "fr-FR": "Groupes d’options",
+        "da-DK": "Valggrupper",
+        "cs-CZ": "Skupiny možností",
+        "ar-EG": "مجموعات الخيارات",
+        "zh-CN": "选项组",
+        "zh-TW": "選項組"
+      },
+      "keyField": "name"
+    },
+    {
+      "ref": "modifiers",
+      "shape": "menu@1",
+      "columns": [
+        {
+          "ref": "id",
+          "type": "int",
+          "role": "pk"
+        },
+        {
+          "ref": "group_id",
+          "type": "fk",
+          "references": "modifier_groups",
+          "label": {
+            "en-US": "Group",
+            "de-DE": "Gruppe",
+            "fr-FR": "Groupe",
+            "da-DK": "Gruppe",
+            "cs-CZ": "Skupina",
+            "ar-EG": "المجموعة",
+            "zh-CN": "组",
+            "zh-TW": "組"
+          }
+        },
+        {
+          "ref": "slug",
+          "type": "text",
+          "maxLength": 48,
+          "label": {
+            "en-US": "Key",
+            "de-DE": "Schlüssel",
+            "fr-FR": "Clé",
+            "da-DK": "Nøgle",
+            "cs-CZ": "Klíč",
+            "ar-EG": "المفتاح",
+            "zh-CN": "标识",
+            "zh-TW": "識別碼"
+          },
+          "nullable": true
+        },
+        {
+          "ref": "name",
+          "type": "text",
+          "maxLength": 80,
+          "label": {
+            "en-US": "Name",
+            "de-DE": "Name",
+            "fr-FR": "Nom",
+            "da-DK": "Navn",
+            "cs-CZ": "Název",
+            "ar-EG": "الاسم",
+            "zh-CN": "名称",
+            "zh-TW": "名稱"
+          }
+        },
+        {
+          "ref": "price_delta",
+          "type": "money",
+          "default": 0,
+          "label": {
+            "en-US": "Extra charge",
+            "de-DE": "Aufpreis",
+            "fr-FR": "Supplément",
+            "da-DK": "Tillæg",
+            "cs-CZ": "Příplatek",
+            "ar-EG": "رسوم إضافية",
+            "zh-CN": "加价",
+            "zh-TW": "加價"
+          }
+        },
+        {
+          "ref": "available",
+          "type": "bool",
+          "default": true,
+          "label": {
+            "en-US": "Available",
+            "de-DE": "Verfügbar",
+            "fr-FR": "Disponible",
+            "da-DK": "Tilgængelig",
+            "cs-CZ": "Dostupné",
+            "ar-EG": "متاح",
+            "zh-CN": "可售",
+            "zh-TW": "可售"
+          }
+        },
+        {
+          "ref": "position",
+          "type": "int",
+          "default": 0,
+          "label": {
+            "en-US": "Position",
+            "de-DE": "Reihenfolge",
+            "fr-FR": "Ordre",
+            "da-DK": "Rækkefølge",
+            "cs-CZ": "Pořadí",
+            "ar-EG": "الترتيب",
+            "zh-CN": "排序",
+            "zh-TW": "排序"
+          }
+        }
+      ],
+      "label": {
+        "en-US": "Option",
+        "de-DE": "Option",
+        "fr-FR": "Option",
+        "da-DK": "Valgmulighed",
+        "cs-CZ": "Možnost",
+        "ar-EG": "خيار",
+        "zh-CN": "选项",
+        "zh-TW": "選項"
+      },
+      "labelPlural": {
+        "en-US": "Options",
+        "de-DE": "Optionen",
+        "fr-FR": "Options",
+        "da-DK": "Valgmuligheder",
+        "cs-CZ": "Možnosti",
+        "ar-EG": "الخيارات",
+        "zh-CN": "选项",
+        "zh-TW": "選項"
+      },
+      "keyField": "name"
+    }
+  ]
+}
