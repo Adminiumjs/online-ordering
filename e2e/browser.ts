@@ -13,7 +13,7 @@ import { join } from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-export type Variant = "light" | "dark" | "arabic" | "phone";
+export type Variant = "light" | "dark" | "arabic" | "phone" | "tablet";
 export const VARIANTS: readonly Variant[] = ["light", "dark", "arabic", "phone"];
 
 /** Where the screenshots go: `<SHOTS>/<project>/<screen>-<variant>.png`. */
@@ -28,7 +28,7 @@ export function contextOptions(variant: Variant) {
   return {
     locale: variant === "arabic" ? "ar-EG" : "en-US",
     colorScheme: variant === "dark" ? ("dark" as const) : ("light" as const),
-    viewport: variant === "phone" ? PHONE : DESKTOP,
+    viewport: variant === "phone" ? PHONE : variant === "tablet" ? TABLET : DESKTOP,
     ...(variant === "phone" ? { isMobile: true, hasTouch: true, deviceScaleFactor: 2 } : {}),
     timezoneId: "America/New_York",
   };

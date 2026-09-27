@@ -8,7 +8,7 @@
  */
 import { DEMO_HOLIDAYS } from "../data/demo.ts";
 import type { KitchenPerson, KitchenPort, Menu, OrderWithLines } from "../data/ports.ts";
-import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type Row } from "../data/wire.ts";
+import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
 import { venueDay } from "../lib/venueTime.ts";
 import { Engine, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
@@ -52,8 +52,24 @@ export class DemoKitchen implements KitchenPort {
     if (!this.person.roles.includes("manager")) throw new ApiError(403, "FORBIDDEN", "Managers change these.");
   }
 
+  private out = false;
+
+  /** A signed-out screen reads nothing: every read answers 401 until it signs in again. */
+  private signedIn(): void {
+    if (this.out) throw new ApiError(401, "UNAUTHENTICATED", "Sign in again.");
+  }
+
   async me() {
+    this.signedIn();
     return this.person;
+  }
+
+  async signOut(): Promise<void> {
+    this.out = true;
+  }
+
+  async signIn(): Promise<void> {
+    this.out = false;
   }
   async config() {
     return { timezone: this.world.zone, currency: this.world.currency };
@@ -89,6 +105,7 @@ export class DemoKitchen implements KitchenPort {
   }
 
   async orders(from: string, to: string): Promise<OrderWithLines[]> {
+    this.signedIn();
     return this.world
       .where("orders", (o) => {
         const day = venueDay(String(o["pickup_at"]), this.world.zone);
@@ -152,11 +169,23 @@ export class DemoKitchen implements KitchenPort {
     return { ...this.world.update("modifiers", id, { available }) };
   }
 
-  async phoneOrder(body: OrderBody): Promise<OrderReply> {
+  private phoneTree(body: OrderBody, dry: boolean) {
     const values = { ...body.values, channel: "phone" };
     const lines = body.children.order_items.map((line) => ({ values: line.values, options: (line.children?.["order_item_modifiers"] ?? []).map((o) => o.values) }));
     // The kitchen reads the whole menu: a dish switched off online is still one it may sell by phone.
-    const tree = this.engine.orderTree(values, lines, this.writer, { dry: false, readableDish: (d) => d["available"] === true, readableOption: (o) => o["available"] === true });
+    return this.engine.orderTree(values, lines, this.writer, { dry, readableDish: (d) => d["available"] === true, readableOption: (o) => o["available"] === true });
+  }
+
+  async phoneQuote(body: OrderBody): Promise<QuoteReply> {
+    this.signedIn();
+    const tree = this.phoneTree(body, true);
+    const { number: _n, number_seq: _s, link_token: _t, client_key: _k, ...figures } = tree.order;
+    return { data: figures, children: { order_items: tree.lines.map((l) => ({ data: l.line, children: { order_item_modifiers: l.options.map((o) => ({ data: o })) } })) }, capacity: [{ pool: "orders", state: "available" }], exact: true };
+  }
+
+  async phoneOrder(body: OrderBody): Promise<OrderReply> {
+    this.signedIn();
+    const tree = this.phoneTree(body, false);
     const { order } = this.engine.writeOrder(tree, this.writer, { channel: "phone", customer_id: null, link_token: null });
     return { data: { ...order } };
   }
@@ -179,6 +208,10 @@ export class DemoKitchen implements KitchenPort {
   async setOnline(on: boolean): Promise<Row> {
     this.manager();
     return { ...this.world.update("settings", this.world.settings().id, { online_on: on }) };
+  }
+
+  async receipts(): Promise<boolean> {
+    return this.addOns.invoices;
   }
 
   async holidays() {

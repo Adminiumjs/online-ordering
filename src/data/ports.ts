@@ -107,14 +107,22 @@ export interface KitchenPort {
   setDish(id: Id, values: { available?: boolean; stock_today?: number | null; stock_on?: string | null; online?: boolean }): Promise<Row>;
   setOption(id: Id, available: boolean): Promise<Row>;
 
-  /** An order taken by phone, with its lines and options. */
+  /** An order taken by phone, with its lines and options: its figures first (nothing written), then the order. */
+  phoneQuote(body: OrderBody): Promise<QuoteReply>;
   phoneOrder(body: OrderBody): Promise<OrderReply>;
+
+  /** Ends this screen's staff session; `signIn` goes to Adminium's sign-in and back. */
+  signOut(): Promise<void>;
+  signIn(): Promise<void>;
 
   /** A manager's: the hours, the closures, taking online orders. */
   setHours(id: Id, values: { open?: boolean; opens?: string; closes?: string }): Promise<Row>;
   addClosure(values: { from_date: string; to_date: string; reason: string | null }): Promise<Row>;
   setClosure(id: Id, active: boolean): Promise<Row>;
   setOnline(on: boolean): Promise<Row>;
+
+  /** Whether a hand-over sends a receipt: Invoices & receipts installed with its receipts on. */
+  receipts(): Promise<boolean>;
 
   /** The public holidays Holiday calendars offers, when it is installed. */
   holidays(): Promise<{ date: string; name: string }[] | null>;

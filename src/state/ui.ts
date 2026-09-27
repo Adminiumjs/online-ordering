@@ -19,8 +19,9 @@ export interface Toast {
   kind: ToastKind;
   /** A short note after the message, "(sound off)". */
   suffix?: string;
-  /** The kitchen's Undo, for ten seconds. */
+  /** The kitchen's Undo (or another action, named by `actionLabel`), for ten seconds. */
   undo?: () => void;
+  actionLabel?: string;
 }
 
 export type Theme = "light" | "dark";
@@ -63,7 +64,7 @@ let toastTimer: ReturnType<typeof setTimeout> | null = null;
 let toastId = 0;
 
 /** Says something for a moment: 3.2 seconds, or ten with an Undo. */
-export function toast(message: string, kind: ToastKind = "ok", extra: { suffix?: string; undo?: () => void } = {}): void {
+export function toast(message: string, kind: ToastKind = "ok", extra: { suffix?: string; undo?: () => void; actionLabel?: string } = {}): void {
   toastId += 1;
   useUi.setState({ toast: { id: toastId, message, kind, ...extra } });
   if (toastTimer !== null) clearTimeout(toastTimer);

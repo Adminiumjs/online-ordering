@@ -22,7 +22,8 @@ export interface DayHours {
 /** A day's opening from the hours rows and the closures. */
 export function hoursOn(day: Day, hours: readonly Row[], closures: readonly Row[]): DayHours {
   const row = hours.find((h) => h["weekday"] === weekdayOf(day));
-  const closure = closures.find((c) => String(c["from_date"]) <= day && day <= String(c["to_date"] ?? c["from_date"]));
+  // A closure switched off no longer closes the day.
+  const closure = closures.find((c) => c["active"] !== false && String(c["from_date"]) <= day && day <= String(c["to_date"] ?? c["from_date"]));
   return {
     open: row !== undefined && row["open"] !== false && closure === undefined,
     opens: String(row?.["opens"] ?? "00:00"),

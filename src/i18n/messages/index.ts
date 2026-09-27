@@ -13,6 +13,7 @@ import type { Translated } from "../untranslated.ts";
 import { LOCALE_TAGS, type LocaleTag } from "../locales.ts";
 import { shell } from "../strings/shell.ts";
 import { diner } from "../strings/diner.ts";
+import { kitchen } from "../strings/kitchen.ts";
 
 /**
  * Parity guard. `en-US` defines the keys; the other seven must each carry a
@@ -25,11 +26,11 @@ type Area<EN extends Record<string, string>> = { "en-US": EN } & Record<
   Translated<EN>
 >;
 
-const AREAS: [Area<(typeof shell)["en-US"]>, Area<(typeof diner)["en-US"]>] = [shell, diner];
+const AREAS: [Area<(typeof shell)["en-US"]>, Area<(typeof diner)["en-US"]>, Area<(typeof kitchen)["en-US"]>] = [shell, diner, kitchen];
 
 export const MESSAGES = Object.fromEntries(
   LOCALE_TAGS.map((t) => [t, Object.assign({}, ...AREAS.map((a) => a[t] ?? {}))]),
 ) as Record<LocaleTag, Record<string, string>>;
 
 /** Keys are typed off English — the source of truth — so a typo is a compile error. */
-export type MessageKey = keyof (typeof shell)["en-US"] | keyof (typeof diner)["en-US"];
+export type MessageKey = keyof (typeof shell)["en-US"] | keyof (typeof diner)["en-US"] | keyof (typeof kitchen)["en-US"];

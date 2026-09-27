@@ -37,7 +37,7 @@ export function Toaster() {
               }}
               style={{ marginInlineStart: 4, height: 28, paddingInline: 11, borderRadius: 999, border: "1px solid color-mix(in srgb, var(--bg) 40%, transparent)", background: "transparent", color: "var(--bg)", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}
             >
-              {t("shell.toast.undo")}
+              {toast.actionLabel ?? t("shell.toast.undo")}
             </button>
           )}
         </div>
