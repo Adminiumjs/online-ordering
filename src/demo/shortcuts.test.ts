@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { instantOf } from "../lib/venueTime.ts";
 import { DemoAdminium } from "./adminium.ts";
-import { DEMO_HOLIDAYS } from "./kitchen.ts";
+import { DEMO_HOLIDAYS } from "../data/demo.ts";
 import { addHoliday, afterClosing, anotherScreenReady, arrive, fillSlot, lunchRush, sellOut } from "./shortcuts.ts";
 
 const ZONE = "America/Los_Angeles";

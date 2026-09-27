@@ -1,15 +1,7 @@
 {
   "files": {
-    "src/components/Shell.tsx": 1,
-    "src/data/adminiumSource.test.ts": 3,
-    "src/data/adminiumSource.ts": 6,
     "src/i18n/ambient.ts": 1,
     "src/i18n/index.tsx": 1,
-    "src/main.tsx": 3,
-    "src/state/store.ts": 2,
-    "src/styles/components.css": 1,
-    "src/styles/tokens.css": 6,
-    "src/surface-nav.ts": 1,
     "vite.config.ts": 1
   }
 }

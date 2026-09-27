@@ -6,6 +6,7 @@
  *
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
+import { DEMO_HOLIDAYS } from "../data/demo.ts";
 import type { KitchenPerson, KitchenPort, Menu, OrderWithLines } from "../data/ports.ts";
 import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type Row } from "../data/wire.ts";
 import { venueDay } from "../lib/venueTime.ts";
@@ -13,14 +14,6 @@ import { Engine, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
 /** The holidays Holiday calendars offers the demo's kitchen (US, the rest of 2026). */
-export const DEMO_HOLIDAYS = [
-  { date: "2026-09-07", name: "Labor Day" },
-  { date: "2026-10-12", name: "Columbus Day" },
-  { date: "2026-11-11", name: "Veterans Day" },
-  { date: "2026-11-26", name: "Thanksgiving Day" },
-  { date: "2026-12-25", name: "Christmas Day" },
-];
-
 type Limit = { writable: readonly string[]; writableValues?: Record<string, readonly unknown[]> };
 
 export class DemoKitchen implements KitchenPort {

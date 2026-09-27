@@ -298,7 +298,7 @@
           "description": "Taleggio, thyme, roasted garlic cream.",
           "price": 16.5,
           "available": true,
-          "featured": false,
+          "featured": true,
           "tags": "V",
           "position": 9,
           "hue": "30",

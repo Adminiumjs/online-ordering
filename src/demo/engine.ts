@@ -260,9 +260,10 @@ export class Engine {
     const items = built.reduce((n, line) => n + line.qty, 0);
     if (items > this.num("max_items")) throw treeRefused({ child: "order_items", column: "qty", reason: "too-many" });
 
-    // The pickup time, then each dish's portions on its day.
-    this.judgeSlot(values["pickup_at"], writer.origin, opts.except);
-    const day = venueDay(String(values["pickup_at"]), this.world.zone);
+    // The pickup time, then each dish's portions on its day. A quote with no time yet is priced for today.
+    const timed = values["pickup_at"] !== undefined && values["pickup_at"] !== null && values["pickup_at"] !== "";
+    if (timed || !opts.dry) this.judgeSlot(values["pickup_at"], writer.origin, opts.except);
+    const day = timed ? venueDay(String(values["pickup_at"]), this.world.zone) : this.today();
     const wanted = new Map<Id, number>();
     built.forEach((line, i) => {
       wanted.set(line.dish.id, (wanted.get(line.dish.id) ?? 0) + line.qty);

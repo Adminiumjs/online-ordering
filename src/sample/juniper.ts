@@ -98,7 +98,7 @@ export const DISHES: Dish[] = [
   { slug: "pizza-byo", name: "Build your own pizza", category: "pizza", price: 14.0, description: "Start with our 48-hour dough and go from there.", hue: 26, tags: [], featured: true, allergens: "gluten, dairy" },
   { slug: "pizza-marg", name: "Margherita", category: "pizza", price: 13.5, description: "San Marzano, fior di latte, torn basil.", hue: 8, tags: ["V"], featured: false, allergens: "gluten, dairy" },
   { slug: "pizza-pep", name: "Pepperoni & honey", category: "pizza", price: 16.0, description: "Cup pepperoni, chili honey, oregano.", hue: 350, tags: ["Spicy"], featured: false, allergens: "gluten, dairy" },
-  { slug: "pizza-funghi", name: "Wild mushroom", category: "pizza", price: 16.5, description: "Taleggio, thyme, roasted garlic cream.", hue: 30, tags: ["V"], featured: false, allergens: "gluten, dairy" },
+  { slug: "pizza-funghi", name: "Wild mushroom", category: "pizza", price: 16.5, description: "Taleggio, thyme, roasted garlic cream.", hue: 30, tags: ["V"], featured: true, allergens: "gluten, dairy" },
   { slug: "pizza-verde", name: "Green pizza", category: "pizza", price: 15.25, description: "Basil pesto, broccolini, pistachio.", hue: 108, tags: ["V"], featured: false, allergens: "gluten, dairy, tree nuts" },
   { slug: "pizza-diavola", name: "Diavola", category: "pizza", price: 16.75, description: "Spicy salami, Calabrian chili, honey.", hue: 2, tags: ["Spicy"], featured: false, allergens: "gluten, dairy" },
   { slug: "side-focaccia", name: "Rosemary focaccia", category: "sides", price: 5.0, description: "Warm, salty, torn by hand.", hue: 42, tags: ["V"], featured: false, allergens: "gluten" },

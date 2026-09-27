@@ -137,8 +137,12 @@ export class DemoDiner implements DinerPort {
 
   // ── placing an order ─────────────────────────────────────────────────────────
 
-  /** The order's own values as the entry lets a diner write them, judged. */
-  private orderValues(body: OrderBody): Record<string, unknown> {
+  /**
+   * The order's own values as the entry lets a diner write them, judged. A
+   * quote fills a placeholder for a value it needs and was not sent yet (the
+   * cart is priced before anyone types a name), as Adminium's dry run does.
+   */
+  private orderValues(body: OrderBody, dry = false): Record<string, unknown> {
     const e = entry("orders", "POST");
     const writable = new Set(e.writable as readonly string[]);
     const values: Record<string, unknown> = {};
@@ -146,7 +150,11 @@ export class DemoDiner implements DinerPort {
       if (!writable.has(column)) throw refusedValue(column, "not-writable");
       values[column] = typeof value === "string" ? value.trim() : value;
     }
-    for (const column of e.requires as readonly string[]) if (values[column] === undefined || values[column] === null || values[column] === "") throw refusedValue(column, "required");
+    for (const column of e.requires as readonly string[]) {
+      if (values[column] !== undefined && values[column] !== null && values[column] !== "") continue;
+      if (!dry) throw refusedValue(column, "required");
+      values[column] = column === "email" ? "quote@placeholder.invalid" : "Quote";
+    }
     if (!EMAIL.test(String(values["email"]))) throw refusedValue("email", "invalid");
     if (values["phone"] !== undefined && values["phone"] !== null && values["phone"] !== "" && !PHONE.test(String(values["phone"]))) throw refusedValue("phone", "invalid");
     if (values["phone"] === "") values["phone"] = null;
@@ -167,7 +175,7 @@ export class DemoDiner implements DinerPort {
 
   private judged(body: OrderBody, dry: boolean) {
     if (this.world.settings()["online_on"] !== true) throw new ApiError(403, "PUBLIC_SWITCHED_OFF", "This is not open online right now.");
-    return this.engine.orderTree(this.orderValues(body), this.lines(body), GUEST, {
+    return this.engine.orderTree(this.orderValues(body, dry), this.lines(body), GUEST, {
       dry,
       readableDish: this.readable("menu_items"),
       readableOption: this.readable("modifiers"),

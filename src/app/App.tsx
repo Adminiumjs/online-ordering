@@ -1,115 +1,108 @@
 /**
- * The app shell.
- *
- * Routing is a plain state switch over `store.view` — no react-router. Every
- * member of the `View` union is mapped to a screen below, so no nav link,
- * footer link or confirmation button can land on a route that does not exist;
- * anything the union does not cover falls through to the 404.
- *
- * The chrome — the two shells, the dock, the toasts, the item sheet, the cart
- * drawer and the card sheet — is mounted once around the switch, so a view
- * change never remounts it and a toast survives the navigation that raised it.
+ * The app shell: the side a build carries (the diner's order page, the
+ * kitchen's screens, or both in the demo), the screen the address names, and
+ * what every screen shares — the overlays, the theme, the first reads.
  */
+import { useEffect, type ComponentType } from "react";
 
-import { useEffect } from "react";
-import type { ComponentType } from "react";
-
-import DemoDock from "../components/DemoDock.tsx";
-import { DEMO, SURFACE_SIDE } from "../surface.ts";
-import { CartDrawer, ItemSheet, PaySheet, ToastLayer } from "../components/Overlays.tsx";
-import Shell from "../components/Shell.tsx";
-import type { View } from "../data/types.ts";
-import { setAmbient } from "../i18n/ambient.ts";
+import { SURFACE_SIDE } from "../surface.ts";
 import { useI18n } from "../i18n/index.tsx";
-import { useStore } from "../state/store.ts";
-
-import Cart from "../screens/Cart.tsx";
-import Checkout, { Confirm } from "../screens/Checkout.tsx";
-import Home from "../screens/Home.tsx";
+import { useNow } from "../data/sources.ts";
+import { loadDiner, refreshAvailability, useDiner } from "../state/diner.ts";
+import { openSignInLink, resumeDelete, signedIn } from "../state/account.ts";
+import { openTrack, readTrack, useTrack } from "../state/track.ts";
+import { goDiner, useUi, type DinerView } from "../state/ui.ts";
+import { DinerShell } from "../diner/Shell.tsx";
+import { Home } from "../diner/Home.tsx";
+import { MenuPage } from "../diner/Menu.tsx";
+import { CartDrawer, CartPage } from "../diner/Cart.tsx";
+import { DishSheet } from "../diner/Sheet.tsx";
+import { Checkout } from "../diner/Checkout.tsx";
+import { NotFound, TrackPage } from "../diner/Track.tsx";
+import { FindPage, OrdersPage } from "../diner/Account.tsx";
+import { LargePage } from "../diner/Large.tsx";
+import { ReorderAsk } from "../diner/Reorder.tsx";
 import Kitchen from "../screens/Kitchen.tsx";
-import Menu from "../screens/Menu.tsx";
-import NotFound from "../screens/NotFound.tsx";
-import Track from "../screens/Track.tsx";
 
-const KITCHEN_SCREENS = {
-  kitchen: Kitchen,
-} satisfies Partial<Record<View, ComponentType>>;
-
-const DINER_SCREENS = {
+const DINER_SCREENS: Record<DinerView, ComponentType> = {
   home: Home,
-  menu: Menu,
-  cart: Cart,
+  menu: MenuPage,
+  cart: CartPage,
   checkout: Checkout,
-  confirm: Confirm,
-  track: Track,
-} satisfies Partial<Record<View, ComponentType>>;
+  track: TrackPage,
+  find: FindPage,
+  orders: OrdersPage,
+  large: LargePage,
+  notfound: NotFound,
+};
 
-/*
- * A surface build ships ONE side's screens. `SURFACE_SIDE` folds to a literal,
- * so the branch not taken is eliminated and every screen only it referenced
- * goes with it — which is what stops the PUBLIC bundle from carrying the kitchen display.
- *
- * `notfound` is in every build: an unknown view has to land somewhere.
- */
-const SCREENS: Partial<Record<View, ComponentType>> =
-  SURFACE_SIDE === "staff"
-    ? { ...KITCHEN_SCREENS, notfound: NotFound }
-    : SURFACE_SIDE === "customer"
-      ? { ...DINER_SCREENS, notfound: NotFound }
-      : { ...KITCHEN_SCREENS, ...DINER_SCREENS, notfound: NotFound };
-
-function CurrentScreen() {
-  const view = useStore((s) => s.view);
-  /* Unknown values can only arrive from injected state — 404 them. */
-  const Screen = SCREENS[view] ?? NotFound;
-  return <Screen />;
+/** An order's link or a sign-in link the page was opened with: `/o#<code>`, `/c#<code>`. */
+export interface BootLink {
+  kind: "track" | "signin";
+  token: string;
 }
 
-export default function App() {
-  const initTheme = useStore((s) => s.initTheme);
-  const escape = useStore((s) => s.escape);
-
-  /*
-   * Publish the live locale to the module-level bridge before anything below
-   * renders. `lib/format.ts` builds its `Intl` instances from it, and the
-   * store and the engine call those formatters from outside React where no
-   * hook can reach the provider. Assigning during render rather than in an
-   * effect matters: children render after this line, so the first paint after
-   * a locale switch is already in the new locale instead of one frame behind.
-   */
-  const { locale, t, money, number } = useI18n();
-  setAmbient(locale, t, money, number);
+function Diner({ link }: { link: BootLink | null }) {
+  const { t } = useI18n();
+  const view = useUi((s) => s.dinerView);
+  const token = useTrack((s) => s.token);
+  const loaded = useDiner((s) => s.load === "ok");
+  const now = useNow();
+  const minute = Math.floor(now / 60_000);
 
   useEffect(() => {
-    initTheme();
-  }, [initTheme]);
+    void loadDiner();
+    if (link?.kind === "track") void openTrack(link.token);
+    else if (link?.kind === "signin")
+      void openSignInLink(link.token).then((ok) => {
+        goDiner(ok ? "orders" : "find");
+        if (ok) resumeDelete();
+      });
+    else void signedIn();
+  }, [link]);
 
-  /* Document-level Escape. The store closes overlays innermost-first. */
+  // The kitchen's clock moved: what is free now, and where the followed order stands.
   useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") escape();
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [escape]);
+    if (!loaded) return;
+    void refreshAvailability(now);
+    if (useUi.getState().dinerView === "track" && useTrack.getState().state === "ok") void readTrack();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minute, loaded]);
 
+  // An order's page keeps its code in the fragment, where a reload finds it.
+  useEffect(() => {
+    if (view !== "track" || token === null) return;
+    if (window.location.hash !== `#${token}`) window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#${token}`);
+  }, [view, token]);
+
+  const Screen = DINER_SCREENS[view] ?? NotFound;
   return (
     <>
-      <a className="jk-sr-only jk-skip" href="#main">
-        {t("chrome.skipToContent")}
+      <a className="jn-sr jk-skip" href="#main">
+        {t("shell.skip")}
       </a>
-      <Shell>
-        <CurrentScreen />
-      </Shell>
-      {/*
-        Build-time, not runtime. `DEMO` folds to a literal, so a hosted or
-        connected build does not CONTAIN the dock — it is not merely hidden.
-      */}
-      {DEMO && <DemoDock />}
+      <DinerShell>
+        <Screen key={view} />
+      </DinerShell>
+      <DishSheet />
       <CartDrawer />
-      <ItemSheet />
-      <PaySheet />
-      <ToastLayer />
+      <ReorderAsk />
     </>
   );
+}
+
+export default function App({ link }: { link: BootLink | null }) {
+  const persona = useUi((s) => s.persona);
+  const theme = useUi((s) => s.theme);
+  useEffect(() => {
+    document.documentElement.dataset["theme"] = theme;
+  }, [theme]);
+  /*
+   * A surface build carries ONE side. `SURFACE_SIDE` folds to a literal, so the
+   * branch not taken is eliminated with every screen only it referenced: the
+   * order page's bundle carries no kitchen screen, and the kitchen's no order page.
+   */
+  if (SURFACE_SIDE === "staff") return <Kitchen />;
+  if (SURFACE_SIDE === "customer") return <Diner link={link} />;
+  return persona === "kitchen" ? <Kitchen /> : <Diner link={link} />;
 }
