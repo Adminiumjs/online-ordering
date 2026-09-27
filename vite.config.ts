@@ -6,9 +6,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // https://vite.dev/config/
-// `base` defaults to "/" (root deploy on Vercel / DigitalOcean). The
-// `build:demo` script overrides it with --base=/demo/online-ordering/ so the app can
-// be served from the Adminium demo sub-path.
+// `base` defaults to "/". The `build:demo` script overrides it with
+// --base=/demo/online-ordering/app/ so the app can be served from the website's
+// demo sub-path.
 /*
  * Every build-time flag is defined here, ALWAYS, even when unset.
  *

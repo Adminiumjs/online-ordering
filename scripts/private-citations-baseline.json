@@ -1,10 +1,5 @@
 {
   "files": {
-    "Dockerfile": 1,
-    "db/schema.sql": 4,
-    "db/seed-drift.test.ts": 2,
-    "db/seed-rows.mjs": 2,
-    "docker-compose.yml": 1,
     "src/components/Shell.tsx": 1,
     "src/data/adminiumSource.test.ts": 3,
     "src/data/adminiumSource.ts": 6,
