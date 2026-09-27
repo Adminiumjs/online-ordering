@@ -185,6 +185,18 @@ describe("placing an order", () => {
     expect([phone.data["channel"], phone.data["status"], phone.data["email"] ?? null]).toEqual(["phone", "placed", null]);
   });
 
+  it("refuses an eleventh order from one address in a day: the limit on an order nobody signed in for", async () => {
+    for (let i = 0; i < 9; i += 1) await demo.diner.place(kwame({ pickup_at: at(["12:30", "12:45", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45"][i]!) }, [line("Lemonade", 1)]), `cap-${String(i)}-0123456789abcdef`);
+    const error = await refusal(demo.diner.place(kwame({ pickup_at: at("15:00") }, [line("Lemonade", 1)]), "cap-last-0123456789abcdef"));
+    expect([error.status, error.code]).toEqual([409, "PUBLIC_LIMIT_REACHED"]);
+  });
+
+  it("refuses a time on a day the kitchen is closed", async () => {
+    await demo.kitchen.addClosure({ from_date: TOMORROW, to_date: TOMORROW, reason: "Staff day" });
+    expect((await refusal(demo.diner.place(kwame({ pickup_at: at("12:30", TOMORROW) }), "k".repeat(22)))).params).toEqual({ column: "pickup_at", reason: "closed" });
+    expect(await demo.diner.slots(TOMORROW)).toEqual([]);
+  });
+
   it("keeps what a stranger types plain text", async () => {
     expect((await refusal(demo.diner.place(kwame({ name: "see https://x.example" }), "k".repeat(22)))).params).toEqual({ column: "name", reason: "plain-text" });
   });

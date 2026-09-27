@@ -11,3 +11,6 @@ dist-surface
 .env
 .env.*
 !.env.example
+
+# The browser pass: screenshots, traces, the report.
+e2e-results

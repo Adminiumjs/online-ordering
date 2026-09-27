@@ -306,7 +306,10 @@
               "en-US": "Front photo"
             },
             "nullable": true,
-            "semantic": "image"
+            "semantic": "image",
+            "rules": {
+              "personal": false
+            }
           },
           {
             "ref": "photo_street",
@@ -316,7 +319,10 @@
               "en-US": "Street photo"
             },
             "nullable": true,
-            "semantic": "image"
+            "semantic": "image",
+            "rules": {
+              "personal": false
+            }
           },
           {
             "ref": "photo_closed",
@@ -326,7 +332,10 @@
               "en-US": "Closed photo"
             },
             "nullable": true,
-            "semantic": "image"
+            "semantic": "image",
+            "rules": {
+              "personal": false
+            }
           },
           {
             "ref": "photo_store",
@@ -336,7 +345,10 @@
               "en-US": "Counter photo"
             },
             "nullable": true,
-            "semantic": "image"
+            "semantic": "image",
+            "rules": {
+              "personal": false
+            }
           },
           {
             "ref": "tax_rate",
@@ -4822,9 +4834,6 @@
         "status",
         "channel",
         "pickup_at",
-        "name",
-        "phone",
-        "email",
         "note",
         "item_count",
         "subtotal",

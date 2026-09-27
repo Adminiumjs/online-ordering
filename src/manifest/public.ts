@@ -49,6 +49,13 @@ export const ORDER_SELECT = [
   "link_expires",
 ];
 
+/**
+ * What placing an order answers: its figures and its progress, never the
+ * diner's own details back — a create anyone may call reads no personal
+ * column (the page knows what it typed).
+ */
+export const PLACED_SELECT = ORDER_SELECT.filter((column) => !["name", "phone", "email"].includes(column));
+
 export const LINE_SELECT = ["id", "order_id", "position", "menu_item_id", "qty", "note", "name", "unit_price", "options_total", "unit_total", "line_total"];
 export const OPTION_SELECT = ["id", "order_item_id", "modifier_id", "name", "price_delta"];
 
@@ -152,7 +159,7 @@ export const PUBLIC_ACCESS = [
     methods: ["POST"],
     humanCheck: true,
     level: "verified",
-    select: ORDER_SELECT,
+    select: PLACED_SELECT,
     writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key"],
     requires: ["name", "email"],
     // The manager's switch in Hours; the kitchen's phone orders never pass here.
