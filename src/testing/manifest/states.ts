@@ -1,0 +1,630 @@
+/*
+ * VENDORED VERBATIM from packages/manifest/src/states.ts.
+ * Never hand-edit this copy: change the monorepo package and re-run
+ * `node scripts/sync-manifest-validator.mjs`.
+ *
+ * WHY A COPY. `@adminium/manifest` is not published to npm and this app is a
+ * standalone repo that must build from a clean clone, so it cannot depend on
+ * the monorepo. It lives under `testing/` because `zod` is a devDependency
+ * here and a runtime dependency the host does not carry — nothing in
+ * the shipped bundle's import graph may reach it, which sources.test.ts gates.
+ *
+ * The only edits are import specifiers: `.js` becomes `.ts`, and the
+ * `@adminium/add-on-contracts` package import becomes relative ones.
+ */
+/**
+ * `table.states` — the life of a document, kept by Adminium for every writer.
+ *
+ * ```json
+ * "states": {
+ *   "column": "status", "initial": "draft",
+ *   "moves": {
+ *     "draft": [{ "to": "sent", "requires": { "children": { "invoice_lines": 1 }, "where": [{ "column": "total", "gt": 0 }] } }, "void"],
+ *     "sent": [{ "to": "void", "requires": { "where": [{ "column": "paid", "eq": 0 }] }, "roles": ["studio-manager"] }]
+ *   },
+ *   "lock": { "when": ["sent", "void"], "except": ["due_on", "ladder"] },
+ *   "children": {
+ *     "invoice_lines": {
+ *       "via": "document_id", "lock": true,
+ *       "release": { "when": ["void"], "columns": ["time_entry_id"] },
+ *       "lockLinked": { "time_entry_id": ["hours", "date"] }
+ *     },
+ *     "payments": { "via": "document_id", "parentIn": ["sent"], "clearOnCreate": ["client_paid_at"] }
+ *   },
+ *   "noDelete": { "when": "numbered" },
+ *   "onlyLater": ["valid_until"]
+ * }
+ * ```
+ *
+ * - `moves`: from each state, the states a write may move a row to. A move
+ *   may ask for something first — child rows, a column's value — and may be
+ *   kept for some of the app's roles. A move not listed is refused.
+ * - `lock`: while a row is in one of `when`, only `except` (and the state
+ *   itself, through a move) may change. Adminium's own columns (totals,
+ *   stamps) keep being written by Adminium.
+ * - `children`: child tables tied to this row's state. `lock` refuses their
+ *   writes while the row is locked; `parentIn` allows them only while the row
+ *   is in those states (payments on a sent invoice); `clearOnCreate` empties
+ *   columns of this row when one of them is created (a recorded payment
+ *   clears the client's "I've sent it"). `release` opens a locked child a
+ *   little while its parent is in some of the lock's states: a change that
+ *   only EMPTIES the listed columns (a void invoice's line letting go of the
+ *   time it billed, so the time can be billed again), and only in a state no
+ *   move leaves. `lockLinked` keeps the
+ *   listed columns of the row a child's link points at from changing while
+ *   the child points at it (the hours of time on an invoice) — unless the
+ *   parent is in a state that releases that link.
+ * - `lockedWhenReferencedBy`: this row locks once a row of another table in
+ *   one of the states points at it (a terms version once a proposal naming it
+ *   is sent).
+ * - `noDelete`: rows in these states, or any row with a number
+ *   (`"numbered"`), are never deleted — voided instead.
+ * - `onlyLater`: date columns that may move later and never earlier.
+ * - A move may also wait for the row one of its links points at
+ *   (`requires.linked`), for a window on the clock (`requires.time`, read from
+ *   moments — see `refs.ts`) and for a value of the settings row
+ *   (`requires.setting`).
+ * - `strict`: a write naming the state the row already holds is refused
+ *   (a ticket let in once), repeating up to four columns of the row.
+ * - `late`: a move made inside some time before a moment sets a flag, or is
+ *   refused.
+ * - `timed`: listed moves Adminium makes by itself once a moment of the row
+ *   has passed (a held order expiring).
+ * - `effects`: a move that moves the row one of its links points at too, by a
+ *   move that table lists (a guest checked out turns the room to cleaning).
+ *
+ * Adding sample data and importing past records are history: they write any
+ * state their rows were in.
+ */
+import { z } from 'zod';
+
+import {
+  momentIssues,
+  momentOffsetSchema,
+  momentSchema,
+  refSchema,
+  scalarSchema,
+  valueFits,
+  type ColumnShape,
+  type Moment,
+  type MomentOffset,
+  type ReferenceIssue,
+  type TableIndex,
+} from './refs.ts';
+
+const stateName = z.string().min(1).max(64);
+const roleKey = z.string().regex(/^[a-z][a-z0-9-]*$/, 'a role key');
+
+/** A condition on the row itself, checked in the same statement that changes it. */
+export const stateConditionSchema = z
+  .object({
+    column: refSchema,
+    eq: scalarSchema.optional(),
+    in: z.array(scalarSchema).min(1).max(32).optional(),
+    isNull: z.boolean().optional(),
+    gt: z.number().finite().optional(),
+    gte: z.number().finite().optional(),
+    lt: z.number().finite().optional(),
+    lte: z.number().finite().optional(),
+  })
+  .strict()
+  .refine((c) => [c.eq, c.in, c.isNull, c.gt, c.gte, c.lt, c.lte].filter((part) => part !== undefined).length === 1, {
+    message: 'a condition says one of eq, in, isNull, gt, gte, lt or lte',
+  });
+export type StateCondition = z.infer<typeof stateConditionSchema>;
+
+/** Conditions on the row one of this row's links points at (the order a ticket belongs to is paid). */
+export const linkedConditionSchema = z
+  .object({
+    /** This row's foreign key. */
+    via: refSchema,
+    where: z.array(stateConditionSchema).min(1).max(8),
+  })
+  .strict();
+export type LinkedCondition = z.infer<typeof linkedConditionSchema>;
+
+/** A move allowed only after one moment, before another, or between the two. */
+export const timeConditionSchema = z
+  .object({ after: momentSchema.optional(), before: momentSchema.optional() })
+  .strict()
+  .refine((t) => t.after !== undefined || t.before !== undefined, { message: 'a time condition says after, before or both' });
+export type TimeCondition = z.infer<typeof timeConditionSchema>;
+
+/** A value of the app's one-row settings table a move waits for (door sales switched on). */
+export const settingConditionSchema = z.object({ table: refSchema, column: refSchema, eq: scalarSchema }).strict();
+export type SettingCondition = z.infer<typeof settingConditionSchema>;
+
+export const stateMoveSchema = z.union([
+  stateName,
+  z
+    .object({
+      to: stateName,
+      /**
+       * What must be true first: at least n child rows of a table, conditions
+       * on the row, on the rows its links point at, on the settings row, and
+       * a window in time.
+       */
+      requires: z
+        .object({
+          children: z.record(refSchema, z.number().int().min(1).max(1000)).optional(),
+          where: z.array(stateConditionSchema).min(1).max(8).optional(),
+          linked: z.array(linkedConditionSchema).min(1).max(4).optional(),
+          time: timeConditionSchema.optional(),
+          setting: z.array(settingConditionSchema).min(1).max(4).optional(),
+        })
+        .strict()
+        .optional(),
+      /** Only people holding one of these app roles may make this move. */
+      roles: z.array(roleKey).min(1).max(8).optional(),
+    })
+    .strict(),
+]);
+export type StateMove = z.infer<typeof stateMoveSchema>;
+
+export const stateChildSchema = z
+  .object({
+    /** The child's foreign key to this row. */
+    via: refSchema,
+    lock: z.literal(true).optional(),
+    parentIn: z.array(stateName).min(1).max(16).optional(),
+    clearOnCreate: z.array(refSchema).min(1).max(8).optional(),
+    /** While this row is in one of `when`, a locked child may still EMPTY these columns of its own, and change nothing else. */
+    release: z.object({ when: z.array(stateName).min(1).max(16), columns: z.array(refSchema).min(1).max(8) }).strict().optional(),
+    /** A child's link column → the columns of the row it points at that stay as they are while it points there. */
+    lockLinked: z.record(refSchema, z.array(refSchema).min(1).max(16)).optional(),
+  })
+  .strict()
+  .refine((c) => c.lock === undefined || c.parentIn === undefined, {
+    message: 'a child is locked with its parent, or writable only in some of its states — not both',
+  })
+  .refine((c) => c.release === undefined || c.lock === true, { message: 'a child is released only from its parent\'s lock (lock: true)' })
+  .refine((c) => c.lockLinked === undefined || (Object.keys(c.lockLinked).length >= 1 && Object.keys(c.lockLinked).length <= 8), {
+    message: 'lockLinked names 1 to 8 link columns',
+  });
+export type StateChild = z.infer<typeof stateChildSchema>;
+
+// ── once means once, late moves, timed moves, moves of a linked row ─────────
+
+/**
+ * `strict`: a write that names the state the row already holds is refused
+ * instead of passing silently (a ticket scanned twice). `show` names up to
+ * four columns of the row the refusal repeats (the door it came in by);
+ * never a personal or secret column.
+ */
+export const strictStatesSchema = z.union([
+  z.literal(true),
+  z.object({ show: z.array(refSchema).min(1).max(4) }).strict(),
+]);
+
+/**
+ * A move to `to` (from one of `from`, or from anywhere) made inside `within`
+ * before `moment`: `flag` lets it through and sets the bool column `flag`;
+ * `refuse` turns it away — for public writers, or with `refuse: 'everyone'`
+ * for every writer.
+ */
+export const lateMoveSchema = z
+  .object({
+    to: stateName,
+    from: z.array(stateName).min(1).max(16).optional(),
+    moment: momentSchema,
+    within: momentOffsetSchema,
+    mode: z.enum(['flag', 'refuse']),
+    flag: refSchema.optional(),
+    refuse: z.enum(['public', 'everyone']).optional(),
+  })
+  .strict()
+  .refine((l) => (l.mode === 'flag') === (l.flag !== undefined), {
+    message: 'a flag names its column, and only mode "flag" has one',
+    path: ['flag'],
+  })
+  .refine((l) => l.refuse === undefined || l.mode === 'refuse', {
+    message: 'who is refused is said only by mode "refuse"',
+    path: ['refuse'],
+  });
+export type LateMove = z.infer<typeof lateMoveSchema>;
+
+/** A listed move Adminium makes by itself once `at` has passed, for a row still in `from`. */
+export const timedMoveSchema = z.object({ from: stateName, to: stateName, at: momentSchema }).strict();
+export type TimedMove = z.infer<typeof timedMoveSchema>;
+
+/**
+ * When this row moves to `on.to`, the row its link `via` points at moves too,
+ * in the same write: `set` names that table's state column and the state it
+ * moves to, one of the moves that table lists (a guest checked out turns the
+ * room to cleaning). One link, never a chain.
+ */
+export const stateEffectSchema = z
+  .object({
+    on: z.object({ to: stateName }).strict(),
+    via: refSchema,
+    set: z.record(refSchema, stateName),
+  })
+  .strict()
+  .refine((e) => Object.keys(e.set).length === 1, { message: 'an effect sets one column: the linked table\'s state', path: ['set'] });
+export type StateEffect = z.infer<typeof stateEffectSchema>;
+
+export const statesSchema = z
+  .object({
+    column: refSchema,
+    initial: stateName,
+    moves: z.record(stateName, z.array(stateMoveSchema).max(16)),
+    lock: z
+      .object({
+        when: z.array(stateName).min(1).max(16),
+        except: z.array(refSchema).max(32).optional(),
+      })
+      .strict()
+      .optional(),
+    children: z.record(refSchema, stateChildSchema).optional(),
+    lockedWhenReferencedBy: z
+      .array(z.object({ table: refSchema, via: refSchema, in: z.array(stateName).min(1).max(16) }).strict())
+      .min(1)
+      .max(4)
+      .optional(),
+    noDelete: z.object({ when: z.union([z.literal('numbered'), z.array(stateName).min(1).max(16)]) }).strict().optional(),
+    onlyLater: z.array(refSchema).min(1).max(8).optional(),
+    /** A move to the state a row already holds is refused, naming when it got there (see {@link strictStatesSchema}). */
+    strict: strictStatesSchema.optional(),
+    /** A move made close to a moment sets a flag, or is refused (see {@link lateMoveSchema}). */
+    late: z.array(lateMoveSchema).min(1).max(4).optional(),
+    /** Moves Adminium makes on its own when a moment passes (see {@link timedMoveSchema}). */
+    timed: z.array(timedMoveSchema).min(1).max(8).optional(),
+    /** A move that moves the row one of its links points at too (see {@link stateEffectSchema}). */
+    effects: z.array(stateEffectSchema).min(1).max(4).optional(),
+  })
+  .strict();
+export type States = z.infer<typeof statesSchema>;
+
+
+/** A move written as a bare state is a move with nothing asked first. */
+export function moveTarget(move: StateMove): string {
+  return typeof move === 'string' ? move : move.to;
+}
+
+interface StatesContext<C extends ColumnShape> {
+  index: TableIndex<C>;
+  /** The app's role keys, when the manifest declares roles (an add-on's shape has none to name). */
+  roles?: readonly string[] | undefined;
+  /** A column of this table decides "numbered": a gapless running number. */
+  numbered: boolean;
+  /** Why a column of this table is kept from readers (a secret, personal data, a shared link's code), or null. */
+  keptFromReaders?: ((column: string) => string | null) | undefined;
+  /** Whether another rule already writes a column of this table. */
+  decided?: ((column: string) => boolean) | undefined;
+  /** This table's booking cancellation, which keeps a late flag of its own. */
+  bookingCancel?: { column: string; to: string } | undefined;
+  /** Another table's states, which an effect moves. */
+  statesOf?: ((table: string) => States | undefined) | undefined;
+}
+
+/** Everything wrong with one table's `states` against the manifest's tables. */
+export function statesIssues<C extends ColumnShape>(
+  table: string,
+  states: States,
+  ctx: StatesContext<C>,
+  at: (...rest: (string | number)[]) => (string | number)[],
+): ReferenceIssue[] {
+  const out: ReferenceIssue[] = [];
+  const { index } = ctx;
+  const column = index.column(table, states.column);
+  let values: readonly string[] = [];
+  if (column === undefined) {
+    out.push({ path: at('column'), message: `"${table}" has no column "${states.column}"` });
+  } else if (column.type !== 'enum') {
+    out.push({ path: at('column'), message: `"${table}.${states.column}" is not an enum, so it cannot hold a state` });
+  } else {
+    values = column.enum ?? [];
+  }
+  const isState = (value: string) => values.length === 0 || values.includes(value);
+  const known = (value: string, path: (string | number)[]) => {
+    if (!isState(value)) out.push({ path, message: `"${value}" is not a value of "${table}.${states.column}"` });
+  };
+  known(states.initial, at('initial'));
+  for (const [from, moves] of Object.entries(states.moves)) {
+    known(from, at('moves', from));
+    moves.forEach((move, m) => {
+      const to = moveTarget(move);
+      known(to, at('moves', from, m));
+      if (to === from) out.push({ path: at('moves', from, m), message: 'a move goes to another state' });
+      if (typeof move === 'string') return;
+      for (const child of Object.keys(move.requires?.children ?? {})) {
+        if (states.children?.[child] === undefined) {
+          out.push({ path: at('moves', from, m, 'requires', 'children', child), message: `"${child}" is not one of this table's children` });
+        }
+      }
+      (move.requires?.where ?? []).forEach((condition, w) => {
+        out.push(...conditionIssues(table, condition, index, at('moves', from, m, 'requires', 'where', w)));
+      });
+      for (const role of move.roles ?? []) {
+        if (ctx.roles !== undefined && !ctx.roles.includes(role)) {
+          out.push({ path: at('moves', from, m, 'roles'), message: `"${role}" is not one of the app's roles` });
+        }
+      }
+    });
+  }
+  if (states.lock !== undefined) {
+    states.lock.when.forEach((value, i) => known(value, at('lock', 'when', i)));
+    for (const ref of states.lock.except ?? []) {
+      if (index.column(table, ref) === undefined) out.push({ path: at('lock', 'except'), message: `"${table}" has no column "${ref}"` });
+      if (ref === states.column) out.push({ path: at('lock', 'except'), message: 'the state moves by its moves, never by the lock' });
+    }
+  }
+  for (const [child, rule] of Object.entries(states.children ?? {})) {
+    const here = (...rest: (string | number)[]) => at('children', child, ...rest);
+    if (index.table(child) === undefined) {
+      out.push({ path: here(), message: `"${child}" is not a table of this manifest` });
+      continue;
+    }
+    const via = index.column(child, rule.via);
+    if (via === undefined) out.push({ path: here('via'), message: `"${child}" has no column "${rule.via}"` });
+    else if (via.type !== 'fk' || via.references !== table) out.push({ path: here('via'), message: `"${child}.${rule.via}" does not point at "${table}"` });
+    if (rule.lock === true && states.lock === undefined) out.push({ path: here('lock'), message: 'a child is locked with its parent, and the parent has no lock' });
+    (rule.parentIn ?? []).forEach((value, i) => known(value, here('parentIn', i)));
+    for (const ref of rule.clearOnCreate ?? []) {
+      const found = index.column(table, ref);
+      if (found === undefined) out.push({ path: here('clearOnCreate'), message: `"${table}" has no column "${ref}"` });
+      else if (found.nullable !== true) out.push({ path: here('clearOnCreate'), message: `"${table}.${ref}" is not nullable, so it cannot be emptied` });
+    }
+    if (rule.release !== undefined) {
+      rule.release.when.forEach((value, i) => {
+        known(value, here('release', 'when', i));
+        if (states.lock !== undefined && !states.lock.when.includes(value)) {
+          out.push({ path: here('release', 'when', i), message: `"${value}" is not a state the lock holds, so there is nothing to release` });
+        }
+        // A released link stops locking what it points at: a row that could move on from here would come back billing what that row no longer says.
+        if ((states.moves[value] ?? []).length > 0) {
+          out.push({ path: here('release', 'when', i), message: `"${value}" has moves out of it, so a line released there could come back billing a changed row; release only in a final state` });
+        }
+      });
+      for (const ref of rule.release.columns) {
+        const found = index.column(child, ref);
+        if (found === undefined) out.push({ path: here('release', 'columns'), message: `"${child}" has no column "${ref}"` });
+        else if (ref === rule.via) out.push({ path: here('release', 'columns'), message: `"${child}.${ref}" ties the row to this one, and is never released` });
+        else if (found.role === 'pk') out.push({ path: here('release', 'columns'), message: `"${child}.${ref}" is the key, and is never emptied` });
+        else if (found.nullable !== true) out.push({ path: here('release', 'columns'), message: `"${child}.${ref}" is not nullable, so it cannot be emptied` });
+      }
+    }
+    for (const [link, columns] of Object.entries(rule.lockLinked ?? {})) {
+      const found = index.column(child, link);
+      if (found === undefined) {
+        out.push({ path: here('lockLinked', link), message: `"${child}" has no column "${link}"` });
+        continue;
+      }
+      if (found.type !== 'fk' || found.references === undefined || index.table(found.references) === undefined) {
+        out.push({ path: here('lockLinked', link), message: `"${child}.${link}" does not point at a table of this manifest` });
+        continue;
+      }
+      if (link === rule.via) out.push({ path: here('lockLinked', link), message: `"${child}.${link}" points at this row, whose own lock says what stays open` });
+      const target = found.references;
+      for (const ref of columns) {
+        const column = index.column(target, ref);
+        if (column === undefined) out.push({ path: here('lockLinked', link), message: `"${target}" has no column "${ref}"` });
+        else if (column.role === 'pk') out.push({ path: here('lockLinked', link), message: `"${target}.${ref}" is the key, which never changes` });
+      }
+    }
+    if (rule.lock === undefined && rule.parentIn === undefined && rule.clearOnCreate === undefined && rule.lockLinked === undefined) {
+      out.push({ path: here(), message: 'a child says lock, parentIn, clearOnCreate or lockLinked' });
+    }
+  }
+  (states.lockedWhenReferencedBy ?? []).forEach((ref, r) => {
+    const here = (...rest: (string | number)[]) => at('lockedWhenReferencedBy', r, ...rest);
+    if (index.table(ref.table) === undefined) {
+      out.push({ path: here('table'), message: `"${ref.table}" is not a table of this manifest` });
+      return;
+    }
+    const via = index.column(ref.table, ref.via);
+    if (via?.type !== 'fk' || via.references !== table) out.push({ path: here('via'), message: `"${ref.table}.${ref.via}" does not point at "${table}"` });
+    if (states.lock === undefined) out.push({ path: here(), message: 'a row locked by a reference needs a lock to say what stays open' });
+  });
+  if (states.noDelete !== undefined) {
+    if (states.noDelete.when === 'numbered') {
+      if (!ctx.numbered) out.push({ path: at('noDelete', 'when'), message: '"numbered" needs a column numbered without gaps (sequence.gapless)' });
+    } else {
+      states.noDelete.when.forEach((value, i) => known(value, at('noDelete', 'when', i)));
+    }
+  }
+  for (const ref of states.onlyLater ?? []) {
+    const found = index.column(table, ref);
+    if (found === undefined) out.push({ path: at('onlyLater'), message: `"${table}" has no column "${ref}"` });
+    else if (found.type !== 'date' && found.type !== 'timestamptz') out.push({ path: at('onlyLater'), message: `"${table}.${ref}" is not a date` });
+  }
+  out.push(...conditionedMoveIssues(table, states, ctx, at, values));
+  return out;
+}
+
+/**
+ * Everything wrong with the rules a move waits for or sets off: conditions on
+ * a linked row, the settings row and the clock; the once-means-once refusal;
+ * late moves; the moves Adminium makes when a moment passes; and the moves of
+ * a linked row a move sets off.
+ */
+function conditionedMoveIssues<C extends ColumnShape>(
+  table: string,
+  states: States,
+  ctx: StatesContext<C>,
+  at: (...rest: (string | number)[]) => (string | number)[],
+  values: readonly string[],
+): ReferenceIssue[] {
+  const out: ReferenceIssue[] = [];
+  const { index } = ctx;
+  const known = (value: string, path: (string | number)[]) => {
+    if (values.length > 0 && !values.includes(value)) out.push({ path, message: `"${value}" is not a value of "${table}.${states.column}"` });
+  };
+  /** The listed move from `from` to `to`, when there is one. */
+  const listed = (from: string, to: string) => (states.moves[from] ?? []).find((move) => moveTarget(move) === to);
+  const reached = (to: string) => Object.values(states.moves).some((moves) => moves.some((move) => moveTarget(move) === to));
+  /** The table a link of this table points at, or an issue. */
+  const linkTarget = (via: string, path: (string | number)[]): string | undefined => {
+    const found = index.column(table, via);
+    if (found === undefined) {
+      out.push({ path, message: `"${table}" has no column "${via}"` });
+      return undefined;
+    }
+    if (found.role === 'pk') {
+      out.push({ path, message: `"${table}.${via}" is the key, and points at no other row` });
+      return undefined;
+    }
+    if (found.type !== 'fk' || found.references === undefined || index.table(found.references) === undefined) {
+      out.push({ path, message: `"${table}.${via}" does not point at a table of this manifest` });
+      return undefined;
+    }
+    return found.references;
+  };
+
+  for (const [from, moves] of Object.entries(states.moves)) {
+    moves.forEach((move, m) => {
+      if (typeof move === 'string' || move.requires === undefined) return;
+      const here = (...rest: (string | number)[]) => at('moves', from, m, 'requires', ...rest);
+      (move.requires.linked ?? []).forEach((linked, l) => {
+        const target = linkTarget(linked.via, here('linked', l, 'via'));
+        if (target === undefined) return;
+        linked.where.forEach((condition, w) => out.push(...conditionIssues(target, condition, index, here('linked', l, 'where', w))));
+      });
+      const time = move.requires.time;
+      if (time?.after !== undefined) out.push(...momentIssues(table, time.after, index, here('time', 'after')));
+      if (time?.before !== undefined) out.push(...momentIssues(table, time.before, index, here('time', 'before')));
+      (move.requires.setting ?? []).forEach((setting, k) => {
+        const path = here('setting', k);
+        if (index.table(setting.table) === undefined) {
+          out.push({ path, message: `"${setting.table}" is not a table of this manifest` });
+          return;
+        }
+        const found = index.column(setting.table, setting.column);
+        if (found === undefined) out.push({ path, message: `"${setting.table}" has no column "${setting.column}"` });
+        else if (!valueFits(found, setting.eq)) out.push({ path, message: `${JSON.stringify(setting.eq)} is not a value of "${setting.table}.${setting.column}"` });
+      });
+    });
+  }
+
+  if (typeof states.strict === 'object') {
+    states.strict.show.forEach((ref, i) => {
+      const path = at('strict', 'show', i);
+      if (index.column(table, ref) === undefined) {
+        out.push({ path, message: `"${table}" has no column "${ref}"` });
+        return;
+      }
+      const kept = ctx.keptFromReaders?.(ref) ?? null;
+      if (kept !== null) out.push({ path, message: `"${table}.${ref}" is ${kept}, so a refusal never repeats it` });
+    });
+  }
+
+  (states.late ?? []).forEach((late, i) => {
+    const here = (...rest: (string | number)[]) => at('late', i, ...rest);
+    known(late.to, here('to'));
+    (late.from ?? []).forEach((from, f) => {
+      known(from, here('from', f));
+      if (listed(from, late.to) === undefined) out.push({ path: here('from', f), message: `no listed move goes from "${from}" to "${late.to}"` });
+    });
+    if (late.from === undefined && !reached(late.to)) out.push({ path: here('to'), message: `no listed move goes to "${late.to}"` });
+    out.push(...momentIssues(table, late.moment, index, here('moment')));
+    if (late.flag !== undefined) {
+      const flag = index.column(table, late.flag);
+      if (flag === undefined) out.push({ path: here('flag'), message: `"${table}" has no column "${late.flag}"` });
+      else if (flag.type !== 'bool') out.push({ path: here('flag'), message: `"${table}.${late.flag}" is not a bool` });
+      else if (late.flag === states.column) out.push({ path: here('flag'), message: 'the flag is a column of its own, not the state' });
+      if (ctx.decided?.(late.flag) === true) out.push({ path: here('flag'), message: `"${table}.${late.flag}" is written by another rule already` });
+      if ((states.late ?? []).some((other, j) => j < i && other.flag === late.flag)) {
+        out.push({ path: here('flag'), message: `"${late.flag}" is set by another late move of this table already` });
+      }
+    }
+    const cancel = ctx.bookingCancel;
+    if (cancel !== undefined && cancel.column === states.column && cancel.to === late.to) {
+      out.push({ path: here('to'), message: `the booking rule already says when a move to "${late.to}" is late; one late rule per move` });
+    }
+    if ((states.late ?? []).some((other, j) => j < i && other.to === late.to)) {
+      out.push({ path: here('to'), message: `another late rule already judges the move to "${late.to}"; one late rule per move` });
+    }
+  });
+
+  (states.timed ?? []).forEach((timed, i) => {
+    const here = (...rest: (string | number)[]) => at('timed', i, ...rest);
+    known(timed.from, here('from'));
+    known(timed.to, here('to'));
+    const move = listed(timed.from, timed.to);
+    if (move === undefined) out.push({ path: here('to'), message: `no listed move goes from "${timed.from}" to "${timed.to}"` });
+    if ((states.timed ?? []).some((other, j) => j < i && other.from === timed.from)) {
+      out.push({ path: here('from'), message: `another timed move already leaves "${timed.from}"` });
+    }
+    const vias = [timed.at, ...(timed.at.or ?? [])].some((moment) => moment.via !== undefined);
+    if (vias) out.push({ path: here('at'), message: "a timed move reads its own row's time, never a linked row's" });
+    else out.push(...momentIssues(table, timed.at, index, here('at')));
+    // A move waiting for a time later than the one it is made at could never pass.
+    const after = typeof move === 'object' ? move.requires?.time?.after : undefined;
+    if (after !== undefined && neverPasses(after, timed.at)) {
+      out.push({ path: here('at'), message: `the move from "${timed.from}" to "${timed.to}" waits until later than this, so it could never be made in time` });
+    }
+  });
+
+  (states.effects ?? []).forEach((effect, i) => {
+    const here = (...rest: (string | number)[]) => at('effects', i, ...rest);
+    known(effect.on.to, here('on', 'to'));
+    if (!reached(effect.on.to)) out.push({ path: here('on', 'to'), message: `no listed move goes to "${effect.on.to}", so nothing sets this off` });
+    if ((states.effects ?? []).some((other, j) => j < i && other.on.to === effect.on.to && other.via === effect.via)) {
+      out.push({ path: here(), message: `another effect already moves the row "${effect.via}" points at on a move to "${effect.on.to}"` });
+    }
+    const target = linkTarget(effect.via, here('via'));
+    if (target === undefined) return;
+    const theirs = ctx.statesOf?.(target);
+    if (theirs === undefined) {
+      out.push({ path: here('via'), message: `"${target}" declares no states, so its rows have no moves to make` });
+      return;
+    }
+    for (const [column, state] of Object.entries(effect.set)) {
+      if (column !== theirs.column) {
+        out.push({ path: here('set', column), message: `"${target}" moves by "${theirs.column}", not "${column}"` });
+        continue;
+      }
+      const moved = Object.values(theirs.moves).some((moves) => moves.some((move) => moveTarget(move) === state));
+      if (!moved) out.push({ path: here('set', column), message: `no move of "${target}" goes to "${state}"` });
+    }
+  });
+  return out;
+}
+
+/** Minutes of a literal shift, or undefined when it is read from a setting. */
+function literalMinutes(offset: MomentOffset | undefined): number | undefined {
+  if (offset === undefined) return 0;
+  const { minutes, hours, days } = offset;
+  if (typeof minutes === 'number') return minutes;
+  if (typeof hours === 'number') return hours * 60;
+  if (typeof days === 'number') return days * 1440;
+  return undefined;
+}
+
+/**
+ * Whether `after` is certainly later than `at`: both the same own column,
+ * no time of day, no fallback, and literal shifts. Anything else depends on
+ * the row and the settings, and is the app's to get right.
+ */
+function neverPasses(after: Moment, at: Moment): boolean {
+  const plain = (m: Moment) => m.via === undefined && m.time === undefined && m.or === undefined;
+  if (!plain(after) || !plain(at) || after.column !== at.column) return false;
+  const shift = (m: Moment): number | undefined => {
+    if (m.plus !== undefined) return literalMinutes(m.plus);
+    const back = literalMinutes(m.minus);
+    return back === undefined ? undefined : -back;
+  };
+  const a = shift(after);
+  const b = shift(at);
+  return a !== undefined && b !== undefined && a > b;
+}
+
+export function conditionIssues<C extends ColumnShape>(
+  table: string,
+  condition: StateCondition,
+  index: TableIndex<C>,
+  path: (string | number)[],
+): ReferenceIssue[] {
+  const found = index.column(table, condition.column);
+  if (found === undefined) return [{ path, message: `"${table}" has no column "${condition.column}"` }];
+  const out: ReferenceIssue[] = [];
+  const values = condition.eq !== undefined ? [condition.eq] : (condition.in ?? []);
+  for (const value of values) {
+    if (!valueFits(found, value)) out.push({ path, message: `${JSON.stringify(value)} is not a value of "${table}.${condition.column}"` });
+  }
+  const ordered = [condition.gt, condition.gte, condition.lt, condition.lte].some((part) => part !== undefined);
+  if (ordered && !['int', 'bigint', 'decimal', 'money', 'float'].includes(found.type)) {
+    out.push({ path, message: `"${table}.${condition.column}" is not a number, so it cannot be compared` });
+  }
+  return out;
+}
