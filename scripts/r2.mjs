@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 //
 // r2.mjs — write one released file into the downloads bucket, then prove the
-// public address serves exactly those bytes (48-self-hosted-downloads.md D1, D2,
-// D4, D6).
+// public address serves exactly those bytes.
 //
 // VENDORED. The canonical copy is `workplan/tools/app-release/r2.mjs` in the
 // Adminium monorepo. `app-release.sh sync` copies it, byte for byte, into every
@@ -11,7 +10,7 @@
 // ─── What a release may conclude, and from what ─────────────────────────────
 //
 // A ledger row says "this version's file is served with this fingerprint". An
-// upload answering 200 does not establish that; the public address does (D6).
+// upload answering 200 does not establish that; the public address does.
 // So `publishObject` returns only after https://downloads.adminium.dev has
 // served bytes whose sha512 equals the build's, and callers write their ledger
 // row after it returns, never before.
@@ -21,7 +20,7 @@
 //     └── 200 ──▶ GET: same sha512 ─────────────────────────┴──────▶ read back
 //                      different sha512 ──▶ STOP
 //
-// DIFFERENT BYTES ARE FINAL. The bucket lock (D2) keeps whatever is there, so
+// DIFFERENT BYTES ARE FINAL. The bucket lock keeps whatever is there, so
 // that version number is burned and the release needs the next patch. SAME
 // BYTES ARE THE RECOVERY: a release that uploaded and then failed its read-back
 // is re-dispatched with the same version and completes here, because `npm pack`
@@ -37,9 +36,9 @@
 
 import { createHash, createHmac } from 'node:crypto';
 
-/** The only public host a release is read back from (D4). */
+/** The only public host a release is read back from. */
 export const DOWNLOAD_HOST = 'downloads.adminium.dev';
-/** An edge can serve a miss cached from before the upload (48 §4); poll past it. */
+/** An edge can serve a miss cached from before the upload; poll past it. */
 export const READ_BACK_WAIT_MS = 5 * 60 * 1000;
 const READ_BACK_POLL_MS = 10_000;
 /** The server's MAX_TARBALL_BYTES: nothing larger is installable, so nothing larger ships. */
@@ -65,8 +64,9 @@ export class R2Error extends Error {
 export const sriOf = (bytes) => `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
 
 /**
- * D1's layout, and D4's own check: a URL built from the key must carry exactly
- * this path (a version's pre-release tail may hold `.` or `+`).
+ * The bucket's folder layout, and the same check the server makes: a URL built
+ * from the key must carry exactly this path (a version's pre-release tail may
+ * hold `.` or `+`).
  */
 export function objectKeyFor({ kind, key, version }) {
   if (typeof key !== 'string' || !KEY_RE.test(key)) throw new R2Error(`not a key: ${JSON.stringify(key)}`, 'key');
@@ -268,13 +268,14 @@ export function createR2(config, { fetchImpl = fetch } = {}) {
   return {
     head: (objectKey) => send('HEAD', objectKey),
     get: (objectKey) => send('GET', objectKey),
-    /** Refuse rather than replace (D6); the lock refuses too, this makes it explicit. */
+    /** Refuse rather than replace; the lock refuses too, this makes it explicit. */
     putIfAbsent: (objectKey, bytes) =>
       send('PUT', objectKey, {
         body: bytes,
         headers: {
           'content-type': 'application/octet-stream',
-          // Immutable by construction (D2), so any cache may keep it for good.
+          // Immutable by construction (the bucket lock), so any cache may keep it
+          // for good.
           // Permanent: under the lock, metadata can never be edited later.
           'cache-control': 'public, max-age=31536000, immutable',
           'content-disposition': `attachment; filename="${objectKey.split('/').pop()}"`,
@@ -302,7 +303,7 @@ export async function readBack({ url, integrity, waitMs = READ_BACK_WAIT_MS, pol
     if (got?.bytes != null) {
       const sri = sriOf(got.bytes);
       if (sri !== integrity) {
-        // A bot challenge arrives as a 200 with an HTML body (48 §4), so name the type.
+        // A bot challenge arrives as a 200 with an HTML body, so name the type.
         throw new R2Error(
           `${url} served ${String(got.bytes.length)} bytes of ${String(got.headers.get('content-type'))} ` +
             `hashing to ${sri}, not ${integrity}`,
@@ -322,8 +323,8 @@ export async function readBack({ url, integrity, waitMs = READ_BACK_WAIT_MS, pol
 }
 
 /**
- * The whole D6 leg for one file: into the bucket if absent, the same bytes if
- * present, and served publicly — in that order, or a thrown R2Error.
+ * The whole publish leg for one file: into the bucket if absent, the same bytes
+ * if present, and served publicly — in that order, or a thrown R2Error.
  */
 export async function publishObject({ config, kind, key, version, bytes, waitMs, pollMs, fetchImpl = fetch, log = () => {} }) {
   const objectKey = objectKeyFor({ kind, key, version });
@@ -379,7 +380,7 @@ export async function publishObject({ config, kind, key, version, bytes, waitMs,
   return { objectKey, url, integrity, status, lastModified: served.lastModified, cache: served.cache };
 }
 
-// ─── The minimum Adminium a release may claim (48 A17) ──────────────────────
+// ─── The minimum Adminium a release may claim ───────────────────────────────
 //
 // Every file released before 2026-09-16 claims `compatibility.minAdminiumVersion:
 // "1.0.0"`, while the newest Adminium was 0.2.8. Nothing enforced the field, so
@@ -425,7 +426,18 @@ export function compareVersions(a, b) {
   return 0;
 }
 
-/** The newest published Adminium, from the registry's `latest` tag. */
+/**
+ * The newest published Adminium — the greater of the `latest` and `next`
+ * dist-tags.
+ *
+ * `next` counts on purpose. A release candidate is published, so an add-on that
+ * needs it CAN be installed; reading `latest` alone made the floor check refuse
+ * every add-on above the stable line for as long as a new major sat on `next`.
+ * That bit on 2026-09-19: 0.3.0-rc.0 shipped to `next`, `latest` rolled back to
+ * 0.2.9, and the invoices add-on could not declare the 0.3.0 floor its own page
+ * requires. `latest` may be the GREATER of the two (a stable release with no rc
+ * pending), so this compares rather than preferring `next`.
+ */
 export async function newestAdminium({ registry = registryFromEnv(), fetchImpl = fetch } = {}) {
   const url = `${registry}/${ADMINIUM_PACKAGE.replace('/', '%2f')}`;
   let res;
@@ -442,9 +454,12 @@ export async function newestAdminium({ registry = registryFromEnv(), fetchImpl =
     await res.body?.cancel();
     throw new R2Error(`${url} answered HTTP ${String(res.status)}`, 'compat');
   }
-  const latest = (await res.json().catch(() => null))?.['dist-tags']?.latest;
-  if (typeof latest !== 'string' || !SEMVER_RE.test(latest)) throw new R2Error(`${url} names no latest version`, 'compat');
-  return latest;
+  const tags = (await res.json().catch(() => null))?.['dist-tags'] ?? {};
+  const usable = ['latest', 'next']
+    .map((name) => tags[name])
+    .filter((v) => typeof v === 'string' && SEMVER_RE.test(v));
+  if (usable.length === 0) throw new R2Error(`${url} names no latest or next version`, 'compat');
+  return usable.reduce((a, b) => (compareVersions(a, b) >= 0 ? a : b));
 }
 
 /** Refuse a manifest whose minimum no published Adminium meets. Returns the minimum. */
@@ -454,7 +469,16 @@ export function assertMinimumReleased(manifest, newest) {
   if (typeof minimum !== 'string' || !SEMVER_RE.test(minimum)) {
     throw new R2Error(`${label}: manifest.json has no compatibility.minAdminiumVersion that is a version`, 'compat');
   }
-  if (compareVersions(minimum, newest) > 0) {
+  // Compared on the RELEASE TRIPLE, the way the server does it. @adminium/
+  // manifest's compareSemver (packages/manifest/src/schema.ts) splits on '-'
+  // and ignores what follows, so an 0.3.0-rc.0 instance reads as 0.3.0 and
+  // installs an add-on whose floor is 0.3.0. Using strict semver here instead
+  // made this gate refuse to publish what every running server would accept:
+  // a prerelease sorts BELOW its release, so 0.3.0-rc.0 failed a 0.3.0 floor.
+  // A gate that predicts "no server can meet this claim" has to ask the
+  // question the server asks.
+  const triple = (v) => v.split('+')[0].split('-')[0];
+  if (compareVersions(triple(minimum), triple(newest)) > 0) {
     throw new R2Error(
       `${label} claims it needs Adminium ${minimum}, but the newest published release is ${newest}. ` +
         'No server can meet that claim, and a released file keeps it forever. Set ' +
