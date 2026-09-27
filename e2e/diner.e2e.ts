@@ -79,7 +79,9 @@ for (const variant of VARIANTS) {
     await expect(times.getByRole("radio", { checked: true })).not.toHaveAttribute("data-time", before ?? "");
     await expect(times.getByRole("radio", { checked: true })).toBeFocused();
 
-    await page.getByRole("button", { name: new RegExp(`^${t("co.placeNoTotal")}`) }).click();
+    // "Place order · $16.78": the words before the total, which no other button starts with.
+    const placeWords = t("co.place").split("{total}")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await page.getByRole("button", { name: new RegExp(`^${placeWords}`) }).click();
     await expect(page.getByRole("button", { name: t("confirm.follow") })).toBeVisible();
     await check(page, PROJECT, "confirmation", variant);
 

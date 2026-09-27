@@ -1,0 +1,467 @@
+/**
+ * The kitchen's emails in the seven languages beside English. Each language
+ * is one set of sentences; `wordsOf` puts them into the same shape as the
+ * English words, so every language has every email and every block. Drafts
+ * until a native speaker has read them (`src/i18n/review-status.json`).
+ *
+ * `{{…}}` are the outbox's variables, exactly as in English.
+ */
+import type { EmailWords } from "./emails.ts";
+import type { Tag } from "./labels.ts";
+
+interface Sentences {
+  payAtPickup: string;
+  subtotal: string;
+  tax: string;
+  total: string;
+  orderFoot: string;
+  enquiryFoot: string;
+  thanks: string;
+  sorry: string;
+  nothingCharged: string;
+  nothingChargedShort: string;
+  callAgain: string;
+  cancelSubject: string;
+  confirmName: string;
+  confirmPhoneName: string;
+  confirmSubject: string;
+  confirmPreheader: string;
+  confirmBody: string;
+  follow: string;
+  phoneBody: string;
+  phoneCall: string;
+  readyName: string;
+  readySubject: string;
+  readyPreheader: string;
+  readyHeading: string;
+  readyCome: string;
+  readyPay: string;
+  ranOutName: string;
+  ranOut: string;
+  busyName: string;
+  busy: string;
+  askedName: string;
+  askedSubject: string;
+  asked: string;
+  closedName: string;
+  closed: string;
+  otherName: string;
+  byYouName: string;
+  byYouSubject: string;
+  byYou: string;
+  byYouCall: string;
+  receiptName: string;
+  receiptSubject: string;
+  receiptHeading: string;
+  receiptBody: string;
+  enquiryName: string;
+  enquirySubject: string;
+  enquiryPreheader: string;
+  enquiryHeading: string;
+  enquiryRef: string;
+  enquiryCall: string;
+}
+
+function wordsOf(s: Sentences): EmailWords {
+  const cancelled = (name: string, reason: string) => ({ name, subject: s.cancelSubject, preheader: s.nothingChargedShort, heading: s.sorry, paras: [reason, s.nothingCharged, s.callAgain] });
+  return {
+    payAtPickup: s.payAtPickup,
+    subtotal: s.subtotal,
+    tax: s.tax,
+    total: s.total,
+    orderFoot: s.orderFoot,
+    enquiryFoot: s.enquiryFoot,
+    "order-confirmation": { name: s.confirmName, subject: s.confirmSubject, preheader: s.confirmPreheader, heading: s.thanks, paras: [s.confirmBody], button: s.follow },
+    "order-confirmation-phone": { name: s.confirmPhoneName, subject: s.confirmSubject, preheader: s.confirmPreheader, heading: s.thanks, paras: [s.phoneBody, s.phoneCall] },
+    "order-ready": { name: s.readyName, subject: s.readySubject, preheader: s.readyPreheader, heading: s.readyHeading, paras: [s.readyCome, "{{practice.directions}}", s.readyPay] },
+    "order-cancelled-ran-out": cancelled(s.ranOutName, s.ranOut),
+    "order-cancelled-too-busy": cancelled(s.busyName, s.busy),
+    "order-cancelled-customer-asked": { name: s.askedName, subject: s.askedSubject, preheader: s.nothingChargedShort, paras: [s.asked, s.nothingCharged, s.callAgain] },
+    "order-cancelled-closed": cancelled(s.closedName, s.closed),
+    "order-cancelled-other": cancelled(s.otherName, "{{order.cancel_note}}"),
+    "order-cancelled-by-you": { name: s.byYouName, subject: s.byYouSubject, preheader: s.nothingChargedShort, paras: [s.byYou, s.byYouCall] },
+    "order-receipt": { name: s.receiptName, subject: s.receiptSubject, preheader: "#{{order.number}} · {{order.total}}", heading: s.receiptHeading, paras: [s.receiptBody] },
+    "enquiry-received": { name: s.enquiryName, subject: s.enquirySubject, preheader: s.enquiryPreheader, heading: s.enquiryHeading, paras: [s.enquiryRef, s.enquiryCall] },
+  };
+}
+
+const DE: Sentences = {
+  payAtPickup: "Bezahlt wird bei der Abholung, bar oder mit Karte.",
+  subtotal: "Zwischensumme",
+  tax: "Steuer",
+  total: "Gesamt",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast.",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du uns eine Anfrage für eine Großbestellung geschickt hast.",
+  thanks: "Danke, {{recipient.first_name}}.",
+  sorry: "Tut uns leid, {{recipient.first_name}}.",
+  nothingCharged: "Es wurde nichts berechnet — du zahlst bei der Abholung, und es wurde nichts abgeholt.",
+  nothingChargedShort: "Es wurde nichts berechnet",
+  callAgain: "Ruf uns unter {{practice.phone}} an, wenn du noch einmal bestellen möchtest.",
+  cancelSubject: "Wir mussten #{{order.number}} stornieren",
+  confirmName: "Bestellbestätigung",
+  confirmPhoneName: "Bestellbestätigung (Telefon)",
+  confirmSubject: "Deine Bestellung #{{order.number}} ist da",
+  confirmPreheader: "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
+  confirmBody: "Wir haben deine Bestellung #{{order.number}} für {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} um {{order.pickup_at.time}}.",
+  follow: "Bestellung verfolgen",
+  phoneBody: "Hier ist deine telefonische Bestellung: #{{order.number}} für {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} um {{order.pickup_at.time}}.",
+  phoneCall: "Ruf uns unter {{practice.phone}} an, wenn sich etwas ändert.",
+  readyName: "Bestellung fertig",
+  readySubject: "#{{order.number}} liegt im Regal",
+  readyPreheader: "Jetzt im Regal · {{order.total}} zu zahlen",
+  readyHeading: "#{{order.number}} ist fertig.",
+  readyCome: "Komm rein — sie wartet auf dich, nach Nummer abgelegt.",
+  readyPay: "Du zahlst {{order.total}} an der Theke.",
+  ranOutName: "Storniert: etwas ist ausgegangen",
+  ranOut: "Etwas ist ausgegangen: {{order.cancel_dish}}.",
+  busyName: "Storniert: die Küche war zu voll",
+  busy: "Die Küche ist zu voll, um es rechtzeitig zu schaffen.",
+  askedName: "Storniert: auf Wunsch des Gasts",
+  askedSubject: "Wir haben #{{order.number}} storniert",
+  asked: "Wie gewünscht haben wir #{{order.number}} storniert.",
+  closedName: "Storniert: bis Ladenschluss nicht fertig",
+  closed: "Wir haben geschlossen, bevor deine Bestellung fertig war, deshalb haben wir sie storniert.",
+  otherName: "Storniert: ein anderer Grund",
+  byYouName: "Vom Gast storniert",
+  byYouSubject: "Du hast #{{order.number}} storniert",
+  byYou: "Du hast #{{order.number}} um {{order.cancelled_at.time}} storniert. Es wurde nichts berechnet.",
+  byYouCall: "Wenn du das nicht warst, ruf uns unter {{practice.phone}} an.",
+  receiptName: "Beleg",
+  receiptSubject: "Dein Beleg von {{appName}}",
+  receiptHeading: "Danke fürs Abholen von #{{order.number}}.",
+  receiptBody: "Dein Beleg ist angehängt: {{order.total}}.",
+  enquiryName: "Anfrage für Großbestellung erhalten",
+  enquirySubject: "Wir haben deine Anfrage, {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} Personen",
+  enquiryHeading: "{{enquiry.heads}} Personen am {{enquiry.wanted_on}}.",
+  enquiryRef: "Deine Referenz ist {{enquiry.ref}}.",
+  enquiryCall: "Jemand aus der Küche ruft dich an, um alles zu besprechen — am selben Tag, wenn wir offen haben, sonst kurz nach dem Öffnen.",
+};
+
+const FR: Sentences = {
+  payAtPickup: "Paiement au retrait, en espèces ou par carte.",
+  subtotal: "Sous-total",
+  tax: "Taxe",
+  total: "Total",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous.",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous nous avez envoyé une demande de grande commande.",
+  thanks: "Merci, {{recipient.first_name}}.",
+  sorry: "Désolés, {{recipient.first_name}}.",
+  nothingCharged: "Rien n’a été facturé — vous payez au retrait, et rien n’a été retiré.",
+  nothingChargedShort: "Rien n’a été facturé",
+  callAgain: "Appelez-nous au {{practice.phone}} si vous souhaitez commander à nouveau.",
+  cancelSubject: "Nous avons dû annuler la commande #{{order.number}}",
+  confirmName: "Confirmation de commande",
+  confirmPhoneName: "Confirmation de commande (téléphone)",
+  confirmSubject: "Votre commande #{{order.number}} est enregistrée",
+  confirmPreheader: "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · {{order.total}} à payer au retrait",
+  confirmBody: "Nous avons votre commande #{{order.number}} pour {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} à {{order.pickup_at.time}}.",
+  follow: "Suivre votre commande",
+  phoneBody: "Voici la commande passée par téléphone : #{{order.number}} pour {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} à {{order.pickup_at.time}}.",
+  phoneCall: "Appelez-nous au {{practice.phone}} en cas de changement.",
+  readyName: "Commande prête",
+  readySubject: "#{{order.number}} est sur l’étagère",
+  readyPreheader: "Sur l’étagère · {{order.total}} à payer",
+  readyHeading: "#{{order.number}} est prête.",
+  readyCome: "Entrez — elle vous attend, classée par numéro.",
+  readyPay: "Vous paierez {{order.total}} au comptoir.",
+  ranOutName: "Annulée : un produit a manqué",
+  ranOut: "Un produit a manqué : {{order.cancel_dish}}.",
+  busyName: "Annulée : cuisine trop chargée",
+  busy: "La cuisine est trop chargée pour la préparer à temps.",
+  askedName: "Annulée : à la demande du client",
+  askedSubject: "Nous avons annulé la commande #{{order.number}}",
+  asked: "Comme demandé, nous avons annulé la commande #{{order.number}}.",
+  closedName: "Annulée : pas prête avant la fermeture",
+  closed: "Nous avons fermé avant que votre commande soit prête, nous l’avons donc annulée.",
+  otherName: "Annulée : autre raison",
+  byYouName: "Annulée par le client",
+  byYouSubject: "Vous avez annulé la commande #{{order.number}}",
+  byYou: "Vous avez annulé la commande #{{order.number}} à {{order.cancelled_at.time}}. Rien n’a été facturé.",
+  byYouCall: "Si ce n’est pas vous, appelez-nous au {{practice.phone}}.",
+  receiptName: "Reçu",
+  receiptSubject: "Votre reçu de {{appName}}",
+  receiptHeading: "Merci d’avoir retiré la commande #{{order.number}}.",
+  receiptBody: "Votre reçu est en pièce jointe : {{order.total}}.",
+  enquiryName: "Demande de grande commande reçue",
+  enquirySubject: "Nous avons reçu votre demande, {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} personnes",
+  enquiryHeading: "{{enquiry.heads}} personnes le {{enquiry.wanted_on}}.",
+  enquiryRef: "Votre référence est {{enquiry.ref}}.",
+  enquiryCall: "Quelqu’un de la cuisine vous appellera pour en parler — le jour même si nous sommes ouverts, sinon peu après l’ouverture.",
+};
+
+const DA: Sentences = {
+  payAtPickup: "Betal ved afhentning, kontant eller med kort.",
+  subtotal: "Subtotal",
+  tax: "Moms",
+  total: "I alt",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os.",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har sendt os en forespørgsel om en stor bestilling.",
+  thanks: "Tak, {{recipient.first_name}}.",
+  sorry: "Undskyld, {{recipient.first_name}}.",
+  nothingCharged: "Der er ikke opkrævet noget — du betaler ved afhentning, og der er ikke hentet noget.",
+  nothingChargedShort: "Der er ikke opkrævet noget",
+  callAgain: "Ring til os på {{practice.phone}}, hvis du vil bestille igen.",
+  cancelSubject: "Vi måtte annullere #{{order.number}}",
+  confirmName: "Ordrebekræftelse",
+  confirmPhoneName: "Ordrebekræftelse (telefon)",
+  confirmSubject: "Din bestilling #{{order.number}} er modtaget",
+  confirmPreheader: "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · {{order.total}} betales ved afhentning",
+  confirmBody: "Vi har din bestilling #{{order.number}} til {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} kl. {{order.pickup_at.time}}.",
+  follow: "Følg din bestilling",
+  phoneBody: "Her er den bestilling, du afgav pr. telefon: #{{order.number}} til {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} kl. {{order.pickup_at.time}}.",
+  phoneCall: "Ring til os på {{practice.phone}}, hvis noget ændrer sig.",
+  readyName: "Bestilling klar",
+  readySubject: "#{{order.number}} står på hylden",
+  readyPreheader: "På hylden nu · {{order.total}} at betale",
+  readyHeading: "#{{order.number}} er klar.",
+  readyCome: "Kom bare ind — den venter på dig, sorteret efter nummer.",
+  readyPay: "Du betaler {{order.total}} ved disken.",
+  ranOutName: "Annulleret: noget slap op",
+  ranOut: "Noget slap op: {{order.cancel_dish}}.",
+  busyName: "Annulleret: køkkenet havde for travlt",
+  busy: "Køkkenet har for travlt til at nå den i tide.",
+  askedName: "Annulleret: som gæsten bad om",
+  askedSubject: "Vi har annulleret #{{order.number}}",
+  asked: "Som du bad om, har vi annulleret #{{order.number}}.",
+  closedName: "Annulleret: ikke klar før lukketid",
+  closed: "Vi lukkede, før din bestilling var klar, så vi har annulleret den.",
+  otherName: "Annulleret: en anden grund",
+  byYouName: "Annulleret af gæsten",
+  byYouSubject: "Du annullerede #{{order.number}}",
+  byYou: "Du annullerede #{{order.number}} kl. {{order.cancelled_at.time}}. Der er ikke opkrævet noget.",
+  byYouCall: "Hvis det ikke var dig, så ring til os på {{practice.phone}}.",
+  receiptName: "Kvittering",
+  receiptSubject: "Din kvittering fra {{appName}}",
+  receiptHeading: "Tak, fordi du hentede #{{order.number}}.",
+  receiptBody: "Din kvittering er vedhæftet: {{order.total}}.",
+  enquiryName: "Forespørgsel om stor bestilling modtaget",
+  enquirySubject: "Vi har fået din forespørgsel, {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} personer",
+  enquiryHeading: "{{enquiry.heads}} personer den {{enquiry.wanted_on}}.",
+  enquiryRef: "Din reference er {{enquiry.ref}}.",
+  enquiryCall: "En fra køkkenet ringer til dig og taler det igennem — samme dag, hvis vi har åbent, ellers kort efter vi åbner.",
+};
+
+const CS: Sentences = {
+  payAtPickup: "Platí se při vyzvednutí, hotově nebo kartou.",
+  subtotal: "Mezisoučet",
+  tax: "Daň",
+  total: "Celkem",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali.",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste nám poslali poptávku velké objednávky.",
+  thanks: "Děkujeme, {{recipient.first_name}}.",
+  sorry: "Omlouváme se, {{recipient.first_name}}.",
+  nothingCharged: "Nic jsme neúčtovali — platí se při vyzvednutí a nic nebylo vyzvednuto.",
+  nothingChargedShort: "Nic jsme neúčtovali",
+  callAgain: "Zavolejte nám na {{practice.phone}}, pokud si chcete objednat znovu.",
+  cancelSubject: "Objednávku #{{order.number}} jsme museli zrušit",
+  confirmName: "Potvrzení objednávky",
+  confirmPhoneName: "Potvrzení objednávky (telefon)",
+  confirmSubject: "Vaše objednávka #{{order.number}} je přijata",
+  confirmPreheader: "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} při vyzvednutí",
+  confirmBody: "Vaši objednávku #{{order.number}} na {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}} máme.",
+  follow: "Sledovat objednávku",
+  phoneBody: "Tady je vaše telefonická objednávka: #{{order.number}} na {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}.",
+  phoneCall: "Pokud se něco změní, zavolejte nám na {{practice.phone}}.",
+  readyName: "Objednávka hotová",
+  readySubject: "#{{order.number}} je na polici",
+  readyPreheader: "Teď na polici · k zaplacení {{order.total}}",
+  readyHeading: "#{{order.number}} je hotová.",
+  readyCome: "Pojďte dál — čeká na vás, seřazená podle čísla.",
+  readyPay: "U pultu zaplatíte {{order.total}}.",
+  ranOutName: "Zrušeno: něco došlo",
+  ranOut: "Něco došlo: {{order.cancel_dish}}.",
+  busyName: "Zrušeno: kuchyně byla přetížená",
+  busy: "Kuchyně je příliš vytížená, aby to stihla včas.",
+  askedName: "Zrušeno: na přání hosta",
+  askedSubject: "Objednávku #{{order.number}} jsme zrušili",
+  asked: "Jak jste si přáli, objednávku #{{order.number}} jsme zrušili.",
+  closedName: "Zrušeno: nehotové do zavírací doby",
+  closed: "Zavřeli jsme dřív, než byla vaše objednávka hotová, a proto jsme ji zrušili.",
+  otherName: "Zrušeno: jiný důvod",
+  byYouName: "Zrušeno hostem",
+  byYouSubject: "Zrušili jste objednávku #{{order.number}}",
+  byYou: "Objednávku #{{order.number}} jste zrušili v {{order.cancelled_at.time}}. Nic jsme neúčtovali.",
+  byYouCall: "Pokud jste to nebyli vy, zavolejte nám na {{practice.phone}}.",
+  receiptName: "Účtenka",
+  receiptSubject: "Vaše účtenka od {{appName}}",
+  receiptHeading: "Děkujeme za vyzvednutí objednávky #{{order.number}}.",
+  receiptBody: "Účtenku najdete v příloze: {{order.total}}.",
+  enquiryName: "Poptávka velké objednávky přijata",
+  enquirySubject: "Vaši poptávku jsme přijali, {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} osob",
+  enquiryHeading: "{{enquiry.heads}} osob, {{enquiry.wanted_on}}.",
+  enquiryRef: "Vaše číslo poptávky je {{enquiry.ref}}.",
+  enquiryCall: "Někdo z kuchyně vám zavolá a vše probere — týž den, pokud máme otevřeno, jinak brzy po otevření.",
+};
+
+const ZH_CN: Sentences = {
+  payAtPickup: "取餐时付款，现金或刷卡均可。",
+  subtotal: "小计",
+  tax: "税费",
+  total: "合计",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你向我们发送了大额订单询价。",
+  thanks: "谢谢，{{recipient.first_name}}。",
+  sorry: "抱歉，{{recipient.first_name}}。",
+  nothingCharged: "没有任何扣费——取餐时才付款，而订单并未取走。",
+  nothingChargedShort: "没有任何扣费",
+  callAgain: "如想重新下单，请致电 {{practice.phone}}。",
+  cancelSubject: "我们不得不取消订单 #{{order.number}}",
+  confirmName: "订单确认",
+  confirmPhoneName: "订单确认（电话）",
+  confirmSubject: "已收到你的订单 #{{order.number}}",
+  confirmPreheader: "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐时付 {{order.total}}",
+  confirmBody: "已收到你的订单 #{{order.number}}，取餐时间 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。",
+  follow: "跟踪订单",
+  phoneBody: "这是你电话下的订单：#{{order.number}}，取餐时间 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。",
+  phoneCall: "如有变动，请致电 {{practice.phone}}。",
+  readyName: "订单已完成",
+  readySubject: "#{{order.number}} 已放上取餐架",
+  readyPreheader: "已在取餐架上 · 应付 {{order.total}}",
+  readyHeading: "#{{order.number}} 已做好。",
+  readyCome: "请进店领取——已按号码放好等你。",
+  readyPay: "请在柜台支付 {{order.total}}。",
+  ranOutName: "已取消：有食材用完了",
+  ranOut: "有食材用完了：{{order.cancel_dish}}。",
+  busyName: "已取消：厨房太忙",
+  busy: "厨房太忙，来不及按时做好。",
+  askedName: "已取消：应顾客要求",
+  askedSubject: "我们已取消订单 #{{order.number}}",
+  asked: "按你的要求，我们已取消订单 #{{order.number}}。",
+  closedName: "已取消：打烊前未做好",
+  closed: "你的订单做好之前我们已经打烊，所以取消了这笔订单。",
+  otherName: "已取消：其他原因",
+  byYouName: "顾客已取消",
+  byYouSubject: "你已取消订单 #{{order.number}}",
+  byYou: "你于 {{order.cancelled_at.time}} 取消了订单 #{{order.number}}。没有任何扣费。",
+  byYouCall: "如果不是你本人取消，请致电 {{practice.phone}}。",
+  receiptName: "收据",
+  receiptSubject: "来自 {{appName}} 的收据",
+  receiptHeading: "感谢取走订单 #{{order.number}}。",
+  receiptBody: "收据见附件：{{order.total}}。",
+  enquiryName: "已收到大额订单询价",
+  enquirySubject: "已收到你的询价 {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} 人",
+  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。",
+  enquiryRef: "你的询价编号是 {{enquiry.ref}}。",
+  enquiryCall: "厨房会有人致电与你详谈——营业日当天，否则开门后尽快。",
+};
+
+const ZH_TW: Sentences = {
+  payAtPickup: "取餐時付款，現金或刷卡皆可。",
+  subtotal: "小計",
+  tax: "稅金",
+  total: "合計",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你向我們送出了大量訂購詢價。",
+  thanks: "謝謝，{{recipient.first_name}}。",
+  sorry: "抱歉，{{recipient.first_name}}。",
+  nothingCharged: "沒有任何扣款——取餐時才付款，而訂單並未取走。",
+  nothingChargedShort: "沒有任何扣款",
+  callAgain: "如想重新下單，請致電 {{practice.phone}}。",
+  cancelSubject: "我們不得不取消訂單 #{{order.number}}",
+  confirmName: "訂單確認",
+  confirmPhoneName: "訂單確認（電話）",
+  confirmSubject: "已收到你的訂單 #{{order.number}}",
+  confirmPreheader: "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐時付 {{order.total}}",
+  confirmBody: "已收到你的訂單 #{{order.number}}，取餐時間 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。",
+  follow: "追蹤訂單",
+  phoneBody: "這是你電話下的訂單：#{{order.number}}，取餐時間 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。",
+  phoneCall: "如有變動，請致電 {{practice.phone}}。",
+  readyName: "訂單已完成",
+  readySubject: "#{{order.number}} 已放上取餐架",
+  readyPreheader: "已在取餐架上 · 應付 {{order.total}}",
+  readyHeading: "#{{order.number}} 已做好。",
+  readyCome: "請進店領取——已按號碼放好等你。",
+  readyPay: "請在櫃檯支付 {{order.total}}。",
+  ranOutName: "已取消：有食材用完了",
+  ranOut: "有食材用完了：{{order.cancel_dish}}。",
+  busyName: "已取消：廚房太忙",
+  busy: "廚房太忙，來不及準時做好。",
+  askedName: "已取消：應顧客要求",
+  askedSubject: "我們已取消訂單 #{{order.number}}",
+  asked: "依你的要求，我們已取消訂單 #{{order.number}}。",
+  closedName: "已取消：打烊前未做好",
+  closed: "你的訂單做好之前我們已經打烊，所以取消了這筆訂單。",
+  otherName: "已取消：其他原因",
+  byYouName: "顧客已取消",
+  byYouSubject: "你已取消訂單 #{{order.number}}",
+  byYou: "你於 {{order.cancelled_at.time}} 取消了訂單 #{{order.number}}。沒有任何扣款。",
+  byYouCall: "如果不是你本人取消，請致電 {{practice.phone}}。",
+  receiptName: "收據",
+  receiptSubject: "來自 {{appName}} 的收據",
+  receiptHeading: "感謝取走訂單 #{{order.number}}。",
+  receiptBody: "收據見附件：{{order.total}}。",
+  enquiryName: "已收到大量訂購詢價",
+  enquirySubject: "已收到你的詢價 {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} 人",
+  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。",
+  enquiryRef: "你的詢價編號是 {{enquiry.ref}}。",
+  enquiryCall: "廚房會有人致電與你詳談——營業日當天，否則開門後盡快。",
+};
+
+const AR: Sentences = {
+  payAtPickup: "الدفع عند الاستلام، نقدًا أو بالبطاقة.",
+  subtotal: "المجموع الفرعي",
+  tax: "الضريبة",
+  total: "الإجمالي",
+  orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا.",
+  enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك أرسلت إلينا استفسارًا عن طلب كبير.",
+  thanks: "شكرًا، {{recipient.first_name}}.",
+  sorry: "نعتذر، {{recipient.first_name}}.",
+  nothingCharged: "لم نحصّل أي مبلغ — الدفع عند الاستلام، ولم يُستلم شيء.",
+  nothingChargedShort: "لم نحصّل أي مبلغ",
+  callAgain: "اتصل بنا على {{practice.phone}} إن أردت الطلب مجددًا.",
+  cancelSubject: "اضطررنا إلى إلغاء الطلب #{{order.number}}",
+  confirmName: "تأكيد الطلب",
+  confirmPhoneName: "تأكيد الطلب (هاتفي)",
+  confirmSubject: "وصلنا طلبك #{{order.number}}",
+  confirmPreheader: "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · {{order.total}} تُدفع عند الاستلام",
+  confirmBody: "وصلنا طلبك #{{order.number}} ليوم {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}.",
+  follow: "تابع طلبك",
+  phoneBody: "هذا هو الطلب الذي قدّمته هاتفيًا: #{{order.number}} ليوم {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}.",
+  phoneCall: "اتصل بنا على {{practice.phone}} إن تغيّر أي شيء.",
+  readyName: "الطلب جاهز",
+  readySubject: "#{{order.number}} على الرف",
+  readyPreheader: "على الرف الآن · {{order.total}} للدفع",
+  readyHeading: "#{{order.number}} جاهز.",
+  readyCome: "تفضّل بالدخول — إنه بانتظارك، مرتّب بالرقم.",
+  readyPay: "ستدفع {{order.total}} عند الكاونتر.",
+  ranOutName: "أُلغي: نفد شيء",
+  ranOut: "نفد شيء: {{order.cancel_dish}}.",
+  busyName: "أُلغي: المطبخ مشغول جدًا",
+  busy: "المطبخ مشغول جدًا لإعداده في الوقت المحدد.",
+  askedName: "أُلغي: بناءً على طلب الزبون",
+  askedSubject: "ألغينا الطلب #{{order.number}}",
+  asked: "كما طلبت، ألغينا الطلب #{{order.number}}.",
+  closedName: "أُلغي: لم يجهز قبل الإغلاق",
+  closed: "أغلقنا قبل أن يجهز طلبك، لذا ألغيناه.",
+  otherName: "أُلغي: سبب آخر",
+  byYouName: "ألغاه الزبون",
+  byYouSubject: "ألغيت الطلب #{{order.number}}",
+  byYou: "ألغيت الطلب #{{order.number}} الساعة {{order.cancelled_at.time}}. لم نحصّل أي مبلغ.",
+  byYouCall: "إن لم تكن أنت من ألغاه، اتصل بنا على {{practice.phone}}.",
+  receiptName: "الإيصال",
+  receiptSubject: "إيصالك من {{appName}}",
+  receiptHeading: "شكرًا لاستلامك الطلب #{{order.number}}.",
+  receiptBody: "إيصالك مرفق: {{order.total}}.",
+  enquiryName: "استُلم استفسار طلب كبير",
+  enquirySubject: "وصلنا استفسارك، {{enquiry.ref}}",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} أشخاص",
+  enquiryHeading: "{{enquiry.heads}} أشخاص يوم {{enquiry.wanted_on}}.",
+  enquiryRef: "رقمك المرجعي هو {{enquiry.ref}}.",
+  enquiryCall: "سيتصل بك أحد من المطبخ للحديث في التفاصيل — في اليوم نفسه إن كنا مفتوحين، أو بعد الافتتاح بقليل.",
+};
+
+export const EMAIL_TRANSLATIONS: Record<Exclude<Tag, "en-US">, EmailWords> = {
+  "de-DE": wordsOf(DE),
+  "fr-FR": wordsOf(FR),
+  "da-DK": wordsOf(DA),
+  "cs-CZ": wordsOf(CS),
+  "ar-EG": wordsOf(AR),
+  "zh-CN": wordsOf(ZH_CN),
+  "zh-TW": wordsOf(ZH_TW),
+};

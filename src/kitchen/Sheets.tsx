@@ -153,7 +153,7 @@ export function Ticket() {
         {o["note"] ? (
           <div className="jk-notice" style={{ marginBlockStart: 14, background: "var(--warn-soft)", color: "var(--warn)" }}>
             <Icon name="message-square" size={14} style={{ marginBlockStart: 1 }} />
-            <span>{String(o["note"])}</span>
+            <span><bdi>{String(o["note"])}</bdi></span>
           </div>
         ) : null}
         {status === "cancelled" && o["cancel_code"] !== "self" && (

@@ -190,3 +190,11 @@ describe("the kitchen writes only what running the day needs", () => {
     expect(role("kitchen").permissions.some((p) => p.startsWith("table:@customers:"))).toBe(false);
   });
 });
+
+describe("every word the manifest shows", () => {
+  it("is in the eight languages", async () => {
+    const { untranslated } = await import("./labels.ts");
+    buildManifest();
+    expect(untranslated()).toEqual([]);
+  });
+});

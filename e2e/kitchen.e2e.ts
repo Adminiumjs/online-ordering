@@ -35,7 +35,7 @@ for (const variant of VARIANTS) {
     await page.goto(DEMO_BASE);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await asKitchen(page);
-    const tab = (key: MessageKey) => page.getByRole("tab", { name: new RegExp(`^${t(key)}`) });
+    const tab = (key: MessageKey) => page.getByRole("tab", { name: new RegExp(`^${t(key)}(\\s|\\d|$)`) });
     await expect(tab("kitchen.tab.queue")).toBeVisible();
     await check(page, PROJECT, "queue", variant);
 

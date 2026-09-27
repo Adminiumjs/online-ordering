@@ -145,7 +145,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
       {o["note"] ? (
         <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBlockEnd: 11, padding: "9px 11px", borderRadius: 10, background: "var(--warn-soft)", color: "var(--warn)" }}>
           <Icon name="message-square" size={13} style={{ marginBlockStart: 1 }} />
-          <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}>{String(o["note"])}</span>
+          <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}><bdi>{String(o["note"])}</bdi></span>
         </div>
       ) : null}
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBlockEnd: 11 }}>

@@ -241,3 +241,6 @@ textarea.jk-input { resize: vertical; min-height: 84px; line-height: 1.5; }
  * the page's side.
  */
 [dir="rtl"] .jk-mono { text-align: right; }
+
+/* What people type (a name, a note) reads in its own direction, whatever the page's. */
+input:not([dir]):not([type="date"]), textarea:not([dir]) { unicode-bidi: plaintext; }

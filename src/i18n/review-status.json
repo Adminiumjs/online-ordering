@@ -1,0 +1,18 @@
+{
+  "note": "Every translation is a draft until a native speaker has read it. The release review flips `reviewed` per language and surface, and names who read it.",
+  "surfaces": {
+    "screens": "src/i18n/strings/*.ts — the order page and the kitchen",
+    "emails": "src/manifest/emails-i18n.ts — the kitchen's emails",
+    "manifest": "src/manifest/words.ts — the dashboard's labels for this app",
+    "card": "src/demo/card.ts — the website's demo card"
+  },
+  "languages": {
+    "de-DE": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "fr-FR": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "da-DK": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "cs-CZ": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "ar-EG": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "zh-CN": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } },
+    "zh-TW": { "screens": { "reviewed": false, "by": null }, "emails": { "reviewed": false, "by": null }, "manifest": { "reviewed": false, "by": null }, "card": { "reviewed": false, "by": null } }
+  }
+}

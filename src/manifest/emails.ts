@@ -20,6 +20,7 @@
  */
 import type { Tag } from "./labels.ts";
 import type { Kind } from "./outbox.ts";
+import { EMAIL_TRANSLATIONS } from "./emails-i18n.ts";
 
 /** One email's sentences. */
 export interface Words {
@@ -189,9 +190,9 @@ function layout(kind: Kind, all: EmailWords) {
   };
 }
 
-/** Every language's words: English here, the others as they are translated. */
-export function emailWords(): Partial<Record<Tag, EmailWords>> & { "en-US": EmailWords } {
-  return { "en-US": EMAIL_EN };
+/** Every language's words: English here, the others in `emails-i18n.ts`. */
+export function emailWords(): Record<Tag, EmailWords> {
+  return { "en-US": EMAIL_EN, ...EMAIL_TRANSLATIONS };
 }
 
 /** The variables each template reads, for the template editor's list. */
