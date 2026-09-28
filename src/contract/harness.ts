@@ -28,7 +28,8 @@ const read = (path: string) => readFileSync(path, "utf8");
 export const ADMINIUM_REPO = process.env["ADMINIUM_REPO"] ?? "";
 export const ADD_ONS_REPO = process.env["ADD_ONS_REPO"] ?? join(REPO, "..", "add-ons");
 const E2E_SERVER = join(ADMINIUM_REPO, "apps", "e2e", "scripts", "e2e-server.mjs");
-const INVOICES = join(ADD_ONS_REPO, "packages", "invoices");
+/** An add-on's package in the add-ons checkout, by its key. */
+const addOnDir = (key: string) => join(ADD_ONS_REPO, "packages", key);
 
 /** Why the contract cannot run here, or null when it can. */
 export function missing(): string | null {
@@ -41,9 +42,15 @@ export function missing(): string | null {
   return null;
 }
 
-/** Why the checks that need Invoices & Receipts cannot run here, or null when they can. */
-export function missingAddOn(): string | null {
-  return existsSync(join(INVOICES, "dist", "server.js")) ? null : `no built invoices add-on in ${ADD_ONS_REPO}`;
+/** Why the checks that need an add-on cannot run here, or null when they can: its build has every file its manifest names. */
+export function missingAddOn(key = "invoices"): string | null {
+  const dir = addOnDir(key);
+  if (!existsSync(join(dir, "manifest.json"))) return `no ${key} add-on in ${ADD_ONS_REPO}`;
+  const manifest = JSON.parse(read(join(dir, "manifest.json"))) as { addOn?: { slots?: { client?: string }[] } };
+  // Its screens; and a renderer's server half, which the host loads by its place in the package.
+  const built = [...(manifest.addOn?.slots ?? []).map((s) => s.client), ...(existsSync(join(dir, "src", "server.ts")) ? ["dist/server.js"] : [])].filter((f): f is string => typeof f === "string");
+  const absent = built.find((file) => !existsSync(join(dir, file)));
+  return absent === undefined && existsSync(join(dir, "dist")) ? null : `no built ${key} add-on in ${ADD_ONS_REPO}`;
 }
 
 /** `CONTRACT_ENGINES=postgres,mysql` runs only those (a machine with few free ports runs them one at a time). */
@@ -95,14 +102,14 @@ const bundle = (files: Record<string, Buffer>): Bundle => {
 };
 
 /**
- * The version the app asks of the add-on (`addOns.requires[].range` `>=x.y.z`), and the
+ * The version the app asks of an add-on (`addOns.requires[].range` `>=x.y.z`), and the
  * version the checkout carries.
  */
-export function addOnVersions(): { floor: string | null; checkout: string } {
+export function addOnVersions(key = "invoices"): { floor: string | null; checkout: string } {
   const app = JSON.parse(read(join(REPO, "manifest.json"))) as { addOns?: { requires?: { key: string; range: string }[]; suggests?: { key: string; range: string }[] } };
-  const range = [...(app.addOns?.requires ?? []), ...(app.addOns?.suggests ?? [])].find((r) => r.key === "invoices")?.range ?? "";
+  const range = [...(app.addOns?.requires ?? []), ...(app.addOns?.suggests ?? [])].find((r) => r.key === key)?.range ?? "";
   const floor = /^>=\s*(\d+\.\d+\.\d+)$/.exec(range.trim())?.[1] ?? null;
-  const checkout = (JSON.parse(read(join(INVOICES, "manifest.json"))) as { version: string }).version;
+  const checkout = (JSON.parse(read(join(addOnDir(key), "manifest.json"))) as { version: string }).version;
   return { floor, checkout };
 }
 
@@ -119,30 +126,31 @@ const newer = (a: string, b: string) => {
  * checkout is packed as it — a rehearsal of the release, said in the test's
  * name — rather than failing on a number nobody has stamped yet.
  */
-export function packedAddOnVersion(): { version: string; rehearsed: boolean } {
-  const { floor, checkout } = addOnVersions();
+export function packedAddOnVersion(key = "invoices"): { version: string; rehearsed: boolean } {
+  const { floor, checkout } = addOnVersions(key);
   if (floor !== null && newer(floor, checkout)) return { version: floor, rehearsed: true };
   return { version: checkout, rehearsed: false };
 }
 
-/** The add-on, packed as its release packs it: `files[]`, the name rewritten, no dev-only fields. */
-export function addOnBundle(): Bundle & { key: string; version: string } {
-  const pkg = JSON.parse(read(join(INVOICES, "package.json"))) as Record<string, unknown> & { name: string; version: string; files: string[] };
+/** An add-on, packed as its release packs it: `files[]`, the name rewritten, no dev-only fields. */
+export function addOnBundle(key = "invoices"): Bundle & { key: string; version: string } {
+  const dir = addOnDir(key);
+  const pkg = JSON.parse(read(join(dir, "package.json"))) as Record<string, unknown> & { name: string; version: string; files: string[] };
   const files: Record<string, Buffer> = {};
   const add = (path: string) => {
-    const absolute = join(INVOICES, path);
+    const absolute = join(dir, path);
     if (!existsSync(absolute)) return;
     if (statSync(absolute).isDirectory()) {
       for (const name of readdirSync(absolute)) add(join(path, name));
       return;
     }
-    files[relative(INVOICES, absolute).split("\\").join("/")] = readFileSync(absolute);
+    files[relative(dir, absolute).split("\\").join("/")] = readFileSync(absolute);
   };
   for (const entry of pkg.files) add(entry);
-  const { version } = packedAddOnVersion();
+  const { version } = packedAddOnVersion(key);
   const { devDependencies: _dev, scripts: _scripts, ...shipped } = pkg;
   files["package.json"] = Buffer.from(JSON.stringify({ ...shipped, name: pkg.name.replace(/^@adminium\//, "@adminiumjs/"), version }));
-  const manifest = JSON.parse(read(join(INVOICES, "manifest.json"))) as { key: string; version: string };
+  const manifest = JSON.parse(read(join(dir, "manifest.json"))) as { key: string; version: string };
   files["manifest.json"] = Buffer.from(JSON.stringify({ ...manifest, version }));
   return { ...bundle(files), key: manifest.key, version };
 }
@@ -187,8 +195,8 @@ export interface Server {
   sink: string;
   /** What the server has said so far (its log), for a failure to show. */
   log(): string;
-  /** Set the server's clock to `at` (epoch ms); it runs on from there. */
-  setClock(at: number): Promise<void>;
+  /** Set the server's clock to `at` (epoch ms); it runs on from there, or with `still` stands at it until set again. */
+  setClock(at: number, still?: boolean): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -242,8 +250,8 @@ export async function boot(engine: Engine, port: number, now: number, options: {
     base,
     sink: `http://127.0.0.1:${String(port + 2)}`,
     log: () => log,
-    setClock: async (at) => {
-      writeFileSync(clockFile, String(at));
+    setClock: async (at, still = false) => {
+      writeFileSync(clockFile, still ? `${String(at)} still` : String(at));
       child.kill("SIGUSR2");
       // The signal is handled on the server's next turn of its loop.
       await new Promise((resolve) => setTimeout(resolve, 300));

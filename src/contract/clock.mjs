@@ -15,21 +15,28 @@ const target = Number(process.env.CONTRACT_NOW);
 if (Number.isFinite(target)) {
   const RealDate = Date;
   let offset = target - RealDate.now();
-  // The contract sets the clock again (a SIGUSR2, the new "now" in CONTRACT_CLOCK_FILE): to 11:40 just before the sample goes in.
+  /** A moment the clock stands still at, while the sample goes in; null while it runs. */
+  let still = null;
+  const now = () => still ?? RealDate.now() + offset;
+  // The contract sets the clock again (a SIGUSR2, the new "now" in CONTRACT_CLOCK_FILE, "<ms>" or
+  // "<ms> still"): to 11:40 on the dot while the sample goes in, and running on from there after.
   const file = process.env.CONTRACT_CLOCK_FILE;
   if (file) {
     process.on("SIGUSR2", () => {
-      const next = Number(readFileSync(file, "utf8"));
-      if (Number.isFinite(next)) offset = next - RealDate.now();
+      const [at, mode] = readFileSync(file, "utf8").trim().split(/\s+/);
+      const next = Number(at);
+      if (!Number.isFinite(next)) return;
+      offset = next - RealDate.now();
+      still = mode === "still" ? next : null;
     });
   }
   class ContractDate extends RealDate {
     constructor(...args) {
-      if (args.length === 0) super(RealDate.now() + offset);
+      if (args.length === 0) super(now());
       else super(...args);
     }
     static now() {
-      return RealDate.now() + offset;
+      return now();
     }
   }
   globalThis.Date = ContractDate;

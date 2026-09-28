@@ -15,22 +15,21 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { AdminiumDiner } from "../data/adminiumDiner.ts";
-import { AdminiumKitchen } from "../data/adminiumKitchen.ts";
-import { createSessionTransport } from "../data/sessionSource.ts";
+import type { AdminiumDiner } from "../data/adminiumDiner.ts";
+import type { AdminiumKitchen } from "../data/adminiumKitchen.ts";
 import { ApiError, type OrderBody, type Row } from "../data/wire.ts";
 import { DemoAdminium } from "../demo/adminium.ts";
-import { DEMO_CURRENCY, DEMO_START, DEMO_ZONE } from "../demo/world.ts";
+import { DEMO_START, DEMO_ZONE } from "../demo/world.ts";
 import { addDays, instantOf, venueDay } from "../lib/venueTime.ts";
-import { loadStaffConfig, type StaffConfig } from "../staffConnection.ts";
+import type { StaffConfig } from "../staffConnection.ts";
 import { phoneRefusal } from "../state/kitchen.ts";
-import { appBundle, boot, Caller, ENGINES, missing, ok, PORTS_PER_ENGINE, until, type Engine, type Server } from "./harness.ts";
+import { ENGINES, missing, ok, PORTS_PER_ENGINE, until, type Caller, type Engine, type Server } from "./harness.ts";
+import { standUp } from "./stand.ts";
 
 const why = missing();
 if (why !== null && process.env["ADMINIUM_REQUIRE_CONTRACT"] === "1") throw new Error(`the contract must run here, and cannot: ${why}`);
 /** After `install.contract.test.ts`'s three servers. */
 const PORT_BASE = Number(process.env["CONTRACT_PORT_BASE"] ?? 4870) + 3 * PORTS_PER_ENGINE;
-const ADMIN = { email: process.env["E2E_ADMIN_EMAIL"] ?? "e2e@adminium.local", password: process.env["E2E_ADMIN_PASSWORD"] ?? "adminium-e2e-password" };
 
 /**
  * Whether Adminium lets a move marked undo empty its stamps on a row its lock
@@ -42,21 +41,6 @@ const UNDO_OUT_OF_A_LOCK = process.env["CONTRACT_UNDO_OUT_OF_A_LOCK"] === "1";
 const TODAY = venueDay(DEMO_START, DEMO_ZONE);
 const TOMORROW = addDays(TODAY, 1);
 const at = (time: string, day = TODAY) => new Date(instantOf(day, time, DEMO_ZONE)).toISOString();
-
-/** A tab's storage, for the order page's door. */
-function tab(): Storage {
-  const map = new Map<string, string>();
-  return {
-    get length() {
-      return map.size;
-    },
-    clear: () => map.clear(),
-    getItem: (k) => map.get(k) ?? null,
-    key: (i) => [...map.keys()][i] ?? null,
-    removeItem: (k) => void map.delete(k),
-    setItem: (k, v) => void map.set(k, v),
-  };
-}
 
 async function refusal(promise: Promise<unknown>): Promise<ApiError> {
   try {
@@ -73,7 +57,6 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
     describe.skipIf(!available)(`on ${engine}`, () => {
       let server: Server;
       let staff: Caller;
-      let connectionId = "";
       let cfg: StaffConfig;
       let kitchen: AdminiumKitchen;
       let diner: AdminiumDiner;
@@ -84,54 +67,16 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
       /** The diner who got the last Wild mushrooms: a real order, which emails are about (the sample's never are). */
       let mushroomWinner = 0;
 
-      const ids: Record<string, string> = {};
-      const data = (ref: string) => `/api/v1/data/${connectionId}/${encodeURIComponent(ids[ref]!)}`;
-      const rows = async (ref: string): Promise<Row[]> => ok(await staff.get<{ data: Row[] }>(`${data(ref)}?limit=200`)).data;
-      const order = async (number: string) => (await rows("orders")).find((o) => o["number"] === number)!;
+      let data: (ref: string) => string;
+      let rows: (ref: string) => Promise<Row[]>;
+      let order: (number: string) => Promise<Row>;
+      let messagesOf: (orderId: unknown) => Promise<Row[]>;
       const dish = async (name: string) => (await rows("menu_items")).find((d) => d["name"] === name)!;
-      const messagesOf = async (orderId: unknown) => (await rows("messages")).filter((m) => String(m["order_id"]) === String(orderId));
 
       beforeAll(async () => {
-        server = await boot(engine as Engine, PORT_BASE + index * PORTS_PER_ENGINE, DEMO_START - 60_000, { database: `oo_doors_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}` });
-        staff = new Caller(server.base, { origin: server.base });
-        await staff.signIn(ADMIN.email, ADMIN.password);
-        connectionId = ok(await staff.get<{ connections: { id: string; name: string }[] }>("/api/v1/connections")).connections.find((c) => c.name === "northwind")!.id;
-        // Installed as an operator installs it, on the kitchen's clock and money.
-        const app = appBundle();
-        const staged = await staff.post(`/api/v1/apps/upload?expectedSha512=${encodeURIComponent(app.integrity)}`, app.buffer);
-        if (![200, 201].includes(staged.status)) throw new Error(`upload: ${JSON.stringify(staged.body).slice(0, 400)}`);
-        const body = { key: app.key, version: app.version, connectionId };
-        const plan = ok(await staff.post<{ plan: { checksum: string } }>("/api/v1/apps/plan", body)).plan;
-        const installed = ok(await staff.post<{ schema: { created: string[] } }>("/api/v1/apps/install", { ...body, planChecksum: plan.checksum }));
-        ok(await staff.patch(`/api/v1/connections/${connectionId}`, { timezone: DEMO_ZONE, currency: DEMO_CURRENCY }));
-        const schema = ok(await staff.get<{ model: { tables: { id: string; name: string }[] } }>(`/api/v1/connections/${connectionId}/schema`));
-        for (const name of installed.schema.created) ids[name.replace(/^ordering_/, "")] = schema.model.tables.find((t) => t.name === name)!.id;
-        // The sample goes in a moment before 11:40, as the demo's is written for 11:40 on the dot.
-        await server.setClock(DEMO_START - 5_000);
-        ok(await staff.post("/api/v1/apps/ordering/sample-data"));
-        await until(async () => (ok(await staff.get<{ loaded: boolean }>("/api/v1/apps/ordering/sample-data")).loaded ? true : undefined), "the sample to be added");
-        ok(await staff.put("/api/v1/public-api", { enabled: true }));
-        ok(await staff.put("/api/v1/settings/email", { publicOrigin: server.base }));
-
-        // The kitchen's door, booted as the staff build boots it, on the operator's session.
-        cfg = (await loadStaffConfig({ hostedStaff: true, base: "/apps/ordering/staff/", fetchImpl: staff.fetchAs() }))!;
-        expect(cfg.user).not.toBeNull();
-        const transport = createSessionTransport({
-          tableOfRef: cfg.tables,
-          connectionId: cfg.connectionId ?? undefined,
-          staff: { csrfToken: cfg.csrfToken, timezone: cfg.timezone, timezoneSource: cfg.timezoneSource, serverTimezone: cfg.serverTimezone, currency: cfg.currency },
-          fetchImpl: staff.fetchAs(),
-        });
-        kitchen = new AdminiumKitchen(transport, cfg);
-
-        // The order page's door, booted from the customer config as the customer build boots it.
-        const served = ok(await new Caller(server.base).get<{ publishableKey: string; publicKeys?: Record<string, string>; tables?: Record<string, string> }>("/apps/ordering/customer/surface-config.json"));
-        const originFetch: typeof fetch = (input, init) => {
-          const headers = new Headers(init?.headers);
-          headers.set("origin", server.base);
-          return fetch(input, { ...init, headers });
-        };
-        diner = new AdminiumDiner({ baseUrl: server.base, publishableKey: served.publishableKey, ...(served.tables === undefined ? {} : { tables: served.tables }), ...(served.publicKeys === undefined ? {} : { publicKeys: served.publicKeys }) }, { fetch: originFetch, storage: tab() });
+        const stand = await standUp(engine as Engine, PORT_BASE + index * PORTS_PER_ENGINE, `oo_doors_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}`);
+        ({ server, staff, cfg, kitchen, data, rows, order, messagesOf } = stand);
+        diner = await stand.dinerOf();
         // Just before 11:40, where the demo stands: a time 20 minutes on is still one a diner may take.
         await server.setClock(DEMO_START - 30_000);
       }, 300_000);
@@ -303,13 +248,27 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         expect((await messagesOf(taken.data.id)).map((m) => m["kind"]).sort()).toEqual(["order-cancelled-too-busy", "order-confirmation-phone"]);
       }, 150_000);
 
-      it.skipIf(!UNDO_OUT_OF_A_LOCK)("takes back a hand-over unpaid, with no receipt without Invoices & Receipts", async () => {
+      it("hands an order over paid, and queues no receipt without Invoices & Receipts", async () => {
+        // A real order (a sample one is never emailed about at all), with an address to email.
+        const menu = await kitchen.menu();
+        const made = await kitchen.phoneOrder(
+          { values: { name: "Una V.", phone: "(555) 015-6677", email: "una.v@mail.example", pickup_at: at("14:30") }, children: { order_items: [{ values: { menu_item_id: menu.items.find((d) => d["name"] === "Lemonade")!.id, qty: 1 } }] } },
+          "una-0123456789abcdefghijkl",
+        );
+        const id = made.data.id;
+        for (const [from, to] of [["placed", "confirmed"], ["confirmed", "preparing"], ["preparing", "ready"]] as const) await kitchen.move(id, from, to);
+        const handed = await kitchen.handOff(id, "cash");
+        expect([handed["status"], handed["paid_method"], handed["picked_up_by"]]).toEqual(["picked_up", "cash", cfg.user!.name]);
+        const kinds = (await messagesOf(id)).map((m) => m["kind"]);
+        expect(kinds).toContain("order-ready");
+        expect(kinds).not.toContain("order-receipt");
+      }, 60_000);
+
+      it.skipIf(!UNDO_OUT_OF_A_LOCK)("takes back a hand-over unpaid", async () => {
         const shelf = await order("S2113");
-        const handed = await kitchen.handOff(shelf.id as number, "cash");
-        expect([handed["status"], handed["paid_method"]]).toEqual(["picked_up", "cash"]);
+        await kitchen.handOff(shelf.id as number, "cash");
         const back = await kitchen.move(shelf.id as number, "picked_up", "ready");
         expect([back["status"], back["paid_method"], back["picked_up_at"], back["picked_up_by"]]).toEqual(["ready", null, null, null]);
-        // No receipt without Invoices & Receipts: none was ever queued.
         expect((await messagesOf(shelf.id)).filter((m) => m["kind"] === "order-receipt")).toEqual([]);
       }, 150_000);
 
