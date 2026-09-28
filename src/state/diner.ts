@@ -43,6 +43,8 @@ export type LineAlert =
   | { kind: "fewer"; day: Day }
   /** The dish's option rules changed under the line: its options are to be chosen again. */
   | { kind: "options" }
+  /** The line's note is not plain words. */
+  | { kind: "note" }
   | { kind: "gone"; name: string; dish: boolean };
 
 export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed";
@@ -91,7 +93,7 @@ interface DinerState {
   form: { name: string; email: string; phone: string; note: string };
   touched: Partial<Record<"name" | "email" | "phone", boolean>>;
   /** Details Adminium refused, by field, until the diner changes them. */
-  fieldErrors: Partial<Record<"name" | "email" | "phone", FieldError>>;
+  fieldErrors: Partial<Record<"name" | "email" | "phone" | "note", FieldError>>;
   /** The first visit's time is chosen for the diner; after that only the diner chooses. */
   autoPick: boolean;
   placing: boolean;
@@ -486,9 +488,14 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
   }
   // A detail as the diner typed it: the field says so.
   const column = error.params["column"];
-  if (error.code === "PUBLIC_WRITE_REFUSED" && line === null && (column === "name" || column === "email" || column === "phone")) {
+  if (error.code === "PUBLIC_WRITE_REFUSED" && line === null && (column === "name" || column === "email" || column === "phone" || column === "note")) {
     const kind: FieldError = column === "email" || column === "phone" || reason === "format" ? "invalid" : "plain";
-    set({ fieldErrors: { ...get().fieldErrors, [column]: kind }, touched: { ...get().touched, [column]: true } });
+    set({ fieldErrors: { ...get().fieldErrors, [column]: kind }, ...(column === "note" ? {} : { touched: { ...get().touched, [column]: true } }) });
+    return true;
+  }
+  // A line's note Adminium would not take: the line says so, and its sheet opens to change it.
+  if (error.code === "PUBLIC_WRITE_REFUSED" && target !== undefined && column === "note") {
+    set({ alerts: { ...get().alerts, [target.key]: { kind: "note" } } });
     return true;
   }
   // A dish's option rules moved under the line (fewer or more to choose now): chosen again.

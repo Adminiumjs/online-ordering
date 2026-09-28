@@ -42,6 +42,8 @@ export interface LineState {
   fewer: boolean;
   /** The dish's choices changed: its options are to be picked again. */
   options: boolean;
+  /** The line's note is not plain words. */
+  note: boolean;
   left: number | null;
   day: Day;
 }
@@ -79,7 +81,7 @@ export function useLineStates(): { states: Map<string, LineState>; day: Day } {
     const left = alert?.kind === "short" ? alert.left : p.left;
     const over = !sold && gone === null && left !== null && line.qty > left ? left : null;
     const fewer = !sold && gone === null && over === null && alert?.kind === "fewer";
-    states.set(line.key, { dish, gone, sold, over, fewer, options: gone === null && alert?.kind === "options", left, day: forDay });
+    states.set(line.key, { dish, gone, sold, over, fewer, options: gone === null && alert?.kind === "options", note: alert?.kind === "note", left, day: forDay });
   }
   return { states, day: forDay };
 }
@@ -141,6 +143,7 @@ export function CartLineRow({ line, index, state, size }: { line: CartLine; inde
           chip("warn", "alert-circle", dayWord === null ? t("cart.onlyLeftToday", { count: fmt.number(state.over) }, state.over) : t("cart.onlyLeftFor", { count: fmt.number(state.over), day: dayWord }, state.over))}
         {state.fewer && chip("warn", "alert-circle", dayWord === null ? t("cart.fewerToday") : t("cart.fewerFor", { day: dayWord }))}
         {state.options && chip("warn", "alert-circle", t("cart.optionsAgain"))}
+        {state.note && chip("warn", "alert-circle", t("co.name.plain"))}
         {state.gone !== null && (
           <div role="alert" style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", borderRadius: 10, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.45 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>

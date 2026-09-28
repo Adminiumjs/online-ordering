@@ -75,7 +75,8 @@ function useBlock(): string | null {
   if (!EMAIL.test(f.email.trim())) return t("co.block.email");
   if (phoneBad(f.phone)) return t("co.block.phone");
   if (lines.some((l) => l.sold)) return t("co.block.sold");
-  if (lines.some((l) => l.gone !== null || l.options)) return t("co.block.gone");
+  if (lines.some((l) => l.gone !== null || l.options || l.note)) return t("co.block.gone");
+  if (s.fieldErrors.note !== undefined) return t("co.name.plain");
   if (s.fieldErrors.name !== undefined) return t("co.block.name");
   if (s.fieldErrors.email !== undefined) return t("co.block.email");
   if (s.fieldErrors.phone !== undefined) return t("co.block.phone");

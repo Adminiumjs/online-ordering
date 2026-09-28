@@ -176,7 +176,7 @@ const SHORTCUTS: Record<string, () => void | Promise<void>> = {
   },
   "sample-enquiry": () => {
     const saturday = addDays(today(), 4);
-    setLarge({ heads: 30, headsText: "30", date: saturday, other: "", notes: "Office party — mostly pizza, a few vegan bowls", name: "Maya Chen", phone: "(555) 010-4471", email: "maya@riverside-studio.example" });
+    setLarge({ heads: 30, headsText: "30", date: saturday, other: "", notes: "Office party, mostly pizza and a few vegan bowls", name: "Maya Chen", phone: "(555) 010-4471", email: "maya@riverside-studio.example" });
     useLarge.setState({ touched: {}, sent: null, failed: false });
   },
   "new-order": () => {

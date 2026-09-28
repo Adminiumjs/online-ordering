@@ -14,6 +14,7 @@ import type { DinerPort, Menu, OrderWithLines } from "../data/ports.ts";
 import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime } from "../data/wire.ts";
 import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
+import { linkFreeText, plainText } from "../lib/plainText.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
 type Entry = (typeof MANIFEST_RULES.publicAccess)[number] & Record<string, unknown>;
@@ -52,7 +53,6 @@ function passes(row: Row, filters: readonly Record<string, unknown>[] | undefine
 /** A refusal of the diner's own value (what the form already says): its charge on the caps is handed back. */
 const OWN_VALUE: ReadonlySet<string> = new Set(["too-long", "format", "required", "invalid-character", "too-short", "too-small", "too-large", "unknown"]);
 
-const LINK = /(https?:\/\/|www\.|<a\s)/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^[0-9+()\-.\s]{6,32}$/;
 
@@ -171,13 +171,14 @@ export class DemoDiner implements DinerPort {
     if (values["note"] === "") values["note"] = null;
     // Plain text is asked of a stranger only: a signed-in diner's own words are theirs.
     const anonymous = e.anonymous as { plainText: readonly string[] };
-    if (this.signIn === null) for (const column of anonymous.plainText) if (typeof values[column] === "string" && LINK.test(String(values[column]))) throw refusedValue(column);
+    if (this.signIn === null) for (const column of anonymous.plainText) if (!plainText(values[column])) throw refusedValue(column);
     return values;
   }
 
   private lines(body: OrderBody) {
     return body.children.order_items.map((line, i) => {
-      if (typeof line.values["note"] === "string" && LINK.test(String(line.values["note"]))) {
+      // A line's note reaches the kitchen's screen and the diner's email: plain, and naming no place to go.
+      if (!linkFreeText(line.values["note"] === "" ? null : line.values["note"])) {
         throw treeRefused({ child: "order_items", index: i, path: ["order_items", i], column: "note" });
       }
       return { values: line.values, options: (line.children?.["order_item_modifiers"] ?? []).map((o) => o.values) };
@@ -458,7 +459,7 @@ export class DemoDiner implements DinerPort {
     if (!Number.isInteger(heads) || heads < 6 || heads > 120) throw refusedValue("heads", heads < 6 ? "too-small" : "too-large");
     if (!EMAIL.test(String(row["email"]))) throw refusedValue("email", "format");
     if (!PHONE.test(String(row["phone"]))) throw refusedValue("phone", "format");
-    for (const column of (e.anonymous as { plainText: readonly string[] }).plainText) if (typeof row[column] === "string" && LINK.test(String(row[column]))) throw refusedValue(column);
+    for (const column of (e.anonymous as { plainText: readonly string[] }).plainText) if (!plainText(row[column] === "" ? null : row[column])) throw refusedValue(column);
     const seq = this.world.nextNumber("enquiries", "ref_seq");
     const written = this.world.insert("enquiries", {
       ...row,
