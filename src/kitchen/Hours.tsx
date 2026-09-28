@@ -107,10 +107,12 @@ export function Hours() {
 
       <Section id="jn-kh-week" title={t("kitchen.hours.week")}>
         <div style={{ display: "flex", flexDirection: "column", marginBlockStart: 8 }}>
-          {week.map((w, i) => {
+          {week.map((w) => {
             const open = w["open"] !== false;
             const opens = String(w["opens"] ?? "11:00");
             const closes = String(w["closes"] ?? "21:00");
+            // Named by its own weekday, not its place in the list (a missing row would shift every name after it).
+            const i = WEEKDAY_KEYS.indexOf(String(w["weekday"]) as (typeof WEEKDAY_KEYS)[number]);
             const day = name(i);
             return (
               <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", paddingBlock: 10, borderBlockEnd: "1px solid var(--border)" }}>

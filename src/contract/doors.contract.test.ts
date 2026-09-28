@@ -102,6 +102,29 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         expect(dishes.find((d) => realNames.get(d.id) === "Wild mushroom")).toMatchObject({ state: "on", left: 2 });
       }, 60_000);
 
+      it("refuses what the demo's Adminium refuses, in the same words", async () => {
+        const [menu, shown] = await Promise.all([diner.menu(), demo.diner.menu()]);
+        /** A cart by dish names, in each Adminium's own ids. */
+        const cart = (m: typeof menu, lines: [string, number, string?][], time: string | null): OrderBody => ({
+          values: { name: "Pat", email: "pat@mail.example", language: "en-US", ...(time === null ? {} : { pickup_at: at(time) }) },
+          children: { order_items: lines.map(([name, qty, note]) => ({ values: { menu_item_id: m.items.find((d) => d["name"] === name)!.id, qty, ...(note === undefined ? {} : { note }) } })) },
+        });
+        const cases: [string, [string, number, string?][], string | null][] = [
+          ["no time", [["Lemonade", 1]], null],
+          ["a paused time", [["Lemonade", 1]], "13:00"],
+          ["too soon", [["Lemonade", 1]], "11:45"],
+          ["too many of a dish", [["Lemonade", 21]], "12:30"],
+          ["more than an order holds", [["Lemonade", 20], ["Margherita", 20]], "12:30"],
+          ["a note with a number", [["Lemonade", 1, "2 straws"]], "12:30"],
+          ["a note with an address", [["Lemonade", 1, "see evil.com"]], "12:30"],
+        ];
+        for (const [what, lines, time] of cases) {
+          const real = await refusal(diner.quote(cart(menu, lines, time)));
+          const played = await refusal(demo.diner.quote(cart(shown, lines, time)));
+          expect([played.status, played.code, played.params], what).toEqual([real.status, real.code, real.params]);
+        }
+      }, 60_000);
+
       /** Kwame's cart, by this Adminium's ids. */
       const kwame = async (values: Record<string, unknown> = {}): Promise<OrderBody> => {
         const menu = await diner.menu();
@@ -217,8 +240,10 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         const o = await order("S2116");
         const on = await kitchen.move(o.id as number, "placed", "confirmed");
         expect(on["confirmed_at"]).not.toBeNull();
+        // The second screen's same tap: already done, by whom and when.
         const repeat = await refusal(kitchen.move(o.id as number, "placed", "confirmed"));
-        expect(["STATE_UNCHANGED", "STATE_MOVE_REFUSED"]).toContain(repeat.code);
+        expect([repeat.code, repeat.params["state"], repeat.params["by"]]).toEqual(["STATE_UNCHANGED", "confirmed", cfg.user!.name]);
+        expect(Date.parse(String(repeat.params["at"]))).toBeGreaterThan(0);
         const stale = await refusal(kitchen.move(o.id as number, "preparing", "ready"));
         expect([stale.code, stale.params["from"]]).toEqual(["STATE_MOVE_REFUSED", "confirmed"]);
         const back = await kitchen.move(o.id as number, "confirmed", "placed");

@@ -48,8 +48,21 @@ export function sayRefused(t: TFunction, fmt: Formatter, result: MoveResult, num
   }
 }
 
+/** The orders this screen is moving now: a second tap waits for the first. */
+const moving = new Set<Id>();
+
 /** Moves an order one step on and offers Undo. */
 export async function advance(t: TFunction, fmt: Formatter, id: Id, from: string, to: string): Promise<void> {
+  if (moving.has(id)) return;
+  moving.add(id);
+  try {
+    await advanceOnce(t, fmt, id, from, to);
+  } finally {
+    moving.delete(id);
+  }
+}
+
+async function advanceOnce(t: TFunction, fmt: Formatter, id: Id, from: string, to: string): Promise<void> {
   const order = useKitchen.getState().orders.find((o) => o.order.id === id);
   const number = String(order?.order["number"] ?? "");
   const name = String(order?.order["name"] ?? "");
