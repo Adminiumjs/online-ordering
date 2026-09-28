@@ -332,6 +332,34 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         expect((await diner.slots(TOMORROW)).find((s) => s.time === time)!.state).toBe("free");
       }, 60_000);
 
+      it("switches a dish off the order page, and sells one out for today: the page and the phone say so", async () => {
+        const menu = await kitchen.menu();
+        const soup = menu.items.find((d) => d["name"] === "Tomato & fennel soup")!;
+        await kitchen.setDish(soup.id, { available: false });
+        expect((await diner.menu()).items.some((d) => d.id === soup.id)).toBe(false);
+        await kitchen.setDish(soup.id, { available: true });
+        const salad = menu.items.find((d) => d["name"] === "Little gem salad")!;
+        // "Sold out" is none left today, whatever was ordered.
+        await kitchen.setDish(salad.id, { stock_today: 0, stock_on: TODAY });
+        expect((await diner.dishes(TODAY)).find((d) => d.id === String(salad.id))).toMatchObject({ state: "soldout", left: 0 });
+        const refused = await refusal(kitchen.phoneOrder({ values: { name: "Jo", phone: "(555) 010-1111", pickup_at: at("15:00") }, children: { order_items: [{ values: { menu_item_id: salad.id, qty: 1 } }] } }, "jo-salad-0123456789abcdef"));
+        expect([refused.code, phoneRefusal(refused), refused.params["pool"]]).toEqual(["CAPACITY_FULL", "soldout", { key: String(salad.id), at: TODAY }]);
+        // Tomorrow it sells.
+        expect((await diner.dishes(TOMORROW)).find((d) => d.id === String(salad.id))!.state).toBe("on");
+      }, 60_000);
+
+      it("stops online orders for today, one pause a time, and leaves tomorrow open", async () => {
+        const counts = await kitchen.slotCounts(TODAY);
+        const now = Date.parse(String((await staff.get<{ now: string }>("/apps/ordering/staff/surface-config.json")).body.now));
+        const left = counts.filter((c) => Date.parse(c.at) > now && c.pause === null);
+        for (const slot of left) await kitchen.pause(slot.at);
+        expect((await diner.slots(TODAY)).filter((s) => s.state === "free")).toEqual([]);
+        expect((await diner.slots(TOMORROW)).some((s) => s.state === "free")).toBe(true);
+        // Taking orders again: every pause of today reopened.
+        for (const slot of await kitchen.slotCounts(TODAY)) if (slot.pause !== null && Date.parse(slot.at) > now) await kitchen.reopen(slot.pause.id);
+        expect((await diner.slots(TODAY)).some((s) => s.state === "free")).toBe(true);
+      }, 120_000);
+
       it("takes the last place of a time for one of two phone orders at once, and numbers every order without a gap", async () => {
         const menu = await kitchen.menu();
         const lemonade = menu.items.find((d) => d["name"] === "Lemonade")!;
