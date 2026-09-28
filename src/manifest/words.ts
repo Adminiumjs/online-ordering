@@ -103,7 +103,7 @@ export const WORDS: Record<string, Translation> = {
   "Note for the kitchen": { "de-DE": "Notiz für die Küche", "fr-FR": "Note pour la cuisine", "da-DK": "Note til køkkenet", "cs-CZ": "Poznámka pro kuchyni", "ar-EG": "ملاحظة للمطبخ", "zh-CN": "给厨房的备注", "zh-TW": "給廚房的備註" },
   "Number": { "de-DE": "Nummer", "fr-FR": "Numéro", "da-DK": "Nummer", "cs-CZ": "Číslo", "ar-EG": "الرقم", "zh-CN": "编号", "zh-TW": "編號" },
   "Number (running)": { "de-DE": "Nummer (fortlaufend)", "fr-FR": "Numéro (séquence)", "da-DK": "Nummer (løbende)", "cs-CZ": "Číslo (pořadové)", "ar-EG": "الرقم (تسلسلي)", "zh-CN": "编号（流水）", "zh-TW": "編號（流水）" },
-  "On": { "de-DE": "Am", "fr-FR": "Le", "da-DK": "Den", "cs-CZ": "Dne", "ar-EG": "في", "zh-CN": "日期", "zh-TW": "日期" },
+  "In effect": { "de-DE": "Gültig", "fr-FR": "En vigueur", "da-DK": "Gældende", "cs-CZ": "Platí", "ar-EG": "سارية", "zh-CN": "生效", "zh-TW": "生效" },
   "Online": { "de-DE": "Online", "fr-FR": "En ligne", "da-DK": "Online", "cs-CZ": "Online", "ar-EG": "عبر الإنترنت", "zh-CN": "在线", "zh-TW": "線上" },
   "Open": { "de-DE": "Geöffnet", "fr-FR": "Ouvert", "da-DK": "Åben", "cs-CZ": "Otevřeno", "ar-EG": "مفتوح", "zh-CN": "营业", "zh-TW": "營業" },
   "Opening hours": { "de-DE": "Öffnungszeiten", "fr-FR": "Heures d’ouverture", "da-DK": "Åbningstider", "cs-CZ": "Otevírací doba", "ar-EG": "ساعات العمل", "zh-CN": "营业时间", "zh-TW": "營業時間" },

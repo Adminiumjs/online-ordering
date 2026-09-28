@@ -16,13 +16,16 @@
  *                              one for an order still unfinished at closing;
  *   order-cancelled-by-you     the diner cancelled it themselves, online — so a
  *                              forwarded link used by someone else shows up;
- *   order-receipt              handed over: the receipt attached (with
- *                              Invoices & Receipts; behind its switch);
+ *   order-receipt              handed over: the receipt attached (only
+ *                              with Invoices & Receipts attached);
  *   enquiry-received           a large-order enquiry, with its reference.
  *
- * The log is the dedupe: a kind already queued or sent for the same row is not
- * queued again. An order linked to a signed-in diner is addressed to them; any
- * other order to the address typed on it, in the language it was placed in.
+ * The ready and receipt emails wait twenty seconds first, so the kitchen's
+ * Undo takes them back before they go; one taken back so does not stop the
+ * next. The log is the dedupe: a kind already queued or sent for the same row
+ * is not queued again. An order linked to a signed-in diner is addressed to
+ * them, any other order to the address typed on it — each in the language it
+ * was placed in.
  */
 
 export const KINDS = [
@@ -54,6 +57,15 @@ const onOrder = (column: string, to: string, where?: Record<string, unknown>) =>
   onChange: { table: "orders", column, to, ...(where === undefined ? {} : { where }) },
 });
 
+/**
+ * A message that waits a few seconds, so an Undo made at once takes it back
+ * before the diner hears of a move that did not stand.
+ */
+const heldWhileUndone = (states: string[]) => ({
+  holdSeconds: 20,
+  dropWhen: [{ column: "status", in: states, reason: "no-longer-needed" }],
+});
+
 export const OUTBOX = {
   table: "messages",
   columns: {
@@ -72,6 +84,8 @@ export const OUTBOX = {
     table: "customers",
     email: "email",
     name: "name",
+    // Written in the language the order was placed in, whatever the diner's own row says.
+    language: { column: "language" },
     // An order nobody signed in for — and every phone order — carries its own details.
     fallback: { via: "order_id", email: "email", name: "name", language: "language" },
   },
@@ -82,9 +96,16 @@ export const OUTBOX = {
   producers: [
     { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "online" } } },
     { kind: "order-confirmation-phone", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "phone" } } },
-    { kind: "order-ready", link: "order_id", gate: { setting: { table: "settings", column: "ready_email_on" } }, ...onOrder("status", "ready") },
+    {
+      kind: "order-ready",
+      link: "order_id",
+      gate: { setting: { table: "settings", column: "ready_email_on" } },
+      ...onOrder("status", "ready"),
+      ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
+    },
     ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }) })),
-    { kind: "order-receipt", link: "order_id", gate: { setting: { table: "settings", column: "receipt_email_on" } }, ...onOrder("status", "picked_up") },
+    // Drawn by Invoices & Receipts: without it attached, no receipt is queued at all.
+    { kind: "order-receipt", link: "order_id", gate: { feature: "receipts" }, ...onOrder("status", "picked_up"), ...heldWhileUndone(["ready"]) },
     { kind: "enquiry-received", link: "enquiry_id", onCreate: { table: "enquiries" }, recipient: { column: "email", name: "name" } },
   ],
 };

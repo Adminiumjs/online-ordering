@@ -12,7 +12,10 @@
  *   - `@ref` is the id of the earlier row with that `@label`;
  *   - `@ago` is an instant that long before `now`; `@in` one that long after,
  *     rounded up with `@grid` to the next step of that many minutes on the
- *     kitchen's clock, counted from its midnight and never past the next;
+ *     kitchen's clock, counted from its midnight and never past the next; with
+ *     `@slot`, the first pickup slot from then on that is open (its day's
+ *     hours, no closure, not paused) and has room beside the rows placed on it
+ *     before — today, or a day it opens up to two weeks on;
  *   - `@day`/`@time` is a wall time on the kitchen's clock, `@day` alone a
  *     date there; with `@workdays` the days count Monday to Friday, and day 0
  *     on a weekend is the Monday after;
@@ -484,6 +487,45 @@ type Resolved = unknown;
 
 interface Context extends ResolveOptions {
   labels: Map<string, number>;
+  /** The tables resolved so far: the slot limit reads its settings, hours, closures and pauses there. */
+  out: ResolvedSample;
+  /** How many rows `@slot` has placed on each pickup time, by instant. */
+  placed: Map<number, number>;
+}
+
+const WEEKDAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+/**
+ * The first pickup slot at or after `earliest` that is open and has room, as
+ * the loader places a `@slot` time: the grid of `slot_minutes` from each day's
+ * opening, the last one starting before its close; never a closed day nor a
+ * paused slot; at most `slot_capacity` rows on one time. The plain time when
+ * no slot is open in the two weeks from the day before.
+ */
+function placeOnSlot(earliest: number, ctx: Context): Date {
+  const settings = ctx.out["settings"]?.[0] ?? {};
+  const step = Number(settings["slot_minutes"] ?? 30);
+  const size = Number(settings["slot_capacity"] ?? Number.POSITIVE_INFINITY);
+  const hours = new Map((ctx.out["hours"] ?? []).map((row) => [String(row["weekday"]), row]));
+  const closures = (ctx.out["closures"] ?? []).filter((row) => row["active"] === true);
+  const paused = new Set((ctx.out["slot_pauses"] ?? []).filter((row) => row["active"] === true).map((row) => Date.parse(String(row["slot_at"]))));
+  const first = zonedDay(earliest, ctx.zone, -1);
+  for (let i = 0; i < 16; i += 1) {
+    const date = new Date(Date.UTC(first.y, first.m - 1, first.d + i));
+    const day = { y: date.getUTCFullYear(), m: date.getUTCMonth() + 1, d: date.getUTCDate() };
+    const spelled = spellDay(day);
+    const open = hours.get(WEEKDAYS[date.getUTCDay()]!);
+    if (open === undefined || open["open"] !== true) continue;
+    if (closures.some((row) => String(row["from_date"]) <= spelled && (row["to_date"] === null || spelled <= String(row["to_date"])))) continue;
+    const [opens, closes] = [String(open["opens"]), String(open["closes"])].map((t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5))) as [number, number];
+    for (let minute = opens; step > 0 && minute < closes; minute += step) {
+      const at = zonedWallTime(day, `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`, ctx.zone);
+      if (at < earliest || paused.has(at) || (ctx.placed.get(at) ?? 0) + 1 > size) continue;
+      ctx.placed.set(at, (ctx.placed.get(at) ?? 0) + 1);
+      return new Date(at);
+    }
+  }
+  return new Date(earliest);
 }
 
 function resolveValue(value: unknown, ctx: Context): Resolved {
@@ -497,6 +539,7 @@ function resolveValue(value: unknown, ctx: Context): Resolved {
   if (typeof record["@ago"] === "string") return new Date(ctx.now - durationMs(record["@ago"]));
   if (typeof record["@in"] === "string") {
     const at = ctx.now + durationMs(record["@in"]);
+    if (typeof record["@slot"] === "string") return placeOnSlot(at, ctx);
     return typeof record["@grid"] === "number" ? new Date(onVenueGrid(at, record["@grid"], ctx.zone)) : new Date(at);
   }
   if (typeof record["@day"] === "number") {
@@ -560,8 +603,8 @@ function settingValue(name: string, options: ResolveOptions, out?: ResolvedSampl
 
 /** Every table of the bundle, as Adminium would have written it at `now`. */
 export function resolveSample(bundle: SampleBundleRows, options: ResolveOptions): ResolvedSample {
-  const ctx: Context = { ...options, labels: new Map() };
   const out: ResolvedSample = {};
+  const ctx: Context = { ...options, labels: new Map(), out, placed: new Map() };
   const rowById = (table: string, id: unknown) => out[table]?.find((candidate) => candidate["id"] === id);
   for (const table of bundle.tables) {
     const shape = COLUMNS[table.ref];

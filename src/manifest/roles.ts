@@ -49,7 +49,8 @@ export const ROLES = [
       orders: {
         writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method"],
         writableValues: {
-          status: ["confirmed", "preparing", "ready", "picked_up", "cancelled"],
+          // Forward, and back one step (the Undo) — never back from a hand-over.
+          status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"],
           cancel_code: KITCHEN_CANCEL_CODES,
         },
       },

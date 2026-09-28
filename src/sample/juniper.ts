@@ -396,11 +396,15 @@ function ago(at: string): Record<string, string> {
   return { "@ago": `PT${String(diff)}M` };
 }
 
-/** A pickup on the board: the kitchen's next quarter-hour at least so far ahead. */
+/**
+ * A pickup on the board: the kitchen's first open slot at least so far ahead —
+ * on the next day it opens when today has none left, so the board is never
+ * empty whenever the sample is added.
+ */
 function ahead(at: string): Record<string, unknown> {
   const diff = minutes(at) - NOW;
-  // The quarter-hour grid rounds up: 11:45 is 5 minutes on at 11:40, 12:00 20, 12:15 35.
-  return { "@in": `PT${String(diff)}M`, "@grid": 15 };
+  // On the quarter-hour grid: 11:45 is 5 minutes on at 11:40, 12:00 20, 12:15 35.
+  return { "@in": `PT${String(diff)}M`, "@slot": "orders" };
 }
 
 const wall = (day: number, time: string) => ({ "@day": day, "@time": time });

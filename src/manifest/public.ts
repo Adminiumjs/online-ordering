@@ -127,11 +127,16 @@ export const PUBLIC_ACCESS = [
     writable: ["name"],
     claim: { verify: "email-link", email: "email" },
     humanCheck: true,
-    forget: { columns: ["email", "name"], stamp: "forgotten_at" },
+    // "Delete my details" also stops every link the diner's orders were emailed with.
+    forget: { columns: ["email", "name"], stamp: "forgotten_at", links: true },
   },
   // Their own orders, newest first on the page; and the cancel while the kitchen has not taken it.
   { table: "orders", methods: ["GET", "PATCH"], level: "verified", claimedBy: { table: "customers", column: "customer_id" }, select: ORDER_SELECT, ...OWN_CANCEL },
   ...linesOf(),
+
+  // Whether a pickup slot is still free, and a dish still has portions ("3 left" only below five).
+  { table: "orders", kind: "availability", methods: ["GET"] },
+  { table: "order_items", kind: "availability", methods: ["GET"], showLeft: { below: 5 } },
 
   // ── the menu, the hours, the kitchen ─────────────────────────────────────────
   ...MENU_TABLES.map((table) => ({
@@ -167,7 +172,7 @@ export const PUBLIC_ACCESS = [
     claimedBy: { table: "customers", column: "customer_id", optional: true },
     identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name" } },
     shareLink: "link_token",
-    anonymous: { perValue: { columns: ["email"], n: 10 }, perKeyHour: 300, plainText: ["name", "note"] },
+    anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", "note"] },
     children: {
       order_items: {
         via: "order_id",

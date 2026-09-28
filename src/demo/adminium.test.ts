@@ -301,6 +301,32 @@ describe("the kitchen's moves", () => {
     expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt").map((m) => m["status"])).toEqual(["sent"]);
   });
 
+  it("lets a manager take a hand-over back: ready and unpaid again, the held receipt dropped", async () => {
+    const id = order("2113").id;
+    await demo.kitchen.handOff(id, "cash");
+    const back = await demo.kitchen.move(id, "picked_up", "ready");
+    expect([back["status"], back["paid_method"], back["picked_up_at"], back["picked_up_by"], back["ready_at"]]).toEqual(["ready", null, null, null, at("11:34")]);
+    demo.advance(1);
+    expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt").map((m) => [m["status"], m["skip_reason"]])).toEqual([["skipped", "no-longer-needed"]]);
+  });
+
+  it("takes a hand-over back only for a manager", async () => {
+    const id = order("2113").id;
+    await demo.kitchen.handOff(id, "card");
+    demo.kitchen.person.roles.splice(demo.kitchen.person.roles.indexOf("manager"), 1);
+    const error = await refusal(demo.kitchen.move(id, "picked_up", "ready"));
+    expect([error.code, error.params["roles"]]).toEqual(["STATE_MOVE_REFUSED", ["manager"]]);
+    demo.kitchen.person.roles.push("manager");
+  });
+
+  it("queues no receipt at all without Invoices & Receipts", async () => {
+    demo.kitchen.addOns.invoices = false;
+    const id = order("2113").id;
+    await demo.kitchen.handOff(id, "card");
+    demo.advance(1);
+    expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt")).toEqual([]);
+  });
+
   it("frees a cancelled order's slot and portions", async () => {
     const before = (await demo.kitchen.slotCounts(TODAY)).find((s) => s.time === "12:15")!.taken;
     await demo.kitchen.cancel(order("2116").id, "placed", "too_busy", null, null);
@@ -361,6 +387,17 @@ describe("signing in", () => {
     expect(await demo.diner.signedIn()).toBeNull();
     // The orders keep their own copies.
     expect(order("2109")["name"]).toBe("Kwame B.");
+  });
+
+  it("stops the links a diner's orders were emailed with when they delete their details", async () => {
+    await demo.diner.place(kwame(), "k".repeat(22));
+    const placed = demo.world.all("orders").at(-1)!;
+    const token = String(placed["link_token"]);
+    expect((await demo.diner.openLink(token)).session).toBe(`link-${String(placed.id)}`);
+    await demo.diner.requestSignIn("kwame.b@mail.example");
+    await demo.diner.verifyLink(DEMO_SIGN_IN.token);
+    await demo.diner.forget();
+    expect((await refusal(demo.diner.openLink(token))).status).toBe(404);
   });
 });
 

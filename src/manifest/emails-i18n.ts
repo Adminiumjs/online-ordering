@@ -54,6 +54,7 @@ interface Sentences {
   receiptSubject: string;
   receiptHeading: string;
   receiptBody: string;
+  paidBy: string;
   enquiryName: string;
   enquirySubject: string;
   enquiryPreheader: string;
@@ -80,7 +81,7 @@ function wordsOf(s: Sentences): EmailWords {
     "order-cancelled-closed": cancelled(s.closedName, s.closed),
     "order-cancelled-other": cancelled(s.otherName, "{{order.cancel_note}}"),
     "order-cancelled-by-you": { name: s.byYouName, subject: s.byYouSubject, preheader: s.nothingChargedShort, paras: [s.byYou, s.byYouCall] },
-    "order-receipt": { name: s.receiptName, subject: s.receiptSubject, preheader: "#{{order.number}} · {{order.total}}", heading: s.receiptHeading, paras: [s.receiptBody] },
+    "order-receipt": { name: s.receiptName, subject: s.receiptSubject, preheader: "#{{order.number}} · {{order.total}}", heading: s.receiptHeading, paras: [s.receiptBody, s.paidBy] },
     "enquiry-received": { name: s.enquiryName, subject: s.enquirySubject, preheader: s.enquiryPreheader, heading: s.enquiryHeading, paras: [s.enquiryRef, s.enquiryCall] },
   };
 }
@@ -130,10 +131,11 @@ const DE: Sentences = {
   receiptSubject: "Dein Beleg von {{appName}}",
   receiptHeading: "Danke fürs Abholen von #{{order.number}}.",
   receiptBody: "Dein Beleg ist angehängt: {{order.total}}.",
+  paidBy: "Bezahlt mit: {{order.paid_method.label}}",
   enquiryName: "Anfrage für Großbestellung erhalten",
   enquirySubject: "Wir haben deine Anfrage, {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} Personen",
-  enquiryHeading: "{{enquiry.heads}} Personen am {{enquiry.wanted_on}}.",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} Personen",
+  enquiryHeading: "{{enquiry.heads.number}} Personen am {{enquiry.wanted_on}}.",
   enquiryRef: "Deine Referenz ist {{enquiry.ref}}.",
   enquiryCall: "Jemand aus der Küche ruft dich an, um alles zu besprechen — am selben Tag, wenn wir offen haben, sonst kurz nach dem Öffnen.",
 };
@@ -183,10 +185,11 @@ const FR: Sentences = {
   receiptSubject: "Votre reçu de {{appName}}",
   receiptHeading: "Merci d’avoir retiré la commande #{{order.number}}.",
   receiptBody: "Votre reçu est en pièce jointe : {{order.total}}.",
+  paidBy: "Payé par : {{order.paid_method.label}}",
   enquiryName: "Demande de grande commande reçue",
   enquirySubject: "Nous avons reçu votre demande, {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} personnes",
-  enquiryHeading: "{{enquiry.heads}} personnes le {{enquiry.wanted_on}}.",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} personnes",
+  enquiryHeading: "{{enquiry.heads.number}} personnes le {{enquiry.wanted_on}}.",
   enquiryRef: "Votre référence est {{enquiry.ref}}.",
   enquiryCall: "Quelqu’un de la cuisine vous appellera pour en parler — le jour même si nous sommes ouverts, sinon peu après l’ouverture.",
 };
@@ -236,10 +239,11 @@ const DA: Sentences = {
   receiptSubject: "Din kvittering fra {{appName}}",
   receiptHeading: "Tak, fordi du hentede #{{order.number}}.",
   receiptBody: "Din kvittering er vedhæftet: {{order.total}}.",
+  paidBy: "Betalt med: {{order.paid_method.label}}",
   enquiryName: "Forespørgsel om stor bestilling modtaget",
   enquirySubject: "Vi har fået din forespørgsel, {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} personer",
-  enquiryHeading: "{{enquiry.heads}} personer den {{enquiry.wanted_on}}.",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} personer",
+  enquiryHeading: "{{enquiry.heads.number}} personer den {{enquiry.wanted_on}}.",
   enquiryRef: "Din reference er {{enquiry.ref}}.",
   enquiryCall: "En fra køkkenet ringer til dig og taler det igennem — samme dag, hvis vi har åbent, ellers kort efter vi åbner.",
 };
@@ -289,10 +293,11 @@ const CS: Sentences = {
   receiptSubject: "Vaše účtenka od {{appName}}",
   receiptHeading: "Děkujeme za vyzvednutí objednávky #{{order.number}}.",
   receiptBody: "Účtenku najdete v příloze: {{order.total}}.",
+  paidBy: "Způsob platby: {{order.paid_method.label}}",
   enquiryName: "Poptávka velké objednávky přijata",
   enquirySubject: "Vaši poptávku jsme přijali, {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} osob",
-  enquiryHeading: "{{enquiry.heads}} osob, {{enquiry.wanted_on}}.",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} osob",
+  enquiryHeading: "{{enquiry.heads.number}} osob, {{enquiry.wanted_on}}.",
   enquiryRef: "Vaše číslo poptávky je {{enquiry.ref}}.",
   enquiryCall: "Někdo z kuchyně vám zavolá a vše probere — týž den, pokud máme otevřeno, jinak brzy po otevření.",
 };
@@ -342,10 +347,11 @@ const ZH_CN: Sentences = {
   receiptSubject: "来自 {{appName}} 的收据",
   receiptHeading: "感谢取走订单 #{{order.number}}。",
   receiptBody: "收据见附件：{{order.total}}。",
+  paidBy: "付款方式：{{order.paid_method.label}}",
   enquiryName: "已收到大额订单询价",
   enquirySubject: "已收到你的询价 {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} 人",
-  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
+  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads.number}} 人。",
   enquiryRef: "你的询价编号是 {{enquiry.ref}}。",
   enquiryCall: "厨房会有人致电与你详谈——营业日当天，否则开门后尽快。",
 };
@@ -395,10 +401,11 @@ const ZH_TW: Sentences = {
   receiptSubject: "來自 {{appName}} 的收據",
   receiptHeading: "感謝取走訂單 #{{order.number}}。",
   receiptBody: "收據見附件：{{order.total}}。",
+  paidBy: "付款方式：{{order.paid_method.label}}",
   enquiryName: "已收到大量訂購詢價",
   enquirySubject: "已收到你的詢價 {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} 人",
-  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
+  enquiryHeading: "{{enquiry.wanted_on}}，{{enquiry.heads.number}} 人。",
   enquiryRef: "你的詢價編號是 {{enquiry.ref}}。",
   enquiryCall: "廚房會有人致電與你詳談——營業日當天，否則開門後盡快。",
 };
@@ -448,10 +455,11 @@ const AR: Sentences = {
   receiptSubject: "إيصالك من {{appName}}",
   receiptHeading: "شكرًا لاستلامك الطلب #{{order.number}}.",
   receiptBody: "إيصالك مرفق: {{order.total}}.",
+  paidBy: "طريقة الدفع: {{order.paid_method.label}}",
   enquiryName: "استُلم استفسار طلب كبير",
   enquirySubject: "وصلنا استفسارك، {{enquiry.ref}}",
-  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads}} أشخاص",
-  enquiryHeading: "{{enquiry.heads}} أشخاص يوم {{enquiry.wanted_on}}.",
+  enquiryPreheader: "{{enquiry.ref}} · {{enquiry.heads.number}} أشخاص",
+  enquiryHeading: "{{enquiry.heads.number}} أشخاص يوم {{enquiry.wanted_on}}.",
   enquiryRef: "رقمك المرجعي هو {{enquiry.ref}}.",
   enquiryCall: "سيتصل بك أحد من المطبخ للحديث في التفاصيل — في اليوم نفسه إن كنا مفتوحين، أو بعد الافتتاح بقليل.",
 };

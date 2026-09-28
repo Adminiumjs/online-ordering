@@ -14,7 +14,9 @@
  *     dish with portions set for a day sells no more than that on that day;
  *   - the order moves new → confirmed → preparing → ready → picked up, one
  *     step at a time, each step stamped with when and by whom; a cancel always
- *     carries its reason; at closing, a ready order not collected is marked so;
+ *     carries its reason; at closing, a ready order not collected is marked so,
+ *     and half an hour later one never finished is cancelled; a step taken by
+ *     mistake is taken back within a minute, emptying its stamps;
  *   - a finished order is locked, with its lines.
  *
  * The four menu tables are Point of Sale's `menu@1`, column for column (the
@@ -273,7 +275,8 @@ export const TABLES: Table[] = [
       date("from_date", "From"),
       date("to_date", "To"),
       text("reason", 120, "Reason", opt),
-      bool("active", "On", true),
+      // Switched off, a closure is kept but no longer closes the kitchen.
+      bool("active", "In effect", true),
     ],
   },
   {
@@ -328,19 +331,27 @@ export const TABLES: Table[] = [
       moves: {
         // No roles on this cancel: the diner's own link makes it too, and holds none.
         placed: ["confirmed", cancel()],
-        confirmed: ["preparing", cancel()],
-        preparing: ["ready", cancel()],
+        confirmed: ["preparing", cancel(), undo("placed", "confirmed_at")],
+        preparing: ["ready", cancel(), undo("confirmed", "preparing_at")],
         ready: [
           { to: "picked_up", requires: { where: [{ column: "paid_method", isNull: false }] } },
           cancel(),
           // Made by the clock at closing; by hand only by a manager.
           { to: "not_collected", roles: ["manager"] },
+          undo("preparing", "ready_at"),
         ],
+        // A hand-over made by mistake: a manager takes it back, whenever it is noticed.
+        picked_up: [{ to: "ready", roles: ["manager"], undo: true }],
       },
-      // A finished order is never re-priced: its lines are locked with it.
-      lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] },
+      // A finished order is never re-priced: its lines are locked with it. How it
+      // was paid stays open, so a hand-over taken back is unpaid again.
+      lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped", "paid_method"] },
       children: { order_items: { via: "order_id", lock: true } },
-      timed: [{ from: "ready", to: "not_collected", at: closing() }],
+      timed: [
+        { from: "ready", to: "not_collected", at: closing() },
+        // Half an hour after closing, what was never finished is cancelled, and the diner told why.
+        ...["placed", "confirmed", "preparing"].map((from) => ({ from, to: "cancelled", at: closing(30), set: { cancel_code: "closed" } })),
+      ],
     },
     columns: [
       id,
@@ -383,13 +394,13 @@ export const TABLES: Table[] = [
       text("cancel_dish", 80, "What ran out", opt),
       text("cancel_note", 160, "Cancel note", opt),
       at("placed_at", "Placed", { rules: stamp("now", onCreate) }),
-      at("confirmed_at", "Confirmed", { ...opt, rules: stamp("now", onStatus("confirmed")) }),
-      text("confirmed_by", 80, "Confirmed by", { ...opt, rules: stamp("user-name", onStatus("confirmed")) }),
-      at("preparing_at", "Started", { ...opt, rules: stamp("now", onStatus("preparing")) }),
-      at("ready_at", "Ready", { ...opt, rules: stamp("now", onStatus("ready")) }),
-      text("ready_by", 80, "Ready by", { ...opt, rules: stamp("user-name", onStatus("ready")) }),
-      at("picked_up_at", "Picked up", { ...opt, rules: stamp("now", onStatus("picked_up")) }),
-      text("picked_up_by", 80, "Handed over by", { ...opt, rules: stamp("user-name", onStatus("picked_up")) }),
+      at("confirmed_at", "Confirmed", { ...opt, rules: undone(stamp("now", onStatus("confirmed"))) }),
+      text("confirmed_by", 80, "Confirmed by", { ...opt, rules: undone(stamp("user-name", onStatus("confirmed"))) }),
+      at("preparing_at", "Started", { ...opt, rules: undone(stamp("now", onStatus("preparing"))) }),
+      at("ready_at", "Ready", { ...opt, rules: undone(stamp("now", onStatus("ready"))) }),
+      text("ready_by", 80, "Ready by", { ...opt, rules: undone(stamp("user-name", onStatus("ready"))) }),
+      at("picked_up_at", "Picked up", { ...opt, rules: undone(stamp("now", onStatus("picked_up"))) }),
+      text("picked_up_by", 80, "Handed over by", { ...opt, rules: undone(stamp("user-name", onStatus("picked_up"))) }),
       at("cancelled_at", "Cancelled", { ...opt, rules: stamp("now", onStatus("cancelled")) }),
       // Staff only: a person's name, or "customer" for the diner's own cancel.
       text("cancelled_by", 80, "Cancelled by", { ...opt, rules: stamp({ byOrigin: { public: "customer", staff: "user-name" } }, onStatus("cancelled")) }),
@@ -509,6 +520,19 @@ export const TABLES: Table[] = [
     ],
   },
 ];
+
+/**
+ * A move back, the kitchen's Undo: only by the screen that saw the row where
+ * it is now, and only within a minute of the move it takes back.
+ */
+function undo(to: string, stamped: string) {
+  return { to, roles: ["kitchen", "manager"], undo: true, requires: { time: { before: { column: stamped, plus: { minutes: 1 } } } } };
+}
+
+/** A stamp an Undo empties again. */
+function undone(rule: { stamp: Record<string, unknown> }) {
+  return { stamp: { ...rule.stamp, clearOnBack: true } };
+}
 
 /** A move to cancelled: always with its reason. */
 function cancel() {

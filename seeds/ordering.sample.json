@@ -5319,7 +5319,7 @@
           "language": "en-US",
           "pickup_at": {
             "@in": "PT5M",
-            "@grid": 15
+            "@slot": "orders"
           },
           "note": null,
           "channel": "online",
@@ -5353,7 +5353,7 @@
           "language": "en-US",
           "pickup_at": {
             "@in": "PT5M",
-            "@grid": 15
+            "@slot": "orders"
           },
           "note": "Extra crispy, please.",
           "channel": "online",
@@ -5383,7 +5383,7 @@
           "language": "en-US",
           "pickup_at": {
             "@in": "PT20M",
-            "@grid": 15
+            "@slot": "orders"
           },
           "note": null,
           "channel": "online",
@@ -5410,7 +5410,7 @@
           "language": "en-US",
           "pickup_at": {
             "@in": "PT35M",
-            "@grid": 15
+            "@slot": "orders"
           },
           "note": "One box, please — we're sharing.",
           "channel": "online",
@@ -5433,7 +5433,7 @@
           "language": "en-US",
           "pickup_at": {
             "@in": "PT35M",
-            "@grid": 15
+            "@slot": "orders"
           },
           "note": null,
           "channel": "online",

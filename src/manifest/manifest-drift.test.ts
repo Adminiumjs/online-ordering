@@ -103,6 +103,14 @@ describe("a diner reads nothing of anyone else's, and nothing the kitchen keeps"
     expect(manifest.publicAccess.find((e) => e.table === "modifiers")!["filters"]).toEqual([{ column: "available", op: "eq", value: true }]);
   });
 
+  it("says whether a slot is free and a dish has portions, and how many only below five", () => {
+    const availability = manifest.publicAccess.filter((e) => e.kind === "availability");
+    expect(availability).toEqual([
+      { table: "orders", kind: "availability", methods: ["GET"] },
+      { table: "order_items", kind: "availability", methods: ["GET"], showLeft: { below: 5 } },
+    ]);
+  });
+
   it("shows the kitchen's own phone and address on its page: a business's, not a person's", () => {
     expect(rules("settings", "phone")["personal"]).toBe(false);
     expect(rules("settings", "address")["personal"]).toBe(false);
@@ -119,7 +127,7 @@ describe("the diner's writes are the few the page needs", () => {
   });
 
   it("caps what nobody signed in for may send, and keeps what a stranger types plain text", () => {
-    expect(post()["anonymous"]).toEqual({ perValue: { columns: ["email"], n: 10 }, perKeyHour: 300, plainText: ["name", "note"] });
+    expect(post()["anonymous"]).toEqual({ perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", "note"] });
     const enquiry = manifest.publicAccess.find((e) => e.table === "enquiries")!;
     expect((enquiry["anonymous"] as Json)["plainText"]).toEqual(["name", "notes"]);
   });
@@ -137,12 +145,12 @@ describe("the diner's writes are the few the page needs", () => {
 describe("the order's life is Adminium's", () => {
   it("moves one step at a time, refuses a second screen's repeat, and locks a finished order with its lines", () => {
     expect(states()["strict"]).toBe(true);
-    expect(states()["lock"]).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] });
+    expect(states()["lock"]).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped", "paid_method"] });
     expect(states()["children"]).toEqual({ order_items: { via: "order_id", lock: true } });
   });
 
   it("cancels only with a reason, and holds no role on the cancel the diner makes too", () => {
-    for (const [from, moves] of Object.entries(states().moves)) {
+    for (const [from, moves] of Object.entries(states().moves).filter(([from]) => from !== "picked_up")) {
       const cancel = moves.find((m) => typeof m === "object" && m["to"] === "cancelled") as Json | undefined;
       expect(cancel, from).toBeDefined();
       expect(cancel!["requires"], from).toEqual({ where: [{ column: "cancel_code", isNull: false }] });
@@ -157,12 +165,59 @@ describe("the order's life is Adminium's", () => {
     expect(states()["timed"]).toContainEqual(expect.objectContaining({ from: "ready", to: "not_collected" }));
   });
 
+  it("takes a step back only as an Undo: by the screen that saw it, within a minute, emptying the step's stamps", () => {
+    const back = (from: string, to: string) => states().moves[from]!.find((m) => typeof m === "object" && m["to"] === to) as Json;
+    for (const [from, to, stamp] of [["confirmed", "placed", "confirmed_at"], ["preparing", "confirmed", "preparing_at"], ["ready", "preparing", "ready_at"]] as const) {
+      expect(back(from, to), `${from} → ${to}`).toEqual({ to, roles: ["kitchen", "manager"], undo: true, requires: { time: { before: { column: stamp, plus: { minutes: 1 } } } } });
+    }
+    // A hand-over taken back: a manager's, at any time.
+    expect(back("picked_up", "ready")).toEqual({ to: "ready", roles: ["manager"], undo: true });
+    for (const column of ["confirmed_at", "confirmed_by", "preparing_at", "ready_at", "ready_by", "picked_up_at", "picked_up_by"]) {
+      expect((rules("orders", column)["stamp"] as Json)["clearOnBack"], column).toBe(true);
+    }
+    for (const column of ["placed_at", "cancelled_at", "cancelled_by", "not_collected_at"]) {
+      expect((rules("orders", column)["stamp"] as Json)["clearOnBack"], column).toBeUndefined();
+    }
+  });
+
+  it("cancels what was never finished half an hour after closing, saying why", () => {
+    for (const from of ["placed", "confirmed", "preparing"]) {
+      expect(states()["timed"]).toContainEqual({
+        from,
+        to: "cancelled",
+        at: { column: "pickup_at", time: { hours: { table: "hours", weekday: "weekday", open: "open", closes: "closes" }, edge: "closes" }, plus: { minutes: 30 } },
+        set: { cancel_code: "closed" },
+      });
+    }
+  });
+
   it("works out every price, number and total on the server", () => {
     expect(rules("orders", "number_seq")["sequence"]).toEqual({ gapless: true, startSetting: { table: "settings", column: "first_order_number" } });
     expect(rules("order_items", "unit_price")["copy"]).toEqual({ via: "menu_item_id", from: "price", mode: "always" });
     expect(rules("order_item_modifiers", "price_delta")["copy"]).toEqual({ via: "modifier_id", from: "price_delta", mode: "always" });
     for (const [t, c] of [["orders", "subtotal"], ["orders", "item_count"], ["order_items", "options_total"]] as const) expect(rules(t, c)["rollup"], c).toBeDefined();
     for (const [t, c] of [["orders", "tax"], ["orders", "total"], ["order_items", "unit_total"], ["order_items", "line_total"]] as const) expect(rules(t, c)["formula"], c).toBeDefined();
+  });
+});
+
+describe("the emails say what stood, in the diner's language", () => {
+  const outbox = () => (manifest as Json)["outbox"] as Json & { producers: Json[]; recipient: Json };
+  const producer = (kind: string) => outbox().producers.find((p) => p["kind"] === kind)!;
+
+  it("waits twenty seconds with the ready and receipt emails, so an Undo takes them back first", () => {
+    expect(producer("order-ready")).toMatchObject({
+      holdSeconds: 20,
+      dropWhen: [{ column: "status", in: ["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"], reason: "no-longer-needed" }],
+    });
+    expect(producer("order-receipt")).toMatchObject({ holdSeconds: 20, dropWhen: [{ column: "status", in: ["ready"], reason: "no-longer-needed" }] });
+  });
+
+  it("queues a receipt only while Invoices & Receipts draws one", () => {
+    expect(producer("order-receipt")["gate"]).toEqual({ feature: "receipts" });
+  });
+
+  it("writes in the language the order was placed in, whoever is signed in", () => {
+    expect(outbox().recipient["language"]).toEqual({ column: "language" });
   });
 });
 
@@ -175,7 +230,7 @@ describe("the kitchen writes only what running the day needs", () => {
   it("moves, cancels with its own reasons, and records how an order was paid — nothing else of an order", () => {
     expect(role("kitchen").limits!["orders"]).toEqual({
       writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method"],
-      writableValues: { status: ["confirmed", "preparing", "ready", "picked_up", "cancelled"], cancel_code: KITCHEN_CANCEL_CODES },
+      writableValues: { status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"], cancel_code: KITCHEN_CANCEL_CODES },
     });
     expect(KITCHEN_CANCEL_CODES).not.toContain("self");
     expect(KITCHEN_CANCEL_CODES).not.toContain("closed");

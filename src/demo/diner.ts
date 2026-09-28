@@ -400,8 +400,13 @@ export class DemoDiner implements DinerPort {
     // Deleting is asked of a fresh sign-in only.
     if (this.engine.now - this.signIn!.at > 10 * 60_000) throw new ApiError(403, "PUBLIC_CODE_STEP_UP", "Sign in again to do this.");
     const e = entry("customers", "GET");
-    const forget = (e as { forget: { columns: readonly string[]; stamp: string } }).forget;
+    const forget = (e as { forget: { columns: readonly string[]; stamp: string; links?: true } }).forget;
     this.world.update("customers", customer, { ...Object.fromEntries(forget.columns.map((c) => [c, null])), [forget.stamp]: new Date(this.engine.now).toISOString() });
+    // Every link their orders were emailed with is made afresh, so the old ones open nothing.
+    if (forget.links === true) {
+      for (const order of this.world.where("orders", (o) => o["customer_id"] === customer && o["link_token"] !== null)) this.world.update("orders", order.id, { link_token: mintToken() });
+      this.linkSession = null;
+    }
     this.signIn = null;
   }
 

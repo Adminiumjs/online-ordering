@@ -49,7 +49,8 @@ export const MANIFEST_RULES = {
           "values": [
             "confirmed"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "confirmed_by": {
         "set": "user-name",
@@ -58,7 +59,8 @@ export const MANIFEST_RULES = {
           "values": [
             "confirmed"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "preparing_at": {
         "set": "now",
@@ -67,7 +69,8 @@ export const MANIFEST_RULES = {
           "values": [
             "preparing"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "ready_at": {
         "set": "now",
@@ -76,7 +79,8 @@ export const MANIFEST_RULES = {
           "values": [
             "ready"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "ready_by": {
         "set": "user-name",
@@ -85,7 +89,8 @@ export const MANIFEST_RULES = {
           "values": [
             "ready"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "picked_up_at": {
         "set": "now",
@@ -94,7 +99,8 @@ export const MANIFEST_RULES = {
           "values": [
             "picked_up"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "picked_up_by": {
         "set": "user-name",
@@ -103,7 +109,8 @@ export const MANIFEST_RULES = {
           "values": [
             "picked_up"
           ]
-        }
+        },
+        "clearOnBack": true
       },
       "cancelled_at": {
         "set": "now",
@@ -375,6 +382,24 @@ export const MANIFEST_RULES = {
                 }
               ]
             }
+          },
+          {
+            "to": "placed",
+            "roles": [
+              "kitchen",
+              "manager"
+            ],
+            "undo": true,
+            "requires": {
+              "time": {
+                "before": {
+                  "column": "confirmed_at",
+                  "plus": {
+                    "minutes": 1
+                  }
+                }
+              }
+            }
           }
         ],
         "preparing": [
@@ -388,6 +413,24 @@ export const MANIFEST_RULES = {
                   "isNull": false
                 }
               ]
+            }
+          },
+          {
+            "to": "confirmed",
+            "roles": [
+              "kitchen",
+              "manager"
+            ],
+            "undo": true,
+            "requires": {
+              "time": {
+                "before": {
+                  "column": "preparing_at",
+                  "plus": {
+                    "minutes": 1
+                  }
+                }
+              }
             }
           }
         ],
@@ -419,6 +462,33 @@ export const MANIFEST_RULES = {
             "roles": [
               "manager"
             ]
+          },
+          {
+            "to": "preparing",
+            "roles": [
+              "kitchen",
+              "manager"
+            ],
+            "undo": true,
+            "requires": {
+              "time": {
+                "before": {
+                  "column": "ready_at",
+                  "plus": {
+                    "minutes": 1
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "picked_up": [
+          {
+            "to": "ready",
+            "roles": [
+              "manager"
+            ],
+            "undo": true
           }
         ]
       },
@@ -429,7 +499,8 @@ export const MANIFEST_RULES = {
           "not_collected"
         ],
         "except": [
-          "link_stopped"
+          "link_stopped",
+          "paid_method"
         ]
       },
       "children": {
@@ -453,6 +524,72 @@ export const MANIFEST_RULES = {
               },
               "edge": "closes"
             }
+          }
+        },
+        {
+          "from": "placed",
+          "to": "cancelled",
+          "at": {
+            "column": "pickup_at",
+            "time": {
+              "hours": {
+                "table": "hours",
+                "weekday": "weekday",
+                "open": "open",
+                "closes": "closes"
+              },
+              "edge": "closes"
+            },
+            "plus": {
+              "minutes": 30
+            }
+          },
+          "set": {
+            "cancel_code": "closed"
+          }
+        },
+        {
+          "from": "confirmed",
+          "to": "cancelled",
+          "at": {
+            "column": "pickup_at",
+            "time": {
+              "hours": {
+                "table": "hours",
+                "weekday": "weekday",
+                "open": "open",
+                "closes": "closes"
+              },
+              "edge": "closes"
+            },
+            "plus": {
+              "minutes": 30
+            }
+          },
+          "set": {
+            "cancel_code": "closed"
+          }
+        },
+        {
+          "from": "preparing",
+          "to": "cancelled",
+          "at": {
+            "column": "pickup_at",
+            "time": {
+              "hours": {
+                "table": "hours",
+                "weekday": "weekday",
+                "open": "open",
+                "closes": "closes"
+              },
+              "edge": "closes"
+            },
+            "plus": {
+              "minutes": 30
+            }
+          },
+          "set": {
+            "cancel_code": "closed"
           }
         }
       ]
@@ -497,7 +634,8 @@ export const MANIFEST_RULES = {
           "email",
           "name"
         ],
-        "stamp": "forgotten_at"
+        "stamp": "forgotten_at",
+        "links": true
       }
     },
     {
@@ -597,6 +735,23 @@ export const MANIFEST_RULES = {
         "name",
         "price_delta"
       ]
+    },
+    {
+      "table": "orders",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "table": "order_items",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ],
+      "showLeft": {
+        "below": 5
+      }
     },
     {
       "table": "menu_categories",
@@ -827,6 +982,7 @@ export const MANIFEST_RULES = {
           ],
           "n": 10
         },
+        "perIpHour": 10,
         "perKeyHour": 300,
         "plainText": [
           "name",
@@ -1079,6 +1235,7 @@ export const MANIFEST_RULES = {
           ],
           "writableValues": {
             "status": [
+              "placed",
               "confirmed",
               "preparing",
               "ready",
@@ -1148,7 +1305,22 @@ export const MANIFEST_RULES = {
         "table": "orders",
         "column": "status",
         "to": "ready"
-      }
+      },
+      "holdSeconds": 20,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "placed",
+            "confirmed",
+            "preparing",
+            "picked_up",
+            "cancelled",
+            "not_collected"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
     },
     {
       "kind": "order-cancelled-ran-out",
@@ -1232,16 +1404,23 @@ export const MANIFEST_RULES = {
       "kind": "order-receipt",
       "link": "order_id",
       "gate": {
-        "setting": {
-          "table": "settings",
-          "column": "receipt_email_on"
-        }
+        "feature": "receipts"
       },
       "onChange": {
         "table": "orders",
         "column": "status",
         "to": "picked_up"
-      }
+      },
+      "holdSeconds": 20,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "ready"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
     },
     {
       "kind": "enquiry-received",

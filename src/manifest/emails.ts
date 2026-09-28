@@ -12,7 +12,8 @@
  * kitchen's settings row; `recipient.first_name` the diner; `appName` the
  * kitchen's name; `manage_url` the diner's order page. A time reads in the
  * diner's language and the kitchen's clock (`.time`, `.day_month`,
- * `.relative_day`); money in the connection's currency.
+ * `.relative_day`); money in the connection's currency; a rate, a count and
+ * a choice in the diner's language too (`.percent`, `.number`, `.label`).
  *
  * Only the online confirmation carries the order's own link: a code is sent
  * only to the person it opens the order for, and the ready, cancelled and
@@ -126,13 +127,13 @@ export const EMAIL_EN: EmailWords = {
     subject: "Your receipt from {{appName}}",
     preheader: "#{{order.number}} · {{order.total}}",
     heading: "Thanks for picking up #{{order.number}}.",
-    paras: ["Your receipt is attached: {{order.total}}."],
+    paras: ["Your receipt is attached: {{order.total}}.", "Paid by: {{order.paid_method.label}}"],
   },
   "enquiry-received": {
     name: "Large order enquiry received",
     subject: "We got your enquiry, {{enquiry.ref}}",
-    preheader: "{{enquiry.ref}} · {{enquiry.heads}} people",
-    heading: "{{enquiry.heads}} people on {{enquiry.wanted_on}}.",
+    preheader: "{{enquiry.ref}} · {{enquiry.heads.number}} people",
+    heading: "{{enquiry.heads.number}} people on {{enquiry.wanted_on}}.",
     paras: [
       "Your reference is {{enquiry.ref}}.",
       "Someone from the kitchen will call you to talk it through — the same day if we're open, or soon after we open.",
@@ -170,7 +171,8 @@ function layout(kind: Kind, all: EmailWords) {
       data: {
         lines: [
           { label: all.subtotal, amount: "{{order.subtotal}}" },
-          { label: all.tax, amount: "{{order.tax}}" },
+          // "Tax 8.25%": the order's own rate, written the diner's way.
+          { label: `${all.tax} {{order.tax_rate.percent}}`, amount: "{{order.tax}}" },
           { label: all.total, amount: "{{order.total}}" },
         ],
       },

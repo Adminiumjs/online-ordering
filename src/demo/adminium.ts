@@ -21,6 +21,9 @@ export class DemoAdminium {
     this.engine = new Engine(this.world);
     this.diner = new DemoDiner(this.engine, opts.latency ?? NO_LATENCY);
     this.kitchen = new DemoKitchen(this.engine);
+    // A receipt is Invoices & Receipts' to draw: the card switches the add-on, and the feature with it.
+    this.engine.featureOn = (feature) =>
+      feature === "receipts" ? this.kitchen.addOns.invoices : feature === "holiday-closures" ? this.kitchen.addOns.holidays : false;
   }
 
   get now(): number {

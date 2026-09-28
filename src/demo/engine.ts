@@ -25,8 +25,7 @@
  * `PUBLIC_SOLD_OUT`, `PUBLIC_PRICE_CHANGED`, `STATE_UNCHANGED` …), so a screen
  * says the same words it would against Adminium. The rules are the manifest's
  * (`rules.ts`, written from it, and the sample loader's `RULES`), each held to
- * it by a test; the few the demo plays ahead of the manifest are listed in
- * `AHEAD` below, and a test holds that list too.
+ * it by a test — the Undo, the moves at closing and the held emails included.
  *
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
@@ -46,29 +45,6 @@ export interface Writer {
 
 export const CLOCK: Writer = { origin: "automation", name: "Timed move", roles: [] };
 
-/**
- * What the demo plays ahead of the manifest: the moves and rules the release
- * carries that the Adminium the manifest is checked against cannot read yet.
- * Each goes into the manifest the day its Adminium reads it, and leaves here.
- */
-export const AHEAD = {
-  /** At closing plus half an hour, an order still new, confirmed or cooking is cancelled with the reason `closed`. */
-  closingCancel: { from: ["placed", "confirmed", "preparing"], to: "cancelled", plusMinutes: 30, set: { cancel_code: "closed" } },
-  /** A kitchen's Undo: the backward moves, only from the state the screen showed and within a minute of the move. */
-  undo: {
-    moves: { confirmed: "placed", preparing: "confirmed", ready: "preparing" } as Record<string, string>,
-    /** The forward stamps each undo clears; the state it returns to keeps its own. */
-    clears: { confirmed: ["confirmed_at", "confirmed_by"], preparing: ["preparing_at"], ready: ["ready_at", "ready_by"] } as Record<string, string[]>,
-    withinMs: 60_000,
-    roles: ["kitchen", "manager"],
-  },
-  /** A manager puts back a hand-off made by mistake: ready again, unpaid. */
-  handOffBack: { from: "picked_up", to: "ready", roles: ["manager"], clears: ["picked_up_at", "picked_up_by", "paid_method"] },
-  /** The ready and receipt emails wait this long, and are dropped when the order leaves the state. */
-  holdMs: { "order-ready": 20_000, "order-receipt": 20_000 } as Record<string, number>,
-  /** The two availability entries of the order page. */
-  availability: ["orders", "order_items"],
-} as const;
 
 const COUNTED = ["placed", "confirmed", "preparing", "ready", "picked_up"];
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -80,6 +56,8 @@ type Trigger = "create" | { column: string; values: unknown[] } | { column: stri
 
 export class Engine {
   readonly world: World;
+  /** Whether a feature of the app is on: its add-ons attached (the demo card switches them). */
+  featureOn: (feature: string) => boolean = () => true;
   constructor(world: World) {
     this.world = world;
   }
@@ -323,10 +301,11 @@ export class Engine {
   // ── the states of an order ──────────────────────────────────────────────────
 
   /**
-   * A change of an order: a move by its listed moves (and the few the demo
-   * plays ahead), strict — a move to the state it holds is refused, naming
-   * when and by whom it got there — and nothing but its exceptions once it
-   * is finished.
+   * A change of an order: a move by its listed moves, strict — a move to the
+   * state it holds is refused, naming when and by whom it got there — and
+   * nothing but its exceptions once it is finished. A move marked `undo` is
+   * made only by a write naming the state it saw, within its time, and
+   * empties the stamps marked `clearOnBack` of the state it leaves.
    */
   updateOrder(id: Id, values: Record<string, unknown>, writer: Writer, opts: { from?: string } = {}): Row {
     const stored = this.world.get("orders", id);
@@ -346,31 +325,33 @@ export class Engine {
       if (opts.from !== undefined && opts.from !== was) throw new ApiError(409, "STATE_MOVE_REFUSED", `It is ${was} now.`, { from: was, to });
       const listed = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => (typeof m === "string" ? m : (m as { to: string }).to) === to) as
         | string
-        | { to: string; roles?: readonly string[]; requires?: { where?: readonly { column: string; isNull?: boolean }[] } }
+        | {
+            to: string;
+            roles?: readonly string[];
+            undo?: true;
+            requires?: { where?: readonly { column: string; isNull?: boolean }[]; time?: { before?: { column: string; plus?: { minutes?: number } } } };
+          }
         | undefined;
-      const undo = AHEAD.undo.moves[was] === to;
-      const back = was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to;
-      const closing = writer.origin === "automation" && (AHEAD.closingCancel.from as readonly string[]).includes(was) && to === AHEAD.closingCancel.to;
-      if (listed === undefined && !undo && !back && !closing) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { from: was, to });
-      const roles = typeof listed === "object" ? listed.roles : undo ? AHEAD.undo.roles : back ? AHEAD.handOffBack.roles : undefined;
-      if (roles !== undefined && writer.origin !== "automation" && !writer.roles.some((r) => roles.includes(r))) {
-        throw new ApiError(409, "STATE_MOVE_REFUSED", `Not yours to move from ${was} to ${to}.`, { from: was, to, roles });
+      if (listed === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { from: was, to });
+      const move = typeof listed === "object" ? listed : { to };
+      if (move.roles !== undefined && writer.origin !== "automation" && !writer.roles.some((r) => move.roles!.includes(r))) {
+        throw new ApiError(409, "STATE_MOVE_REFUSED", `Not yours to move from ${was} to ${to}.`, { from: was, to, roles: move.roles });
       }
-      if (undo) {
-        // Only from the state the screen showed, and within a minute of the move it takes back.
-        const stamp = stored[`${was}_at`];
-        if (opts.from !== was || stamp === null || stamp === undefined || this.now > toMs(String(stamp)) + AHEAD.undo.withinMs) {
-          throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to undo.", { from: was, to });
+      // An undo only from the state the screen showed.
+      if (move.undo === true && opts.from === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", "Name the state it was in.", { from: was, to, undo: true });
+      // What it waits for, judged on the row as it stands.
+      const until = move.requires?.time?.before;
+      if (until !== undefined) {
+        const base = stored[until.column];
+        if (empty(base) || this.now >= toMs(String(base)) + (until.plus?.minutes ?? 0) * 60_000) {
+          throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to take it back.", { from: was, to });
         }
       }
       const after = { ...stored, ...values };
-      for (const condition of typeof listed === "object" ? (listed.requires?.where ?? []) : []) {
+      for (const condition of move.requires?.where ?? []) {
         if (condition.isNull === false && empty(after[condition.column])) {
           throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { from: was, to, requires: { column: condition.column } });
         }
-      }
-      if (to === "cancelled" && empty(after["cancel_code"])) {
-        throw new ApiError(409, "STATE_MOVE_REFUSED", "A cancel needs its reason.", { from: was, to, requires: { column: "cancel_code" } });
       }
     } else if (lock.includes(was)) {
       const except = (states.lock.except ?? []) as readonly string[];
@@ -378,9 +359,17 @@ export class Engine {
       if (locked.length > 0) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { columns: locked, state: was });
     }
     let change: Record<string, unknown> = { ...values };
-    if (AHEAD.undo.moves[was] === to) for (const column of AHEAD.undo.clears[was] ?? []) change[column] = null;
-    if (was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to) for (const column of AHEAD.handOffBack.clears) change[column] = null;
-    const backward = AHEAD.undo.moves[was] === to || (was === AHEAD.handOffBack.from && to === AHEAD.handOffBack.to);
+    const listedTo = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => typeof m === "object" && (m as { to: string }).to === to) as { undo?: true } | undefined;
+    const backward = to !== was && listedTo?.undo === true;
+    if (backward) {
+      // The stamps of the state it leaves are emptied; those of the state it returns to keep what they had.
+      const rules = (MANIFEST_RULES.stamps as Record<string, Record<string, StampRule & { clearOnBack?: true }>>)["orders"] ?? {};
+      for (const [column, rule] of Object.entries(rules)) {
+        const on = (Array.isArray(rule.on) ? rule.on : [rule.on]) as Trigger[];
+        const watches = (state: string) => on.some((t) => typeof t === "object" && "values" in t && t.column === "status" && t.values.includes(state));
+        if (rule.clearOnBack === true && watches(was) && !watches(to)) change[column] = null;
+      }
+    }
     // A backward move never stamps the state it returns to again.
     if (!backward) change = { ...change, ...this.stampsFor("orders", stored, { ...stored, ...change }, writer) };
     const row = this.world.update("orders", id, change);
@@ -397,11 +386,10 @@ export class Engine {
       const h = this.dayHours(day);
       // A closed day ends at midnight.
       const closes = h.open || h.closure === null ? instantOf(day, h.closes, this.world.zone) : instantOf(addDays(day, 1), "00:00", this.world.zone);
-      for (const timed of MANIFEST_RULES.states.orders.timed) {
-        if (timed.from === status && this.now >= closes) moved.push(this.updateOrder(order.id, { status: timed.to }, CLOCK));
-      }
-      if ((AHEAD.closingCancel.from as readonly string[]).includes(status) && this.now >= closes + AHEAD.closingCancel.plusMinutes * 60_000) {
-        moved.push(this.updateOrder(order.id, { status: AHEAD.closingCancel.to, ...AHEAD.closingCancel.set }, CLOCK));
+      for (const timed of MANIFEST_RULES.states.orders.timed as readonly { from: string; to: string; at: { plus?: { minutes?: number } }; set?: Record<string, unknown> }[]) {
+        if (timed.from === status && this.now >= closes + (timed.at.plus?.minutes ?? 0) * 60_000) {
+          moved.push(this.updateOrder(order.id, { status: timed.to, ...timed.set }, CLOCK));
+        }
       }
     }
     this.sendDue();
@@ -453,15 +441,16 @@ export class Engine {
       if (producer["onCreate"] !== undefined && before !== null) continue;
       if (producer["onChange"] !== undefined && (before === null || before[source.column!] === after[source.column!] || after[source.column!] !== source.to)) continue;
       if (source.where !== undefined && after[source.where.column] !== source.where.eq) continue;
-      const gate = producer["gate"] as { setting: { column: string } } | undefined;
-      if (gate !== undefined && this.setting(gate.setting.column) !== true) continue;
+      const gate = producer["gate"] as { setting: { column: string } } | { feature: string } | undefined;
+      if (gate !== undefined && "setting" in gate && this.setting(gate.setting.column) !== true) continue;
+      if (gate !== undefined && "feature" in gate && !this.featureOn(gate.feature)) continue;
       const kind = String(producer["kind"]);
       const link = String(producer["link"]);
       if (this.world.where("messages", (m) => m["kind"] === kind && m[link] === after.id && m["status"] !== "skipped").length > 0) continue;
       const recipient = producer["recipient"] as { column: string } | undefined;
       const customer = table === "orders" && !empty(after["customer_id"]) ? this.world.get("customers", Number(after["customer_id"])) : undefined;
       const to = recipient !== undefined ? after[recipient.column] : (customer?.["email"] ?? after["email"]);
-      const hold = AHEAD.holdMs[kind];
+      const hold = typeof producer["holdSeconds"] === "number" ? producer["holdSeconds"] * 1000 : 0;
       this.world.insert("messages", {
         kind,
         status: empty(to) ? "skipped" : "queued",
@@ -470,7 +459,7 @@ export class Engine {
         order_id: table === "orders" ? after.id : null,
         enquiry_id: table === "enquiries" ? after.id : null,
         customer_id: customer?.id ?? null,
-        due: iso(this.now + (hold ?? 0)),
+        due: iso(this.now + hold),
         created_at: iso(this.now),
         sent_at: null,
         error: null,
@@ -480,13 +469,15 @@ export class Engine {
     this.sendDue();
   }
 
-  /** Sends what has come due; a held ready or receipt email whose order left the state is dropped. */
+  /** Sends what has come due; a waiting message whose row meets its producer's `dropWhen` is dropped. */
   sendDue(): void {
     for (const message of this.world.where("messages", (m) => m["status"] === "queued")) {
       const order = message["order_id"] === null ? undefined : this.world.get("orders", Number(message["order_id"]));
-      const needs = message["kind"] === "order-ready" ? "ready" : message["kind"] === "order-receipt" ? "picked_up" : null;
-      if (needs !== null && order !== undefined && order["status"] !== needs) {
-        this.world.update("messages", message.id, { status: "skipped", skip_reason: "no-longer-needed" });
+      const producer = (MANIFEST_RULES.producers as readonly Record<string, unknown>[]).find((p) => p["kind"] === message["kind"]);
+      const drops = (producer?.["dropWhen"] ?? []) as readonly { column: string; in: readonly unknown[]; reason: string }[];
+      const drop = order === undefined ? undefined : drops.find((d) => d.in.includes(order[d.column]));
+      if (drop !== undefined) {
+        this.world.update("messages", message.id, { status: "skipped", skip_reason: drop.reason });
         continue;
       }
       if (toMs(String(message["due"])) <= this.now) this.world.update("messages", message.id, { status: "sent", sent_at: iso(this.now) });

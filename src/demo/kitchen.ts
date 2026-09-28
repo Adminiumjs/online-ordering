@@ -120,8 +120,10 @@ export class DemoKitchen implements KitchenPort {
   }
 
   async move(id: Id, from: string, to: string): Promise<Row> {
-    this.held("orders", { status: to });
-    return { ...this.engine.updateOrder(id, { status: to }, this.writer, { from }) };
+    // A hand-over taken back is unpaid again.
+    const values = from === "picked_up" ? { status: to, paid_method: null } : { status: to };
+    this.held("orders", values);
+    return { ...this.engine.updateOrder(id, values, this.writer, { from }) };
   }
 
   async cancel(id: Id, from: string, code: string, dish: string | null, note: string | null): Promise<Row> {

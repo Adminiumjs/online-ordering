@@ -171,7 +171,15 @@
             "columns": {
               "desc": "name",
               "qty": "qty",
-              "rate": "unit_total"
+              "rate": "unit_total",
+              "options": {
+                "list": {
+                  "table": "order_item_modifiers",
+                  "via": "order_item_id",
+                  "column": "name",
+                  "orderBy": "id"
+                }
+              }
             }
           }
         },
@@ -1726,14 +1734,14 @@
             "type": "bool",
             "default": true,
             "label": {
-              "en-US": "On",
-              "de-DE": "Am",
-              "fr-FR": "Le",
-              "da-DK": "Den",
-              "cs-CZ": "Dne",
-              "ar-EG": "في",
-              "zh-CN": "日期",
-              "zh-TW": "日期"
+              "en-US": "In effect",
+              "de-DE": "Gültig",
+              "fr-FR": "En vigueur",
+              "da-DK": "Gældende",
+              "cs-CZ": "Platí",
+              "ar-EG": "سارية",
+              "zh-CN": "生效",
+              "zh-TW": "生效"
             }
           }
         ]
@@ -2070,6 +2078,24 @@
                     }
                   ]
                 }
+              },
+              {
+                "to": "placed",
+                "roles": [
+                  "kitchen",
+                  "manager"
+                ],
+                "undo": true,
+                "requires": {
+                  "time": {
+                    "before": {
+                      "column": "confirmed_at",
+                      "plus": {
+                        "minutes": 1
+                      }
+                    }
+                  }
+                }
               }
             ],
             "preparing": [
@@ -2083,6 +2109,24 @@
                       "isNull": false
                     }
                   ]
+                }
+              },
+              {
+                "to": "confirmed",
+                "roles": [
+                  "kitchen",
+                  "manager"
+                ],
+                "undo": true,
+                "requires": {
+                  "time": {
+                    "before": {
+                      "column": "preparing_at",
+                      "plus": {
+                        "minutes": 1
+                      }
+                    }
+                  }
                 }
               }
             ],
@@ -2114,6 +2158,33 @@
                 "roles": [
                   "manager"
                 ]
+              },
+              {
+                "to": "preparing",
+                "roles": [
+                  "kitchen",
+                  "manager"
+                ],
+                "undo": true,
+                "requires": {
+                  "time": {
+                    "before": {
+                      "column": "ready_at",
+                      "plus": {
+                        "minutes": 1
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "picked_up": [
+              {
+                "to": "ready",
+                "roles": [
+                  "manager"
+                ],
+                "undo": true
               }
             ]
           },
@@ -2124,7 +2195,8 @@
               "not_collected"
             ],
             "except": [
-              "link_stopped"
+              "link_stopped",
+              "paid_method"
             ]
           },
           "children": {
@@ -2148,6 +2220,72 @@
                   },
                   "edge": "closes"
                 }
+              }
+            },
+            {
+              "from": "placed",
+              "to": "cancelled",
+              "at": {
+                "column": "pickup_at",
+                "time": {
+                  "hours": {
+                    "table": "hours",
+                    "weekday": "weekday",
+                    "open": "open",
+                    "closes": "closes"
+                  },
+                  "edge": "closes"
+                },
+                "plus": {
+                  "minutes": 30
+                }
+              },
+              "set": {
+                "cancel_code": "closed"
+              }
+            },
+            {
+              "from": "confirmed",
+              "to": "cancelled",
+              "at": {
+                "column": "pickup_at",
+                "time": {
+                  "hours": {
+                    "table": "hours",
+                    "weekday": "weekday",
+                    "open": "open",
+                    "closes": "closes"
+                  },
+                  "edge": "closes"
+                },
+                "plus": {
+                  "minutes": 30
+                }
+              },
+              "set": {
+                "cancel_code": "closed"
+              }
+            },
+            {
+              "from": "preparing",
+              "to": "cancelled",
+              "at": {
+                "column": "pickup_at",
+                "time": {
+                  "hours": {
+                    "table": "hours",
+                    "weekday": "weekday",
+                    "open": "open",
+                    "closes": "closes"
+                  },
+                  "edge": "closes"
+                },
+                "plus": {
+                  "minutes": 30
+                }
+              },
+              "set": {
+                "cancel_code": "closed"
               }
             }
           ]
@@ -2792,7 +2930,8 @@
                   "values": [
                     "confirmed"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2819,7 +2958,8 @@
                   "values": [
                     "confirmed"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2845,7 +2985,8 @@
                   "values": [
                     "preparing"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2871,7 +3012,8 @@
                   "values": [
                     "ready"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2898,7 +3040,8 @@
                   "values": [
                     "ready"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2924,7 +3067,8 @@
                   "values": [
                     "picked_up"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -2951,7 +3095,8 @@
                   "values": [
                     "picked_up"
                   ]
-                }
+                },
+                "clearOnBack": true
               }
             }
           },
@@ -5954,6 +6099,7 @@
           ],
           "writableValues": {
             "status": [
+              "placed",
               "confirmed",
               "preparing",
               "ready",
@@ -6102,7 +6248,8 @@
           "email",
           "name"
         ],
-        "stamp": "forgotten_at"
+        "stamp": "forgotten_at",
+        "links": true
       }
     },
     {
@@ -6202,6 +6349,23 @@
         "name",
         "price_delta"
       ]
+    },
+    {
+      "table": "orders",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "table": "order_items",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ],
+      "showLeft": {
+        "below": 5
+      }
     },
     {
       "table": "menu_categories",
@@ -6432,6 +6596,7 @@
           ],
           "n": 10
         },
+        "perIpHour": 10,
         "perKeyHour": 300,
         "plainText": [
           "name",
@@ -6692,6 +6857,9 @@
       "table": "customers",
       "email": "email",
       "name": "name",
+      "language": {
+        "column": "language"
+      },
       "fallback": {
         "via": "order_id",
         "email": "email",
@@ -6757,7 +6925,22 @@
           "table": "orders",
           "column": "status",
           "to": "ready"
-        }
+        },
+        "holdSeconds": 20,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "placed",
+              "confirmed",
+              "preparing",
+              "picked_up",
+              "cancelled",
+              "not_collected"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-ran-out",
@@ -6841,16 +7024,23 @@
         "kind": "order-receipt",
         "link": "order_id",
         "gate": {
-          "setting": {
-            "table": "settings",
-            "column": "receipt_email_on"
-          }
+          "feature": "receipts"
         },
         "onChange": {
           "table": "orders",
           "column": "status",
           "to": "picked_up"
-        }
+        },
+        "holdSeconds": 20,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "ready"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "enquiry-received",
@@ -6887,6 +7077,7 @@
         "order.pickup_at.time",
         "order.subtotal",
         "order.tax",
+        "order.tax_rate.percent",
         "order.total",
         "practice.address",
         "practice.directions",
@@ -6952,7 +7143,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Tax",
+                    "label": "Tax {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7054,7 +7245,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Steuer",
+                    "label": "Steuer {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7156,7 +7347,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Taxe",
+                    "label": "Taxe {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7258,7 +7449,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Moms",
+                    "label": "Moms {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7360,7 +7551,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Daň",
+                    "label": "Daň {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7462,7 +7653,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "الضريبة",
+                    "label": "الضريبة {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7564,7 +7755,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "税费",
+                    "label": "税费 {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7666,7 +7857,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "稅金",
+                    "label": "稅金 {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7731,6 +7922,7 @@
         "order.pickup_at.time",
         "order.subtotal",
         "order.tax",
+        "order.tax_rate.percent",
         "order.total",
         "practice.address",
         "practice.directions",
@@ -7797,7 +7989,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Tax",
+                    "label": "Tax {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7892,7 +8084,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Steuer",
+                    "label": "Steuer {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -7987,7 +8179,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Taxe",
+                    "label": "Taxe {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -8082,7 +8274,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Moms",
+                    "label": "Moms {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -8177,7 +8369,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "Daň",
+                    "label": "Daň {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -8272,7 +8464,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "الضريبة",
+                    "label": "الضريبة {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -8367,7 +8559,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "税费",
+                    "label": "税费 {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -8462,7 +8654,7 @@
                     "amount": "{{order.subtotal}}"
                   },
                   {
-                    "label": "稅金",
+                    "label": "稅金 {{order.tax_rate.percent}}",
                     "amount": "{{order.tax}}"
                   },
                   {
@@ -9943,6 +10135,7 @@
       },
       "vars": [
         "order.number",
+        "order.paid_method.label",
         "order.total",
         "practice.address",
         "practice.phone"
@@ -9968,7 +10161,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Your receipt is attached: {{order.total}}."
+                  "Your receipt is attached: {{order.total}}.",
+                  "Paid by: {{order.paid_method.label}}"
                 ]
               }
             }
@@ -9991,7 +10185,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Dein Beleg ist angehängt: {{order.total}}."
+                  "Dein Beleg ist angehängt: {{order.total}}.",
+                  "Bezahlt mit: {{order.paid_method.label}}"
                 ]
               }
             }
@@ -10014,7 +10209,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Votre reçu est en pièce jointe : {{order.total}}."
+                  "Votre reçu est en pièce jointe : {{order.total}}.",
+                  "Payé par : {{order.paid_method.label}}"
                 ]
               }
             }
@@ -10037,7 +10233,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Din kvittering er vedhæftet: {{order.total}}."
+                  "Din kvittering er vedhæftet: {{order.total}}.",
+                  "Betalt med: {{order.paid_method.label}}"
                 ]
               }
             }
@@ -10060,7 +10257,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Účtenku najdete v příloze: {{order.total}}."
+                  "Účtenku najdete v příloze: {{order.total}}.",
+                  "Způsob platby: {{order.paid_method.label}}"
                 ]
               }
             }
@@ -10083,7 +10281,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "إيصالك مرفق: {{order.total}}."
+                  "إيصالك مرفق: {{order.total}}.",
+                  "طريقة الدفع: {{order.paid_method.label}}"
                 ]
               }
             }
@@ -10106,7 +10305,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "收据见附件：{{order.total}}。"
+                  "收据见附件：{{order.total}}。",
+                  "付款方式：{{order.paid_method.label}}"
                 ]
               }
             }
@@ -10129,7 +10329,8 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "收據見附件：{{order.total}}。"
+                  "收據見附件：{{order.total}}。",
+                  "付款方式：{{order.paid_method.label}}"
                 ]
               }
             }
@@ -10151,7 +10352,7 @@
         "zh-TW": "已收到大量訂購詢價"
       },
       "vars": [
-        "enquiry.heads",
+        "enquiry.heads.number",
         "enquiry.ref",
         "enquiry.wanted_on",
         "practice.address",
@@ -10160,13 +10361,13 @@
       "locales": {
         "en-US": {
           "subject": "We got your enquiry, {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} people",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} people",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} people on {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} people on {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10184,13 +10385,13 @@
         },
         "de-DE": {
           "subject": "Wir haben deine Anfrage, {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} Personen",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} Personen",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} Personen am {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} Personen am {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10208,13 +10409,13 @@
         },
         "fr-FR": {
           "subject": "Nous avons reçu votre demande, {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} personnes",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} personnes",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} personnes le {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} personnes le {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10232,13 +10433,13 @@
         },
         "da-DK": {
           "subject": "Vi har fået din forespørgsel, {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} personer",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} personer",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} personer den {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} personer den {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10256,13 +10457,13 @@
         },
         "cs-CZ": {
           "subject": "Vaši poptávku jsme přijali, {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} osob",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} osob",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} osob, {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} osob, {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10280,13 +10481,13 @@
         },
         "ar-EG": {
           "subject": "وصلنا استفسارك، {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} أشخاص",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} أشخاص",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads}} أشخاص يوم {{enquiry.wanted_on}}."
+                "text": "{{enquiry.heads.number}} أشخاص يوم {{enquiry.wanted_on}}."
               }
             },
             {
@@ -10304,13 +10505,13 @@
         },
         "zh-CN": {
           "subject": "已收到你的询价 {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} 人",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。"
+                "text": "{{enquiry.wanted_on}}，{{enquiry.heads.number}} 人。"
               }
             },
             {
@@ -10328,13 +10529,13 @@
         },
         "zh-TW": {
           "subject": "已收到你的詢價 {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads}} 人",
+          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.wanted_on}}，{{enquiry.heads}} 人。"
+                "text": "{{enquiry.wanted_on}}，{{enquiry.heads.number}} 人。"
               }
             },
             {
