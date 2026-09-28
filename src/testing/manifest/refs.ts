@@ -96,6 +96,8 @@ export function tableIndex<C extends ColumnShape>(tables: readonly TableShape<C>
   const column = (table: string, ref: string): C | undefined => byRef.get(table)?.columns.find((c) => c.ref === ref);
   return {
     table: (ref: string) => byRef.get(ref),
+    /** Every table, in the manifest's order. */
+    tables: (): readonly TableShape<C>[] => tables,
     column,
     has: (table: string, ref: string) => column(table, ref) !== undefined,
     /** The table's primary key column, when it declares one. */
@@ -208,9 +210,17 @@ export const hoursEdgeSchema = z
   .strict();
 export type HoursEdge = z.infer<typeof hoursEdgeSchema>;
 
-/** A wall time: a time of day, a setting holding one, or the venue's opening or closing hour. */
-export type WallTime = ClockTime | HoursEdge;
-export const wallTimeSchema: z.ZodType<WallTime> = z.union([clockTimeSchema, hoursEdgeSchema]);
+/**
+ * A time of day kept on the row itself: a column of the row the moment's own
+ * column is read from (the linked row's, with `via`) holding `HH:MM` — a
+ * guest's arrival time on their stay.
+ */
+export const rowTimeSchema = z.object({ column: refSchema }).strict();
+export type RowTime = z.infer<typeof rowTimeSchema>;
+
+/** A wall time: a time of day, a setting holding one, the venue's opening or closing hour, or a time kept on the row. */
+export type WallTime = ClockTime | HoursEdge | RowTime;
+export const wallTimeSchema: z.ZodType<WallTime> = z.union([clockTimeSchema, hoursEdgeSchema, rowTimeSchema]);
 
 const momentFields = {
   /** A `date` or `timestamptz` column: this row's own, or the linked row's when `via` is given. */
@@ -302,7 +312,15 @@ export function momentIssues<C extends ColumnShape>(
     }
   }
   const time = moment.time;
-  if (time !== undefined && typeof time === 'object') {
+  if (time !== undefined && typeof time === 'object' && !('edge' in time) && !('table' in time)) {
+    // A time kept on the row the moment's column is read from.
+    if (owner !== undefined) {
+      const found = want(owner, time.column, ['text'], [...path, 'time', 'column'], 'a text column holding HH:MM');
+      if (found?.maxLength !== undefined && found.maxLength < 5) {
+        out.push({ path: [...path, 'time', 'column'], message: `"${owner}.${time.column}" holds fewer than the 5 characters of HH:MM` });
+      }
+    }
+  } else if (time !== undefined && typeof time === 'object') {
     if ('edge' in time) {
       const hours = time.hours;
       const at = [...path, 'time', 'hours'];

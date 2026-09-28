@@ -29,12 +29,12 @@ import { z } from 'zod';
 
 import { addOnNeedsIssues, addOnsSchema, requiresAddOn, type AddOnNeeds } from './add-ons.ts';
 import { bookingIssues, bookingSchema } from './booking.ts';
-import { capacityIssues, capacitySchema, viaIndexIssues, type Capacity } from './capacity.ts';
+import { capacityIssues, capacitySchema, isLegacyCapacity, kindOf, rulesOf, viaIndexIssues, type Capacity } from './capacity.ts';
 import { appDocumentIssues, appDocumentSchema, mappingIssues, type AppDocument } from './documents.ts';
 import { formulaColumns, formulaExprSchema, tableFormulaIssues } from './formula.ts';
 import { pageCalendarIssues } from './page-calendar.ts';
 import { emailTemplateSchema, outboxIssues, outboxProducerSchema, outboxSchema } from './outbox.ts';
-import { codeWhereSchema, publicAccessIssues, publicAccessSchema, publicKeysSchema, shareCodeColumns, type PublicAccess } from './public-access.ts';
+import { codeWhereSchema, publicAccessIssues, publicAccessSchema, publicKeysSchema, shareCodeColumns, unlistedColumn, type PublicAccess } from './public-access.ts';
 import { roleLimitIssues, roleLimitsSchema, type RoleShape } from './roles.ts';
 import { statesIssues, statesSchema, type States } from './states.ts';
 import { MOMENT_LIMITS, clockTimeSchema, momentIssues, momentSchema, settingRefSchema } from './refs.ts';
@@ -277,9 +277,9 @@ const hashChildSchema = z
 /** A number the manifest states, or a whole-number setting. */
 const stampAmount = (max: number) => z.union([z.number().int().min(0).max(max), settingRefSchema]);
 
-/** `addMinutes`: now plus minutes or hours — one of the two. */
+/** `addMinutes`: now plus minutes or hours — one of the two — capped by a moment. */
 const addMinutesSchema = z
-  .object({ minutes: stampAmount(MOMENT_LIMITS.minutes).optional(), hours: stampAmount(MOMENT_LIMITS.hours).optional() })
+  .object({ minutes: stampAmount(MOMENT_LIMITS.minutes).optional(), hours: stampAmount(MOMENT_LIMITS.hours).optional(), notAfter: momentSchema.optional() })
   .strict()
   .refine((a) => (a.minutes === undefined) !== (a.hours === undefined), { message: 'a stamp adds minutes or hours, one of the two' });
 
@@ -305,7 +305,9 @@ const deadlineSchema = z
  *  - `hashOf`: a fingerprint — SHA-256 over the named columns, child rows and
  *    a linked row's text, in a canonical form anyone can recompute;
  *  - `addMinutes`: the moment so many minutes or hours from now (a hold for
- *    ten minutes), the number stated or read from the settings row;
+ *    ten minutes), the number stated or read from the settings row — but
+ *    never later than `notAfter`, as a deadline is capped (an offer ends at
+ *    the doors at the latest);
  *  - `deadline`: `days` after today on the venue's calendar at `time`, but
  *    never later than `notAfter`, a moment of the row or a linked row (a
  *    transfer due in five days at 18:00, or three days before the show);
@@ -589,6 +591,12 @@ export const columnRulesSchema = z
       .object({
         set: stampSetSchema,
         on: z.union([stampTriggerSchema, z.array(stampTriggerSchema).min(2).max(3)]),
+        /**
+         * Emptied again when a move marked `undo` takes the row back out of a
+         * state the stamp watches (the time an order was marked ready, when
+         * the kitchen undoes the Ready).
+         */
+        clearOnBack: z.literal(true).optional(),
       })
       .strict()
       .optional(),
@@ -1441,11 +1449,47 @@ function followIssues(
   const loop = [...inputs].find((ref) => moved.has(ref));
   if (loop !== undefined) {
     out.push({ path: here('copy', 'follow'), message: `"${parent.ref}.${copy.from}" is worked out from "${table.ref}", so "${table.ref}.${own}" cannot follow it` });
+  } else {
+    // A total, a balance or a stamp changes by a settle or a move, never by a change of the row the copies follow:
+    // a copy of one — or of a formula over one — would keep the value it had.
+    const balances = new Set(parent.columns.flatMap((c) => (c.rules?.rollup?.balance === undefined ? [] : [c.rules.rollup.balance.column])));
+    const settled = [...inputs].find((ref) => {
+      const rules = parent.columns.find((c) => c.ref === ref)?.rules;
+      return rules?.rollup !== undefined || rules?.stamp !== undefined || balances.has(ref);
+    });
+    if (settled !== undefined) {
+      const kind = balances.has(settled) ? 'a balance' : parent.columns.find((c) => c.ref === settled)?.rules?.rollup !== undefined ? 'a total' : 'a stamp';
+      const over = settled === copy.from ? '' : ` (it is worked out from "${settled}", ${kind})`;
+      out.push({
+        path: here('copy', 'follow'),
+        message: `"${parent.ref}.${copy.from}"${over === '' ? ` is ${kind}` : over}, which changes without a change of the row, so "${table.ref}.${own}" cannot follow it`,
+      });
+    }
+  }
+  // A follow writes the copy and the formulas over it, and settles the totals into the row it follows only:
+  // a total another table keeps of these rows must read none of what it writes, or that total would go stale.
+  const written = new Set<string>([own]);
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const column of table.columns) {
+      const formula = column.rules?.formula;
+      if (formula === undefined || written.has(column.ref)) continue;
+      if (formulaColumns(formula).some((input) => written.has(input))) {
+        written.add(column.ref);
+        changed = true;
+      }
+    }
   }
   for (const other of tables) {
     if (other.ref === parent.ref) continue;
-    if (other.columns.some((c) => c.rules?.rollup?.from === table.ref)) {
-      out.push({ path: here('copy', 'follow'), message: `"${table.ref}" totals into "${other.ref}" too, so its copies cannot follow "${parent.ref}"` });
+    const reads = other.columns.some((c) => {
+      const rollup = c.rules?.rollup;
+      if (rollup?.from !== table.ref) return false;
+      // The link a total groups its rows by counts too: a copy that moves a row to another parent moves it between that table's totals.
+      return [rollup.via, rollup.sum, rollup.times, rollup.unlessSet, rollup.where?.column].some((ref) => ref !== undefined && written.has(ref));
+    });
+    if (reads) {
+      out.push({ path: here('copy', 'follow'), message: `"${table.ref}" totals into "${other.ref}" too, so its copies cannot follow "${parent.ref}": a total "${other.ref}" keeps reads what the follow writes` });
     }
   }
   return out;
@@ -1914,6 +1958,7 @@ export function appReferenceIssues(
           if ('addMinutes' in set) {
             whole(set.addMinutes.minutes, here('stamp', 'set', 'addMinutes', 'minutes'));
             whole(set.addMinutes.hours, here('stamp', 'set', 'addMinutes', 'hours'));
+            if (set.addMinutes.notAfter !== undefined) out.push(...momentIssues(table.ref, set.addMinutes.notAfter, index, here('stamp', 'set', 'addMinutes', 'notAfter')));
           } else {
             const d = set.deadline;
             whole(d.days, here('stamp', 'set', 'deadline', 'days'));
@@ -1954,6 +1999,7 @@ export function appReferenceIssues(
         });
         const others = (['copy', 'sequence', 'code', 'rollup', 'formula', 'format', 'default', 'lookup', 'perNight'] as const).filter((name) => rules[name] !== undefined);
         if (others.length > 0) out.push({ path: here('stamp'), message: `a stamped column is not also decided by ${others.join(', ')}` });
+        if (stamp.clearOnBack === true) out.push(...clearOnBackIssues(table, column, triggers, here('stamp', 'clearOnBack')));
       }
       if ((rules.sequence !== undefined || rules.code !== undefined) && column.role === 'pk') {
         out.push({ path: here(), message: 'a primary key numbers itself; it takes no sequence or code rule' });
@@ -1986,6 +2032,9 @@ export function appReferenceIssues(
             decided: (column) => decided.get(table.ref)?.has(column) === true,
             bookingCancel: table.booking?.cancel === undefined ? undefined : table.booking.cancel.when,
             statesOf: (ref) => tables.get(ref)?.states,
+            bookedOf: (ref) => tables.get(ref)?.booking !== undefined,
+            lineOf: (ref) => [...tables.values()].find((other) => other.states?.children?.[ref] !== undefined)?.ref,
+            outboxTable: m.outbox?.table,
           },
           (...rest) => at('states', ...rest),
         ),
@@ -2013,9 +2062,12 @@ export function appReferenceIssues(
       mailsOnCreate: (table) => (m.outbox?.producers ?? []).some((producer) => 'onCreate' in producer && producer.onCreate.table === table),
       publicKeys: m.publicKeys,
       roles: m.roles ?? [],
+      outbox: m.outbox,
     }),
   );
   out.push(...viaIndexIssues(m.requiredSchema.tables));
+  out.push(...settingTableIssues(m));
+  out.push(...slotPartyIssues(m));
   out.push(...outboxIssues(m, index));
   out.push(...roleLimitIssues(m.roles ?? [], index));
   if (shapeOf === undefined) out.push(...addOnNeedsIssues(m));
@@ -2031,9 +2083,204 @@ export function appReferenceIssues(
               column.rules?.perNight === undefined ? [] : [[column.ref, { rateVia: column.rules.perNight.rate.via }] as const],
             ),
           ),
+        unlisted: (table, column) => unlistedColumn(m, table, column),
       }),
     );
   }
+  return out;
+}
+
+/**
+ * Where a manifest reads a value of the settings row: the keys a `{table,
+ * column}` setting sits under, or the lists whose items are settings (a move
+ * waiting for one, an entry switched off by one). Any other `{table, column}`
+ * (a person found by address, a changed column an email watches) is no
+ * setting.
+ */
+const SETTING_KEYS: ReadonlySet<string> = new Set([
+  'time', 'minutes', 'hours', 'days', 'perSlot', 'slotMinutes', 'windowDays', 'noticeMinutes', 'cancelHours', 'opens', 'closes',
+  'size', 'min', 'max', 'aheadDays', 'grid', 'from', 'startSetting', 'prefixSetting', 'enabledBy', 'fallback', 'setting',
+]);
+const SETTING_LISTS: ReadonlySet<string> = new Set(['setting', 'requireSetting']);
+
+/** Whether a value is a setting read from a table (`{table, column}`, with a list item's `eq` or `when`). */
+function isTableSetting(value: unknown): value is { table: string; column: string } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const keys = Object.keys(value);
+  const found = value as Record<string, unknown>;
+  return typeof found['table'] === 'string' && typeof found['column'] === 'string' && keys.every((key) => ['table', 'column', 'eq', 'when'].includes(key));
+}
+
+/**
+ * Every setting a rule reads from a table, anywhere in the manifest: its
+ * tables' rules (limits, moments, moves, stamps, fills), its public entries
+ * and keys, and its outbox.
+ */
+export function settingReferences(m: {
+  requiredSchema: { tables: readonly unknown[] };
+  publicAccess?: readonly unknown[] | undefined;
+  publicKeys?: unknown;
+  outbox?: unknown;
+}): { path: (string | number)[]; table: string; column: string }[] {
+  const out: { path: (string | number)[]; table: string; column: string }[] = [];
+  const walk = (value: unknown, path: (string | number)[], key: string | number | undefined, list: string | undefined) => {
+    if (Array.isArray(value)) {
+      value.forEach((item, i) => walk(item, [...path, i], i, typeof key === 'string' ? key : undefined));
+      return;
+    }
+    if (typeof value !== 'object' || value === null) return;
+    const named = typeof key === 'string' ? SETTING_KEYS.has(key) : list !== undefined && SETTING_LISTS.has(list);
+    if (named && isTableSetting(value)) {
+      out.push({ path, table: value.table, column: value.column });
+      return;
+    }
+    for (const [child, inner] of Object.entries(value)) walk(inner, [...path, child], child, undefined);
+  };
+  walk(m.requiredSchema.tables, ['requiredSchema', 'tables'], 'tables', undefined);
+  walk(m.publicAccess ?? [], ['publicAccess'], 'publicAccess', undefined);
+  walk(m.publicKeys, ['publicKeys'], 'publicKeys', undefined);
+  walk(m.outbox, ['outbox'], 'outbox', undefined);
+  return out;
+}
+
+/**
+ * A setting is read from a table holding ONE row — or it reads whichever row
+ * the database returns first (another guest's arrival time). One-row: the
+ * app's settings table (its outbox's `settings.table`), or a table standing
+ * alone — no foreign key of its own, none of another table pointing at it,
+ * and no states, limits or bookings, as a venue's rules are kept. Anything
+ * else is refused; and on the server a table found holding more rows is read
+ * as having no setting at all.
+ */
+function settingTableIssues(m: {
+  requiredSchema: { tables: readonly RequiredTableShape[] };
+  publicAccess?: readonly unknown[] | undefined;
+  publicKeys?: unknown;
+  outbox?: { settings?: { table: string } | undefined } | undefined;
+}): ReferenceIssue[] {
+  const tables = m.requiredSchema.tables;
+  const settingsTable = m.outbox?.settings?.table;
+  const oneRow = (ref: string): boolean => {
+    if (ref === settingsTable) return true;
+    const table = tables.find((t) => t.ref === ref);
+    if (table === undefined) return true; // a table the manifest lacks is refused where the rule is checked
+    if (table.states !== undefined || table.capacity !== undefined || table.booking !== undefined) return false;
+    if (table.columns.some((column) => column.type === 'fk')) return false;
+    return !tables.some((other) => other.columns.some((column) => column.type === 'fk' && column.references === ref));
+  };
+  return settingReferences(m)
+    .filter((ref) => !oneRow(ref.table))
+    .map((ref) => ({
+      path: ref.path,
+      message: `"${ref.table}" may hold many rows, so "${ref.table}.${ref.column}" is no setting: read settings from the app's one-row settings table (outbox.settings.table), or from a table that links nowhere, that no table links to, and that keeps no states or limits`,
+    }));
+}
+
+/**
+ * Advice about a capped balance worked out from a formula (`balance.of` a
+ * total of subtotal and tax): a write that changes what the formula reads is
+ * judged against the cap one row at a time, but a batch (a bulk edit, an
+ * import) settles the balance after its rows are written, without the cap. So
+ * every column the formula reads — through other formulas, and the lines a
+ * total adds up — should stay as it is whenever the capped rows (payments) can
+ * exist: locked by the table's states in every state such a row can be
+ * written in or left in (a sent or void invoice), or the lines locked with it.
+ * One path per balance whose formula reads a column that stays writable.
+ */
+export function cappedFormulaWarnings(tables: readonly RequiredTableShape[]): { path: (string | number)[]; message: string }[] {
+  const out: { path: (string | number)[]; message: string }[] = [];
+  tables.forEach((table, t) => {
+    const columns = new Map(table.columns.map((column) => [column.ref, column]));
+    table.columns.forEach((column, c) => {
+      const rollup = column.rules?.rollup;
+      const balance = rollup?.balance;
+      if (rollup === undefined || balance === undefined) return;
+      const of = columns.get(balance.of);
+      if (of?.rules?.formula === undefined) return;
+      // The rows the cap holds back: this total's, and those of each total the balance takes away that is capped.
+      const capped = [
+        ...(rollup.cap === true ? [rollup.from] : []),
+        ...(balance.minus ?? []).flatMap((ref) => {
+          const minus = columns.get(ref)?.rules?.rollup;
+          return minus?.cap === true ? [minus.from] : [];
+        }),
+      ];
+      if (capped.length === 0) return;
+      const states = table.states;
+      const all = [...new Set([...(table.columns.find((x) => x.ref === states?.column)?.enum ?? []), ...Object.keys(states?.moves ?? {})])];
+      // Every state a capped row can be written in, and every state reached from those: the row stays.
+      const living = new Set<string>();
+      for (const child of capped) {
+        const tie = states?.children?.[child];
+        const from = tie?.createIn ?? tie?.parentIn;
+        for (const state of from ?? all) living.add(state);
+      }
+      if (states !== undefined) {
+        const queue = [...living];
+        while (queue.length > 0) {
+          const next = queue.pop()!;
+          for (const move of states.moves[next] ?? []) {
+            const to = typeof move === 'string' ? move : move.to;
+            if (!living.has(to)) {
+              living.add(to);
+              queue.push(to);
+            }
+          }
+        }
+      }
+      const locked = states?.lock !== undefined && living.size > 0 && [...living].every((state) => states.lock!.when.includes(state));
+      const kept = (ref: string) => locked && !(states?.lock?.except ?? []).includes(ref);
+      // The columns the formula reads, down through formulas; a total stands for the lines it adds up.
+      const open: string[] = [];
+      const seen = new Set<string>();
+      const read = (ref: string) => {
+        if (seen.has(ref)) return;
+        seen.add(ref);
+        const found = columns.get(ref);
+        if (found?.rules?.formula !== undefined) {
+          for (const input of formulaColumns(found.rules.formula)) read(input);
+          return;
+        }
+        const total = found?.rules?.rollup;
+        if (total !== undefined) {
+          if (!(kept(ref) && states?.children?.[total.from]?.lock === true)) open.push(ref);
+          return;
+        }
+        if (!kept(ref)) open.push(ref);
+      };
+      for (const input of formulaColumns(of.rules.formula)) read(input);
+      if (open.length === 0) return;
+      out.push({
+        path: ['requiredSchema', 'tables', t, 'columns', c, 'rules', 'rollup', 'balance', 'of'],
+        message: `"${table.ref}.${balance.of}" is worked out from ${open.map((ref) => `"${ref}"`).join(', ')}, which can change while "${capped.join('", "')}" rows are held to the balance: a bulk edit or an import settles the balance without the cap. Lock them with the table's states while those rows can exist`,
+      });
+    });
+  });
+  return out;
+}
+
+/**
+ * A slot limit a guest may ask about, whose rows each take a party written in
+ * a column: the party asked is capped at what one row may hold, so the column
+ * says it (`validation.max`) — or a page could ask ever larger parties and
+ * learn how full each time is. A released app's slot rule is answered as it
+ * always was.
+ */
+function slotPartyIssues(m: { requiredSchema: { tables: readonly RequiredTableShape[] }; publicAccess?: readonly PublicAccess[] | undefined }): ReferenceIssue[] {
+  const out: ReferenceIssue[] = [];
+  (m.publicAccess ?? []).forEach((entry, e) => {
+    if (entry.kind !== 'availability') return;
+    const table = m.requiredSchema.tables.find((t) => t.ref === entry.table);
+    if (table?.capacity === undefined || isLegacyCapacity(table.capacity)) return;
+    const rule = rulesOf(table.capacity)[entry.rule ?? 0];
+    if (rule === undefined || kindOf(rule) !== 'slot' || !('amount' in rule) || typeof rule.amount !== 'string') return;
+    const amount = rule.amount;
+    if (table.columns.find((column) => column.ref === amount)?.rules?.validation?.max !== undefined) return;
+    out.push({
+      path: ['publicAccess', e],
+      message: `"${table.ref}.${amount}" is the party a guest asks about: give it a largest value (validation.max), or a page asking ever larger parties learns how full each time is`,
+    });
+  });
   return out;
 }
 
@@ -2041,7 +2288,34 @@ export function appReferenceIssues(
 const DECIDING_RULES = ['copy', 'sequence', 'code', 'rollup', 'stamp', 'formula', 'format', 'default', 'lookup'] as const;
 const decidedByRules = (rules: ColumnRules | undefined) => DECIDING_RULES.some((name) => rules?.[name] !== undefined);
 
-/** What renews a code must be another column of the row, one a person changes. */
+/**
+ * A stamp emptied by an undo watches the table's state column, is a column
+ * that may be empty, and some move marked `undo` leaves one of the states it
+ * watches — or it would never be emptied.
+ */
+function clearOnBackIssues(
+  table: RequiredTableShape,
+  column: RequiredTableShape['columns'][number],
+  triggers: readonly unknown[],
+  path: (string | number)[],
+): { path: (string | number)[]; message: string }[] {
+  const out: { path: (string | number)[]; message: string }[] = [];
+  if (column.nullable !== true) out.push({ path, message: `"${table.ref}.${column.ref}" is not nullable, so an undo cannot empty it` });
+  const states = (table as { states?: States }).states;
+  const watched = triggers.flatMap((trigger) => {
+    const t = trigger as { column?: unknown; values?: unknown[] } | string;
+    return typeof t === 'object' && t.values !== undefined && states !== undefined && t.column === states.column ? t.values.map(String) : [];
+  });
+  if (states === undefined || watched.length === 0) {
+    out.push({ path, message: 'only a stamp written when the state moves is emptied by an undo: watch the table\'s state column' });
+    return out;
+  }
+  const undone = Object.entries(states.moves).some(([from, moves]) => watched.includes(from) && moves.some((move) => typeof move === 'object' && move.undo === true));
+  if (!undone) out.push({ path, message: `no move marked undo leaves ${watched.map((v) => `"${v}"`).join(', ')}, so nothing ever empties it` });
+  return out;
+}
+
+/** What renews a code must be another column of the row, one a person changes (or a stamp writes). */
 function codeRenewIssues(
   table: RequiredTableShape,
   column: RequiredTableShape['columns'][number],
@@ -2065,8 +2339,9 @@ function codeRenewIssues(
       for (const value of trigger.values) {
         if (!valueFits(watched, value)) out.push({ path: [...at, 'values'], message: `${JSON.stringify(value)} is not a value of "${table.ref}.${watched.ref}"` });
       }
-    } else if (decidedByRules(watched.rules)) {
-      out.push({ path: [...at, 'column'], message: 'a code is renewed by a change a person makes' });
+    } else if (decidedByRules(watched.rules) && watched.rules?.stamp === undefined) {
+      // A stamp is decided in the same step as the renewal, before it: a holder copied in as an offer is taken renews.
+      out.push({ path: [...at, 'column'], message: 'a code is renewed by a change a person makes, or a stamp' });
     }
   });
   return out;

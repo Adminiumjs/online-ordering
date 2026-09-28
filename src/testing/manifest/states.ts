@@ -44,7 +44,9 @@
  *   stamps) keep being written by Adminium.
  * - `children`: child tables tied to this row's state. `lock` refuses their
  *   writes while the row is locked; `parentIn` allows them only while the row
- *   is in those states (payments on a sent invoice); `clearOnCreate` empties
+ *   is in those states (payments on a sent invoice) — or, apart, `createIn`
+ *   for a new child and `changeIn` for a change or a delete of one (a payment
+ *   taken only on a live stay, and voided on a cancelled one too); `clearOnCreate` empties
  *   columns of this row when one of them is created (a recorded payment
  *   clears the client's "I've sent it"). `release` opens a locked child a
  *   little while its parent is in some of the lock's states: a change that
@@ -72,6 +74,10 @@
  *   has passed (a held order expiring).
  * - `effects`: a move that moves the row one of its links points at too, by a
  *   move that table lists (a guest checked out turns the room to cleaning).
+ * - `create`: what a new row must meet to be created — the conditions a move
+ *   waits for, judged when the row is written (a check-in only for a paid
+ *   ticket, on its day).
+ * - A timed move may also write fixed values to other columns (`set`).
  *
  * Adding sample data and importing past records are history: they write any
  * state their rows were in.
@@ -156,6 +162,14 @@ export const stateMoveSchema = z.union([
         .optional(),
       /** Only people holding one of these app roles may make this move. */
       roles: z.array(roleKey).min(1).max(8).optional(),
+      /**
+       * The move takes back the listed move the other way (ready → preparing
+       * after preparing → ready): made only by a write that names the state
+       * it saw the row in, judged on the row as it stands, and emptying the
+       * stamps the move it takes back wrote (`stamp.clearOnBack`) while the
+       * stamps of the state it returns to keep what they had.
+       */
+      undo: z.literal(true).optional(),
     })
     .strict(),
 ]);
@@ -166,7 +180,12 @@ export const stateChildSchema = z
     /** The child's foreign key to this row. */
     via: refSchema,
     lock: z.literal(true).optional(),
+    /** Written only while this row is in one of these states: `createIn` and `changeIn` together. */
     parentIn: z.array(stateName).min(1).max(16).optional(),
+    /** Added only while this row is in one of these states (a payment taken on a stay still booked or in house). */
+    createIn: z.array(stateName).min(1).max(16).optional(),
+    /** Changed or deleted only while this row is in one of these states (a payment voided on a cancelled stay too). */
+    changeIn: z.array(stateName).min(1).max(16).optional(),
     clearOnCreate: z.array(refSchema).min(1).max(8).optional(),
     /** While this row is in one of `when`, a locked child may still EMPTY these columns of its own, and change nothing else. */
     release: z.object({ when: z.array(stateName).min(1).max(16), columns: z.array(refSchema).min(1).max(8) }).strict().optional(),
@@ -174,8 +193,11 @@ export const stateChildSchema = z
     lockLinked: z.record(refSchema, z.array(refSchema).min(1).max(16)).optional(),
   })
   .strict()
-  .refine((c) => c.lock === undefined || c.parentIn === undefined, {
+  .refine((c) => c.lock === undefined || (c.parentIn === undefined && c.createIn === undefined && c.changeIn === undefined), {
     message: 'a child is locked with its parent, or writable only in some of its states — not both',
+  })
+  .refine((c) => c.parentIn === undefined || (c.createIn === undefined && c.changeIn === undefined), {
+    message: 'parentIn says createIn and changeIn at once: say parentIn, or createIn and changeIn, not both',
   })
   .refine((c) => c.release === undefined || c.lock === true, { message: 'a child is released only from its parent\'s lock (lock: true)' })
   .refine((c) => c.lockLinked === undefined || (Object.keys(c.lockLinked).length >= 1 && Object.keys(c.lockLinked).length <= 8), {
@@ -223,9 +245,52 @@ export const lateMoveSchema = z
   });
 export type LateMove = z.infer<typeof lateMoveSchema>;
 
-/** A listed move Adminium makes by itself once `at` has passed, for a row still in `from`. */
-export const timedMoveSchema = z.object({ from: stateName, to: stateName, at: momentSchema }).strict();
+/**
+ * A listed move Adminium makes by itself once `at` has passed, for a row still
+ * in `from`. `set` writes fixed values to other columns of the row in the same
+ * move (why an order still open at closing was cancelled).
+ */
+export const timedMoveSchema = z
+  .object({
+    from: stateName,
+    to: stateName,
+    at: momentSchema,
+    set: z
+      .record(refSchema, z.union([scalarSchema, z.null()]))
+      .refine((set) => Object.keys(set).length >= 1 && Object.keys(set).length <= 8, { message: 'a timed move sets 1 to 8 columns' })
+      .optional(),
+  })
+  .strict();
 export type TimedMove = z.infer<typeof timedMoveSchema>;
+
+/**
+ * What a row must meet to be created at all: a value of its own
+ * (`where`), of the row one of its links points at (`linked`), of the
+ * settings row (`setting`), and a window on the clock (`time`) — the same
+ * shapes a move waits for. A check-in recorded only for a paid ticket, on
+ * its day, from half an hour before the doors.
+ */
+export const createRequiresSchema = z
+  .object({
+    requires: z
+      .object({
+        where: z.array(stateConditionSchema).min(1).max(8).optional(),
+        linked: z.array(linkedConditionSchema).min(1).max(4).optional(),
+        time: timeConditionSchema.optional(),
+        setting: z.array(settingConditionSchema).min(1).max(4).optional(),
+      })
+      .strict()
+      .refine((r) => [r.where, r.linked, r.time, r.setting].some((part) => part !== undefined), {
+        message: 'a create requires where, linked, time or setting',
+      }),
+  })
+  .strict();
+export type CreateRequires = z.infer<typeof createRequiresSchema>;
+
+/** The one column an effect sets on the linked row (that table's state), and the state it moves to. */
+const effectSetSchema = z
+  .record(refSchema, stateName)
+  .refine((set) => Object.keys(set).length === 1, { message: 'an effect sets one column: the linked table\'s state' });
 
 /**
  * When this row moves to `on.to`, the row its link `via` points at moves too,
@@ -233,15 +298,53 @@ export type TimedMove = z.infer<typeof timedMoveSchema>;
  * moves to, one of the moves that table lists (a guest checked out turns the
  * room to cleaning). One link, never a chain.
  */
-export const stateEffectSchema = z
+export const moveEffectSchema = z
   .object({
     on: z.object({ to: stateName }).strict(),
     via: refSchema,
-    set: z.record(refSchema, stateName),
+    set: effectSetSchema,
+  })
+  .strict();
+export type MoveEffect = z.infer<typeof moveEffectSchema>;
+
+/**
+ * When the link `on.change` really changes — while this row is in one of
+ * `on.in` before and after the write — the row it pointed at moves by `old`
+ * and the row it now points at by `new`, in the same write (a guest moved to
+ * another room: the old room to cleaning, the new one to occupied, which only
+ * a ready room may be). Each is that table's declared move; a new row already
+ * in `new`'s state refuses the write. Either side may be left out, and a link
+ * emptied or first set moves only the side there is.
+ */
+export const changeEffectSchema = z
+  .object({
+    on: z.object({ change: refSchema, in: z.array(stateName).min(1).max(16).optional() }).strict(),
+    old: z.object({ set: effectSetSchema }).strict().optional(),
+    new: z.object({ set: effectSetSchema }).strict().optional(),
   })
   .strict()
-  .refine((e) => Object.keys(e.set).length === 1, { message: 'an effect sets one column: the linked table\'s state', path: ['set'] });
-export type StateEffect = z.infer<typeof stateEffectSchema>;
+  .refine((e) => e.old !== undefined || e.new !== undefined, { message: 'an effect of a changed link moves the old row, the new one, or both' });
+export type ChangeEffect = z.infer<typeof changeEffectSchema>;
+
+export type StateEffect = MoveEffect | ChangeEffect;
+
+/** Whether an effect is set off by a changed link rather than by a move. */
+export function isChangeEffect(effect: StateEffect): effect is ChangeEffect {
+  return 'change' in effect.on;
+}
+
+/**
+ * An effect, parsed by the schema of the form written (a move's, or a changed
+ * link's), so a mistake is named where it is: a union of the two would only
+ * say the input is invalid.
+ */
+export const stateEffectSchema = z.custom<StateEffect>().superRefine((value, ctx) => {
+  const on = typeof value === 'object' && value !== null ? (value as { on?: unknown }).on : undefined;
+  const change = typeof on === 'object' && on !== null && 'change' in on;
+  const parsed = (change ? changeEffectSchema : moveEffectSchema).safeParse(value);
+  if (parsed.success) return;
+  for (const issue of parsed.error.issues) ctx.addIssue({ ...issue, path: [...issue.path], continue: false } as never);
+});
 
 export const statesSchema = z
   .object({
@@ -271,12 +374,25 @@ export const statesSchema = z
     timed: z.array(timedMoveSchema).min(1).max(8).optional(),
     /** A move that moves the row one of its links points at too (see {@link stateEffectSchema}). */
     effects: z.array(stateEffectSchema).min(1).max(4).optional(),
+    /** What a new row must meet to be created (see {@link createRequiresSchema}). */
+    create: createRequiresSchema.optional(),
   })
   .strict();
 export type States = z.infer<typeof statesSchema>;
 
 
 /** A move written as a bare state is a move with nothing asked first. */
+/**
+ * Whether a state is reached only by moves marked `undo`: made only by a
+ * person naming the state they saw — never by a door that names none (a
+ * timed move, an effect, an email's `onSent`, a guest's writable value).
+ */
+export function reachedOnlyByUndo(states: { moves: Readonly<Record<string, readonly StateMove[]>> } | undefined, state: unknown): boolean {
+  if (states === undefined) return false;
+  const moves = Object.values(states.moves).flatMap((list) => list.filter((move) => moveTarget(move) === String(state)));
+  return moves.length > 0 && moves.every((move) => typeof move === 'object' && move.undo === true);
+}
+
 export function moveTarget(move: StateMove): string {
   return typeof move === 'string' ? move : move.to;
 }
@@ -295,6 +411,12 @@ interface StatesContext<C extends ColumnShape> {
   bookingCancel?: { column: string; to: string } | undefined;
   /** Another table's states, which an effect moves. */
   statesOf?: ((table: string) => States | undefined) | undefined;
+  /** Whether another table keeps a booking guard (`table.booking`), whose lock an effect's write cannot take. */
+  bookedOf?: ((table: string) => boolean) | undefined;
+  /** The table whose states another table's rows are tied to as its lines (`states.children`), or undefined. */
+  lineOf?: ((table: string) => string | undefined) | undefined;
+  /** The app's outbox table, whose rows move only by the outbox's own moves. */
+  outboxTable?: string | undefined;
 }
 
 /** Everything wrong with one table's `states` against the manifest's tables. */
@@ -340,6 +462,10 @@ export function statesIssues<C extends ColumnShape>(
           out.push({ path: at('moves', from, m, 'roles'), message: `"${role}" is not one of the app's roles` });
         }
       }
+      // An undo takes back a listed move: the one from where it goes to where it starts.
+      if (move.undo === true && !(states.moves[to] ?? []).some((back) => moveTarget(back) === from)) {
+        out.push({ path: at('moves', from, m, 'undo'), message: `no listed move goes from "${to}" to "${from}", so this move takes nothing back` });
+      }
     });
   }
   if (states.lock !== undefined) {
@@ -359,7 +485,7 @@ export function statesIssues<C extends ColumnShape>(
     if (via === undefined) out.push({ path: here('via'), message: `"${child}" has no column "${rule.via}"` });
     else if (via.type !== 'fk' || via.references !== table) out.push({ path: here('via'), message: `"${child}.${rule.via}" does not point at "${table}"` });
     if (rule.lock === true && states.lock === undefined) out.push({ path: here('lock'), message: 'a child is locked with its parent, and the parent has no lock' });
-    (rule.parentIn ?? []).forEach((value, i) => known(value, here('parentIn', i)));
+    for (const key of ['parentIn', 'createIn', 'changeIn'] as const) (rule[key] ?? []).forEach((value, i) => known(value, here(key, i)));
     for (const ref of rule.clearOnCreate ?? []) {
       const found = index.column(table, ref);
       if (found === undefined) out.push({ path: here('clearOnCreate'), message: `"${table}" has no column "${ref}"` });
@@ -402,7 +528,8 @@ export function statesIssues<C extends ColumnShape>(
         else if (column.role === 'pk') out.push({ path: here('lockLinked', link), message: `"${target}.${ref}" is the key, which never changes` });
       }
     }
-    if (rule.lock === undefined && rule.parentIn === undefined && rule.clearOnCreate === undefined && rule.lockLinked === undefined) {
+    const tied = rule.parentIn !== undefined || rule.createIn !== undefined || rule.changeIn !== undefined;
+    if (rule.lock === undefined && !tied && rule.clearOnCreate === undefined && rule.lockLinked === undefined) {
       out.push({ path: here(), message: 'a child says lock, parentIn, clearOnCreate or lockLinked' });
     }
   }
@@ -542,6 +669,7 @@ function conditionedMoveIssues<C extends ColumnShape>(
     known(timed.to, here('to'));
     const move = listed(timed.from, timed.to);
     if (move === undefined) out.push({ path: here('to'), message: `no listed move goes from "${timed.from}" to "${timed.to}"` });
+    else if (typeof move === 'object' && move.undo === true) out.push({ path: here('to'), message: `the move from "${timed.from}" to "${timed.to}" is an undo, which only a person makes` });
     if ((states.timed ?? []).some((other, j) => j < i && other.from === timed.from)) {
       out.push({ path: here('from'), message: `another timed move already leaves "${timed.from}"` });
     }
@@ -553,13 +681,99 @@ function conditionedMoveIssues<C extends ColumnShape>(
     if (after !== undefined && neverPasses(after, timed.at)) {
       out.push({ path: here('at'), message: `the move from "${timed.from}" to "${timed.to}" waits until later than this, so it could never be made in time` });
     }
+    for (const [ref, value] of Object.entries(timed.set ?? {})) {
+      const path = here('set', ref);
+      const found = index.column(table, ref);
+      if (found === undefined) out.push({ path, message: `"${table}" has no column "${ref}"` });
+      else if (ref === states.column) out.push({ path, message: 'the state moves by the timed move itself, not by what it sets' });
+      else if (found.role === 'pk') out.push({ path, message: `"${table}.${ref}" is the key, which never changes` });
+      else if (value === null ? found.nullable !== true : !valueFits(found, value)) out.push({ path, message: `${JSON.stringify(value)} is not a value of "${table}.${ref}"` });
+      else if (ctx.decided?.(ref) === true) out.push({ path, message: `"${table}.${ref}" is written by another rule already` });
+    }
   });
+
+  const create = states.create?.requires;
+  if (create !== undefined) {
+    const here = (...rest: (string | number)[]) => at('create', 'requires', ...rest);
+    (create.where ?? []).forEach((condition, w) => out.push(...conditionIssues(table, condition, index, here('where', w))));
+    (create.linked ?? []).forEach((linked, l) => {
+      const target = linkTarget(linked.via, here('linked', l, 'via'));
+      if (target === undefined) return;
+      linked.where.forEach((condition, w) => out.push(...conditionIssues(target, condition, index, here('linked', l, 'where', w))));
+    });
+    if (create.time?.after !== undefined) out.push(...momentIssues(table, create.time.after, index, here('time', 'after')));
+    if (create.time?.before !== undefined) out.push(...momentIssues(table, create.time.before, index, here('time', 'before')));
+    (create.setting ?? []).forEach((setting, k) => {
+      const path = here('setting', k);
+      if (index.table(setting.table) === undefined) {
+        out.push({ path, message: `"${setting.table}" is not a table of this manifest` });
+        return;
+      }
+      const found = index.column(setting.table, setting.column);
+      if (found === undefined) out.push({ path, message: `"${setting.table}" has no column "${setting.column}"` });
+      else if (!valueFits(found, setting.eq)) out.push({ path, message: `${JSON.stringify(setting.eq)} is not a value of "${setting.table}.${setting.column}"` });
+    });
+  }
+
+  /** Everything wrong with an effect's move of a row of `target` (its states `theirs`) by `set`. */
+  const effectMoveIssues = (target: string, theirs: States, set: Record<string, string>, here: (...rest: (string | number)[]) => (string | number)[]) => {
+    for (const [column, state] of Object.entries(set)) {
+      if (column !== theirs.column) {
+        out.push({ path: here('set', column), message: `"${target}" moves by "${theirs.column}", not "${column}"` });
+        continue;
+      }
+      const moves = Object.values(theirs.moves).flatMap((list) => list.filter((move) => moveTarget(move) === state));
+      if (moves.length === 0) out.push({ path: here('set', column), message: `no move of "${target}" goes to "${state}"` });
+      // An undo is made only by a person naming the state they saw; an effect names none.
+      if (moves.length > 0 && moves.every((move) => typeof move === 'object' && move.undo === true)) {
+        out.push({ path: here('set', column), message: `every move of "${target}" to "${state}" is an undo, which only a person makes` });
+      }
+      // The linked row is moved inside this write, after its own rows are held: its move may wait only for its own row.
+      const reaches = moves.some((move) => {
+        if (typeof move === 'string') return false;
+        const time = move.requires?.time;
+        const vias = [time?.after, time?.before].flatMap((m) => (m === undefined ? [] : [m, ...(m.or ?? [])])).some((m) => m.via !== undefined);
+        return (move.requires?.linked?.length ?? 0) > 0 || vias;
+      });
+      if (reaches) out.push({ path: here('set', column), message: `the move of "${target}" to "${state}" waits for another row, so an effect cannot make it` });
+      // Judged late by a time read through another row: that row would be read after this write's own rows.
+      const lateThrough = (theirs.late ?? []).some((late) => late.to === state && [late.moment, ...(late.moment.or ?? [])].some((m) => m.via !== undefined));
+      if (lateThrough) out.push({ path: here('set', column), message: `a move of "${target}" to "${state}" is judged late by another row's time, so an effect cannot make it` });
+    }
+  };
+  /** Everything wrong with the table an effect moves a row of, whatever sets it off. */
+  const effectTargetIssues = (target: string, theirs: States, path: (string | number)[]) => {
+    if (target === ctx.outboxTable) out.push({ path, message: `"${target}" is the app's outbox, whose messages move only by the outbox's own moves` });
+    // Moved inside this write, after its own rows are held: a lock taken per day, or a parent held first, would come too late.
+    if (ctx.bookedOf?.(target) === true) out.push({ path, message: `"${target}" books people by the day, and its lock cannot be taken inside another row's write` });
+    const parent = ctx.lineOf?.(target);
+    if (parent !== undefined) out.push({ path, message: `"${target}" rows are lines of "${parent}", which would be held after this write's own rows` });
+    if ((theirs.effects?.length ?? 0) > 0) out.push({ path, message: `"${target}" sets off effects of its own; an effect moves one row, never a chain` });
+  };
 
   (states.effects ?? []).forEach((effect, i) => {
     const here = (...rest: (string | number)[]) => at('effects', i, ...rest);
+    if (isChangeEffect(effect)) {
+      (effect.on.in ?? []).forEach((state, k) => known(state, here('on', 'in', k)));
+      if ((states.effects ?? []).some((other, j) => j < i && isChangeEffect(other) && other.on.change === effect.on.change)) {
+        out.push({ path: here(), message: `another effect already moves the rows "${effect.on.change}" points at when it changes` });
+      }
+      if (effect.on.change === states.column) out.push({ path: here('on', 'change'), message: 'the state moves by its moves: an effect of a changed link watches a link' });
+      const target = linkTarget(effect.on.change, here('on', 'change'));
+      if (target === undefined) return;
+      const theirs = ctx.statesOf?.(target);
+      if (theirs === undefined) {
+        out.push({ path: here('on', 'change'), message: `"${target}" declares no states, so its rows have no moves to make` });
+        return;
+      }
+      if (effect.old !== undefined) effectMoveIssues(target, theirs, effect.old.set, (...rest) => here('old', ...rest));
+      if (effect.new !== undefined) effectMoveIssues(target, theirs, effect.new.set, (...rest) => here('new', ...rest));
+      effectTargetIssues(target, theirs, here('on', 'change'));
+      return;
+    }
     known(effect.on.to, here('on', 'to'));
     if (!reached(effect.on.to)) out.push({ path: here('on', 'to'), message: `no listed move goes to "${effect.on.to}", so nothing sets this off` });
-    if ((states.effects ?? []).some((other, j) => j < i && other.on.to === effect.on.to && other.via === effect.via)) {
+    if ((states.effects ?? []).some((other, j) => j < i && !isChangeEffect(other) && other.on.to === effect.on.to && other.via === effect.via)) {
       out.push({ path: here(), message: `another effect already moves the row "${effect.via}" points at on a move to "${effect.on.to}"` });
     }
     const target = linkTarget(effect.via, here('via'));
@@ -569,14 +783,8 @@ function conditionedMoveIssues<C extends ColumnShape>(
       out.push({ path: here('via'), message: `"${target}" declares no states, so its rows have no moves to make` });
       return;
     }
-    for (const [column, state] of Object.entries(effect.set)) {
-      if (column !== theirs.column) {
-        out.push({ path: here('set', column), message: `"${target}" moves by "${theirs.column}", not "${column}"` });
-        continue;
-      }
-      const moved = Object.values(theirs.moves).some((moves) => moves.some((move) => moveTarget(move) === state));
-      if (!moved) out.push({ path: here('set', column), message: `no move of "${target}" goes to "${state}"` });
-    }
+    effectMoveIssues(target, theirs, effect.set, here);
+    effectTargetIssues(target, theirs, here('via'));
   });
   return out;
 }

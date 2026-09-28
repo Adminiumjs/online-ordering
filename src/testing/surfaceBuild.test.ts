@@ -84,7 +84,15 @@ const BRIDGE = join(REPO, "src", "demoBridge.ts");
 const DEMO_TYPES = join(REPO, "src", "demo-types.ts");
 const NAV = join(REPO, "src", "surface-nav.ts");
 const APP = join(REPO, "src", "app", "App.tsx");
-const DEMO_DATA = join(REPO, "src", "data", "demo.ts");
+/**
+ * The demo's seeded dataset: `src/data/demo.ts`, or the file an app names in
+ * `surface-nav.ts` as `SURFACE_DEMO_DATA = "<path>"` when its seed lives
+ * elsewhere (an app whose demo runs its own Adminium in the browser).
+ */
+const DEMO_DATA = join(
+  REPO,
+  /SURFACE_DEMO_DATA\s*=\s*["']([^"']+)["']/.exec(existsSync(NAV) ? readFileSync(NAV, "utf8") : "")?.[1] ?? join("src", "data", "demo.ts"),
+);
 
 /** Every `.js` byte of a build, concatenated. */
 function bundleOf(dir: string): string {
@@ -172,6 +180,21 @@ function demoToolMarkers(): string[] {
  */
 function staffScreenModules(): string[] {
   const src = readFileSync(NAV, "utf8");
+  /*
+   * An app whose screens are not one module per view (one module per SIDE, say)
+   * names its staff-only modules in `surface-nav.ts` instead:
+   * `SURFACE_STAFF_ONLY = ["src/view/DeskView.tsx", …]`. Every one must exist —
+   * a list naming a file that is gone would check nothing.
+   */
+  const declared = /SURFACE_STAFF_ONLY\s*=\s*\[([^\]]*)\]/.exec(src)?.[1];
+  if (declared !== undefined) {
+    const listed = [...declared.matchAll(/["']([^"']+)["']/g)].map((m) => m[1] ?? "");
+    const missing = listed.filter((file) => !existsSync(join(REPO, file)));
+    if (listed.length === 0 || missing.length > 0) {
+      throw new Error(`SURFACE_STAFF_ONLY in ${NAV} names ${listed.length === 0 ? "nothing" : `missing files: ${missing.join(", ")}`} — this gate cannot see the till`);
+    }
+    return listed;
+  }
   const views = new Set<string>();
   for (const entry of src.matchAll(/\{[^{}]*\}/g)) {
     const body = entry[0];

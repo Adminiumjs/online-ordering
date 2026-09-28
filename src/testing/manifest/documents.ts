@@ -92,9 +92,12 @@ const nightlySourceSchema = z
 /** The pseudo-columns every night has. */
 export const NIGHTLY_COLUMNS: readonly string[] = ['date', 'rate', 'base', 'qty', 'tags'];
 
+/** A code printed in groups of four (`K7QX-M2PD`), as a person reads it out; on a code column only. */
+const formSchema = z.literal('grouped').optional();
+
 export const slotMappingSchema = z.union([
-  z.object({ column: refSchema }).strict(),
-  z.object({ via: refSchema, column: refSchema }).strict(),
+  z.object({ column: refSchema, form: formSchema }).strict(),
+  z.object({ via: refSchema, column: refSchema, form: formSchema }).strict(),
   z.object({ collection: z.union([tableSourceSchema, nightlySourceSchema]) }).strict(),
   /** One list from several sources, in order (a folio's nights, extras and charges). */
   z.object({ collections: z.array(z.union([tableSourceSchema, nightlySourceSchema])).min(1).max(4) }).strict(),
@@ -147,7 +150,7 @@ type NightlySource = z.infer<typeof nightlySourceSchema>;
 export type PerNightOf = (table: string) => ReadonlyMap<string, { rateVia: string }>;
 
 /** A child-row source of one list: the table, its link to the row, and each column it reads. */
-function tableSourceIssues(table: string, c: TableSource, index: TableIndex, here: (...rest: (string | number)[]) => (string | number)[]): ReferenceIssue[] {
+function tableSourceIssues(table: string, c: TableSource, index: TableIndex, here: (...rest: (string | number)[]) => (string | number)[], unlisted?: Unlisted): ReferenceIssue[] {
   const out: ReferenceIssue[] = [];
   if (index.table(c.table) === undefined) return [{ path: here('table'), message: `"${c.table}" is not a table of this manifest` }];
   const via = index.column(c.table, c.via);
@@ -169,6 +172,10 @@ function tableSourceIssues(table: string, c: TableSource, index: TableIndex, her
     const name = index.column(list.table, list.column);
     if (name === undefined) out.push({ path: at('column'), message: `"${list.table}" has no column "${list.column}"` });
     else if (name.type !== 'text' && name.type !== 'enum') out.push({ path: at('column'), message: `"${list.table}.${list.column}" is not a text column, so it lists no names` });
+    else {
+      const kept = unlisted?.(list.table, list.column) ?? null;
+      if (kept !== null) out.push({ path: at('column'), message: `"${list.table}.${list.column}" is ${kept}, which a document never lists from another row` });
+    }
     if (list.orderBy !== undefined && !index.has(list.table, list.orderBy)) out.push({ path: at('orderBy'), message: `"${list.table}" has no column "${list.orderBy}"` });
   }
   return out;
@@ -199,6 +206,15 @@ function nightlySourceIssues(
   return out;
 }
 
+/** A code's groups are read of a code column only: a text column with a `code` rule. */
+function formIssues(index: TableIndex, table: string, column: string, here: (...rest: (string | number)[]) => (string | number)[]): ReferenceIssue[] {
+  const found = index.column(table, column) as { type?: string; rules?: { code?: unknown } } | undefined;
+  return found?.type === 'text' && found.rules?.code !== undefined ? [] : [{ path: here('form'), message: `"${table}.${column}" is not a code column, so it is not printed in groups` }];
+}
+
+/** Why a column of another row may never be listed one level down, or null (see `unlistedColumn`). */
+export type Unlisted = (table: string, column: string) => string | null;
+
 /** Every column a mapping names, against the manifest's tables. */
 export function mappingIssues(
   table: string,
@@ -207,6 +223,8 @@ export function mappingIssues(
   at: (...rest: (string | number)[]) => (string | number)[],
   /** The app's prices by the night; absent for an add-on's shapes, which have none. */
   perNight?: PerNightOf,
+  /** The app's columns no list may print; absent for an add-on's shapes, which list nothing of an app's. */
+  unlisted?: Unlisted,
 ): ReferenceIssue[] {
   const out: ReferenceIssue[] = [];
   for (const [slot, source] of Object.entries(mapping)) {
@@ -214,22 +232,22 @@ export function mappingIssues(
     if ('collections' in source) {
       source.collections.forEach((one, k) => {
         const there = (...rest: (string | number)[]) => here('collections', k, ...rest);
-        out.push(...('nightly' in one ? nightlySourceIssues(table, one, index, perNight, there) : tableSourceIssues(table, one, index, there)));
+        out.push(...('nightly' in one ? nightlySourceIssues(table, one, index, perNight, there) : tableSourceIssues(table, one, index, there, unlisted)));
       });
     } else if ('collection' in source) {
       const c = source.collection;
       const there = (...rest: (string | number)[]) => here('collection', ...rest);
-      out.push(...('nightly' in c ? nightlySourceIssues(table, c, index, perNight, there) : tableSourceIssues(table, c, index, there)));
+      out.push(...('nightly' in c ? nightlySourceIssues(table, c, index, perNight, there) : tableSourceIssues(table, c, index, there, unlisted)));
     } else if ('via' in source) {
       const via = index.column(table, source.via);
       if (via?.type !== 'fk' || via.references === undefined) {
         out.push({ path: here('via'), message: `"${source.via}" is not a foreign key of "${table}"` });
       } else if (!index.has(via.references, source.column)) {
         out.push({ path: here('column'), message: `"${via.references}" has no column "${source.column}"` });
-      }
+      } else if (source.form !== undefined) out.push(...formIssues(index, via.references, source.column, here));
     } else if (!index.has(table, source.column)) {
       out.push({ path: here('column'), message: `"${table}" has no column "${source.column}"` });
-    }
+    } else if (source.form !== undefined) out.push(...formIssues(index, table, source.column, here));
   }
   return out;
 }
@@ -237,7 +255,7 @@ export function mappingIssues(
 /** Everything wrong with an app's `documents` against its tables and add-on needs. */
 export function appDocumentIssues(
   documents: readonly AppDocument[],
-  ctx: { index: TableIndex; addOns: ReadonlySet<string>; features: ReadonlySet<string>; perNight?: PerNightOf },
+  ctx: { index: TableIndex; addOns: ReadonlySet<string>; features: ReadonlySet<string>; perNight?: PerNightOf; unlisted?: Unlisted },
 ): ReferenceIssue[] {
   const out: ReferenceIssue[] = [];
   const kinds = new Set<string>();
@@ -252,7 +270,7 @@ export function appDocumentIssues(
       out.push({ path: at('table'), message: `"${doc.table}" is not a table of this app` });
       return;
     }
-    out.push(...mappingIssues(doc.table, doc.mapping, ctx.index, at, ctx.perNight ?? (() => new Map())));
+    out.push(...mappingIssues(doc.table, doc.mapping, ctx.index, at, ctx.perNight ?? (() => new Map()), ctx.unlisted));
     (doc.requestValues ?? []).forEach((slot, n) => {
       if (doc.requestValues!.indexOf(slot) !== n) out.push({ path: at('requestValues', n), message: `"${slot}" is listed twice` });
       // A mapped slot prints the row; a value sent for it would print something the row does not say.

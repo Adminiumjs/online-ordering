@@ -33,9 +33,35 @@ const POINTER = new RegExp(
     String.raw`\bM\d{1,2}-T\d{1,3}\b`,
     String.raw`\bplan \d{2}\b`,
     String.raw`\b(?:BN|DP|FIX|CD|OE|OW|OU|OF)-\d{1,3}\b`,
+    String.raw`\b(?:FC|N|F|S)-\d{1,3}\b`,
+    String.raw`\bCD-H\d{1,2}\b`,
   ].join("|"),
   "gi",
 );
+
+/**
+ * Short ids, matched with their case: a lower-case `d1` or `q2` is an ordinary
+ * name in code. A letter-number pair followed by another number is an SVG path
+ * command (`Q12 5`), not a citation.
+ */
+const CASED = new RegExp(
+  [
+    String.raw`\bCD-T\d{1,2}\b`,
+    String.raw`\bT-Q\d{1,2}\b`,
+    String.raw`\b(?:TE|TW|TU|TF)-\d{1,3}\b`,
+    String.raw`\b[DQEM]\d{1,2}\b(?![ ,]-?\d)`,
+    String.raw`(?<![\w-])S[1-8]\d{2}(?:\.\d{2})?\b`,
+    String.raw`\bR6\d{2}\b`,
+    String.raw`\bQ-(?:\d{3}|M\d-\d)\b`,
+    String.raw`\b(?:WT|EM|OV) \d{2,4}(?:[-\u2013]\d{2,4})?\b`,
+    String.raw`\bO[EWUF]\d{1,2}\b`,
+  ].join("|"),
+  "g",
+);
+
+function hits(text: string): number {
+  return [...text.matchAll(POINTER)].length + [...text.matchAll(CASED)].length;
+}
 
 function tracked(): string[] {
   return execFileSync("git", ["ls-files", "-z"], { cwd: root, maxBuffer: 1 << 26 })
@@ -52,8 +78,28 @@ function count(file: string): number {
     return 0;
   }
   if (text.includes("\0")) return 0;
-  return [...text.matchAll(POINTER)].length;
+  return hits(text);
 }
+
+/** Joined at run time, so this file holds none of the forms it checks. */
+const j = (...parts: string[]) => parts.join("");
+
+describe("the citation forms", () => {
+  it("catch every id form the plans use", () => {
+    const cited = [
+      j("CD-", "T1"), j("T-", "Q", "16"), j("TE", "-3"), j("TW", "-12"), j("TU", "-4"), j("TF", "-1"),
+      j("per ", "D", "30"), j("Q", "11"), j("S", "104"), j("S", "601.06"), j("R", "603"), j("Q-", "501"),
+      j("Q-", "M", "2-2"), j("WT ", "1700-1743"), j("O", "F5"), j("E", "11"), j("M", "5"), j("BN", "-40"),
+      j("FC", "-3"), j("CD", "-19"), j("plan ", "62"),
+    ];
+    expect(cited.filter((text) => hits(text) === 0)).toEqual([]);
+  });
+
+  it("leave order numbers, email kinds, paths and style tokens alone", () => {
+    const plain = ["WV-8816", "WV-S8017", "e2c", "M10 10 Q12 5 20 0", "#E1E1E1", "bg-slate-800", "d1", "q1", "h-10", "grid-cols-2", "K7QX-M2PD", "4QJK-S429"];
+    expect(plain.filter((text) => hits(text) > 0)).toEqual([]);
+  });
+});
 
 describe("private citations", () => {
   const counts = new Map<string, number>();
