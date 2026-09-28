@@ -9,7 +9,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { Icon, type IconName } from "../components/Icon.tsx";
 import { Toaster } from "../components/Toaster.tsx";
 import type { OrderWithLines } from "../data/ports.ts";
-import { useNow } from "../data/sources.ts";
+import { sources, useNow } from "../data/sources.ts";
 import { useI18n } from "../i18n/index.tsx";
 import { hoursOn } from "../lib/day.ts";
 import { addDays } from "../lib/venueTime.ts";
@@ -250,7 +250,7 @@ function useArrivals(say: (text: string) => void): void {
     const release = keepAwake();
     // Still New after a minute: chime again, pulse, say it.
     const remind = () => {
-      const now = Date.now();
+      const now = sources().clock.now();
       const { orders } = useKitchen.getState();
       const today = kToday();
       for (const o of orders) {

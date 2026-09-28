@@ -46,6 +46,8 @@ export interface PhoneDraft {
   error: string | null;
   /** Minted with the draft and kept until it is placed: a retried Confirm lands on the same order. */
   clientKey: string;
+  /** A try went unanswered: the draft stays as it was sent until pressing again says what happened. */
+  pending?: boolean;
 }
 
 export interface CancelDraft {
@@ -172,15 +174,23 @@ export async function loadKitchen(): Promise<void> {
 }
 
 /** The next seven days' orders: today's board, tomorrow's pre-orders, and what a closure would cover. */
+let ordersAsked = 0;
+let ordersShown = 0;
 async function readOrders(first = false): Promise<void> {
   const today = kToday();
+  const asked = ++ordersAsked;
   const orders = await port().orders(today, addDays(today, 6));
+  // An older read that answers last is never shown over a newer one.
+  if (asked < ordersShown) return;
+  ordersShown = asked;
   const fresh = orders.filter((o) => !arrived.has(o.order.id));
   arrived = new Set(orders.map((o) => o.order.id));
   set({ orders });
   if (first) return;
   for (const order of fresh) {
     if (order.order["status"] !== "placed" || dayOf(order) !== today || ownPhone.has(order.order.id)) continue;
+    // A phone order is confirmed a moment after it is written: no other tablet chimes for it meanwhile.
+    if (order.order["channel"] === "phone" && sources().clock.now() - Date.parse(String(order.order["placed_at"] ?? 0)) < 10_000) continue;
     set({ pulse: [...get().pulse.filter((id) => id !== order.order.id), order.order.id] });
     onArrival?.(order);
   }
@@ -222,10 +232,10 @@ const QUERIES: Record<string, (() => Promise<void>)[]> = {
 let pending = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Reads again what a set of tables feeds, once, after the burst settles. */
+/** Reads again what a set of tables feeds, once: at most half a second after the first frame of a burst. */
 export function refresh(tables: readonly string[], wait = 500): void {
   for (const table of tables) pending.add(table);
-  if (timer !== null) clearTimeout(timer);
+  if (timer !== null) return;
   timer = setTimeout(() => void flush(), wait);
 }
 
@@ -245,7 +255,9 @@ async function flush(): Promise<void> {
 /** Every read again: on reconnecting, on coming back to the tab, when the day turns. */
 export async function refreshAll(): Promise<void> {
   try {
-    await Promise.all([readOrders(), readSlots(), readCounts(), readMenu()]);
+    const p = port();
+    const [settings, hours, closures] = await Promise.all([p.settings(), p.hours(), p.closures(), readOrders(), readSlots(), readCounts(), readMenu()]);
+    set({ settings, hours, closures });
   } catch (error) {
     signedOutBy(error);
   }
@@ -273,6 +285,11 @@ export function goLive(): () => void {
 export async function checkSession(): Promise<void> {
   try {
     await port().me();
+    // Signed in after all (a check that could not be answered is never a sign-out): the board again.
+    if (get().signedOut) {
+      set({ signedOut: false });
+      void refreshAll();
+    }
   } catch (error) {
     signedOutBy(error);
   }
@@ -294,6 +311,10 @@ export type MoveResult =
   | { ok: true; order: Row }
   | { ok: false; kind: "unchanged"; state: string; at: string | null; by: string | null }
   | { ok: false; kind: "cancelled"; at: string | null }
+  /** Another screen moved it on: this is where it stands. */
+  | { ok: false; kind: "moved"; state: string }
+  /** An undo past its minute. */
+  | { ok: false; kind: "late" }
   | { ok: false; kind: "failed" };
 
 function refused(error: unknown, id: Id): MoveResult {
@@ -304,6 +325,10 @@ function refused(error: unknown, id: Id): MoveResult {
   if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && error.params["from"] === "cancelled") {
     const order = get().orders.find((o) => o.order.id === id);
     return { ok: false, kind: "cancelled", at: (order?.order["cancelled_at"] as string | null) ?? null };
+  }
+  if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && error.params["requires"] === "time") return { ok: false, kind: "late" };
+  if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && typeof error.params["from"] === "string" && error.params["named"] !== undefined && error.params["named"] !== error.params["from"]) {
+    return { ok: false, kind: "moved", state: error.params["from"] };
   }
   return { ok: false, kind: "failed" };
 }
@@ -363,15 +388,15 @@ export async function cancelOrder(): Promise<{ ok: true; soldOut: string | null;
   set({ cancel: null, ticket: null });
   let soldFailed = false;
   const mark = c.reason === "ran_out" && c.markSold && c.dishId !== null;
-  if (mark) soldFailed = !(await markSoldOut(c.dishId!));
+  if (mark) soldFailed = !(await markSoldOut(c.dishId!, dayOf(order)));
   await refreshNow(["orders", "menu_items"]);
   return { ok: true, soldOut: mark && !soldFailed ? c.dish : null, soldFailed };
 }
 
 /** Sold out today: no more portions today, whatever a later cancel frees. */
-export async function markSoldOut(dishId: Id): Promise<boolean> {
+export async function markSoldOut(dishId: Id, day: Day = kToday()): Promise<boolean> {
   try {
-    await port().setDish(dishId, { stock_today: 0, stock_on: kToday() });
+    await port().setDish(dishId, { stock_today: 0, stock_on: day });
     return true;
   } catch (error) {
     signedOutBy(error);
@@ -433,6 +458,7 @@ export async function pauseMany(day: Day, times: readonly string[]): Promise<{ d
 export async function reopenMany(ids: readonly Id[]): Promise<boolean> {
   try {
     await Promise.all(ids.map((id) => port().reopen(id)));
+    set({ stopFailed: null });
     return true;
   } catch (error) {
     signedOutBy(error);
@@ -501,6 +527,11 @@ function mintKey(): string {
 export function setPhone(patch: Partial<PhoneDraft>): void {
   const p = get().phone;
   if (p === null) return;
+  // Changing what may already be on the board would make a second order: press again first.
+  if (p.pending === true && ("lines" in patch || "time" in patch || "day" in patch || "name" in patch || "phone" in patch || "email" in patch || "note" in patch)) {
+    set({ phone: { ...p, error: "pending" } });
+    return;
+  }
   const next = { ...p, ...patch };
   set({ phone: next });
   if ("lines" in patch || "time" in patch || "day" in patch) schedulePhoneQuote();
@@ -606,7 +637,7 @@ export function phoneRefusal(error: ApiError): "slot" | "soldout" | "price" | "f
  * every order does), then confirmed at once — the confirm tried again until
  * it lands, so the cook never finds their own order waiting.
  */
-export async function placePhone(): Promise<{ number: string; id: Id } | { error: string }> {
+export async function placePhone(): Promise<{ number: string; id: Id; confirmed: boolean } | { error: string }> {
   const p = get().phone;
   if (p === null) return { error: "failed" };
   set({ phone: { ...p, placing: true, error: null } });
@@ -621,31 +652,48 @@ export async function placePhone(): Promise<{ number: string; id: Id } | { error
     };
     // The total the screen showed: a price moved since writes nothing.
     const quote = freshPhoneQuote(p);
-    const body = { ...phoneBody(p, values), ...(quote === null ? {} : { expect: { total: Number(quote.data["total"]).toFixed(2) } }) };
+    const body = { ...phoneBody(p, values), ...(quote === null ? {} : { expect: { total: String(quote.data["total"]) } }) };
     const reply = await port().phoneOrder(body, p.clientKey);
     id = reply.data.id;
     number = String(reply.data["number"]);
     ownPhone.add(id);
   } catch (error) {
     const code = isApiError(error) ? phoneRefusal(error) : "failed";
-    set({ phone: { ...get().phone!, placing: false, error: code } });
+    // No answer, or the server's error: it may be on the board, and the same key finds it. A named refusal wrote nothing.
+    const unanswered = !isApiError(error) || error.status === 0 || error.status >= 500;
+    set({ phone: { ...get().phone!, placing: false, error: unanswered ? "pending" : code, pending: unanswered, ...(unanswered ? {} : { clientKey: mintKey() }) } });
     // A price that moved since the screen showed it: the new figures, for the next press.
     if (code === "price") schedulePhoneQuote();
     signedOutBy(error);
     await refreshNow(["orders"]);
     return { error: code };
   }
+  let confirmed = false;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       await port().move(id, "placed", "confirmed");
+      confirmed = true;
       break;
     } catch (error) {
-      if (isApiError(error) && error.code === "STATE_UNCHANGED") break;
+      if (isApiError(error) && error.code === "STATE_UNCHANGED") {
+        confirmed = true;
+        break;
+      }
       if (signedOutBy(error)) break;
       await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
     }
   }
   set({ phone: null });
   await refreshNow(["orders"]);
-  return { number, id };
+  return { number, id, confirmed };
 }
+
+/** A card opened is read again: a live frame never carries the diner's details, and the list may be a moment old. */
+useKitchen.subscribe((state, before) => {
+  if (state.ticket === null || state.ticket === before.ticket) return;
+  const id = state.ticket;
+  port()
+    .order(id)
+    .then((order) => set({ orders: get().orders.map((o) => (o.order.id === id ? order : o)) }))
+    .catch(() => undefined);
+});

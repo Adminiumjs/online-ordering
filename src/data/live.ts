@@ -26,6 +26,30 @@ function absent<T extends object>(side: string): T {
   });
 }
 
+/**
+ * The staff config read again, for the minute's check that the kitchen is still signed in: a
+ * config that says nobody is signed in is a sign-out, but no answer at all (the Wi-Fi, a restart,
+ * a 5xx) is not — it throws, and the next check tries again.
+ */
+function reloadStaffConfig<T>(load: (options: { fetchImpl: typeof fetch }) => Promise<T | null>): () => Promise<T | null> {
+  return async () => {
+    let unanswered = false;
+    const watched: typeof fetch = async (input, init) => {
+      try {
+        const res = await fetch(input, init);
+        if (res.status >= 500) unanswered = true;
+        return res;
+      } catch (error) {
+        unanswered = true;
+        throw error;
+      }
+    };
+    const cfg = await load({ fetchImpl: watched });
+    if (cfg === null && unanswered) throw new ApiError(503, "UNREACHABLE", "Adminium did not answer.");
+    return cfg;
+  };
+}
+
 /** The server's clock, from the moment it said and the device's then. */
 function skewOf(said: string | null | undefined): number {
   const at = typeof said === "string" ? Date.parse(said) : Number.NaN;
@@ -53,7 +77,7 @@ export async function liveSources(): Promise<Sources | Error> {
       staff: { csrfToken: staff.csrfToken, timezone: staff.timezone, timezoneSource: staff.timezoneSource, serverTimezone: staff.serverTimezone, currency: staff.currency },
       refreshToken: async () => (await loadStaffConfig())?.csrfToken ?? null,
     });
-    const kitchen = new AdminiumKitchen(transport, staff, { reload: () => loadStaffConfig() });
+    const kitchen = new AdminiumKitchen(transport, staff, { reload: reloadStaffConfig(loadStaffConfig) });
     return {
       diner: absent<DinerPort>("order page"),
       kitchen,

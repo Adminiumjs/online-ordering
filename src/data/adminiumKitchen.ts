@@ -327,7 +327,13 @@ export class AdminiumKitchen implements KitchenPort {
   }
 
   reopen(pauseId: Id): Promise<Row> {
-    return this.run(() => this.change("slot_pauses", pauseId, { active: false }));
+    return this.run(async () => {
+      const row = await this.change("slot_pauses", pauseId, { active: false });
+      // Two tablets pausing at once can leave two rows for one time: every one of them is switched off.
+      const same = await this.list("slot_pauses", { where: { column: "slot_at", op: "eq", value: row["slot_at"] } });
+      for (const other of same) if (other.id !== pauseId && other["active"] === true) await this.change("slot_pauses", other.id, { active: false });
+      return row;
+    });
   }
 
   setDish(id: Id, values: { available?: boolean; stock_today?: number | null; stock_on?: string | null; online?: boolean }): Promise<Row> {

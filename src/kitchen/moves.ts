@@ -37,6 +37,10 @@ export function sayRefused(t: TFunction, fmt: Formatter, result: MoveResult, num
   if (result.kind === "unchanged") {
     const at = result.at === null ? "" : fmt.time(result.at);
     toast(result.by === null || result.by === "" ? t("kitchen.move.alreadyAt", { number, state: word(t, result.state).toLocaleLowerCase(), time: at }) : t("kitchen.move.already", { number, state: word(t, result.state).toLocaleLowerCase(), time: at, by: result.by }), "warn");
+  } else if (result.kind === "moved") {
+    toast(t("kitchen.move.movedElsewhere", { number, state: word(t, result.state).toLocaleLowerCase() }), "warn");
+  } else if (result.kind === "late") {
+    toast(t("kitchen.move.undoLate", { number }), "warn");
   } else if (result.kind === "cancelled") {
     toast(t("kitchen.move.cancelledBy", { name: firstName(name), time: result.at === null ? "" : fmt.time(result.at) }), "warn");
   } else {
@@ -54,14 +58,22 @@ export async function advance(t: TFunction, fmt: Formatter, id: Id, from: string
     sayRefused(t, fmt, result, number, name);
     return;
   }
-  useRecentMove.setState({ id, from, to, until: Date.now() + UNDO_MS });
+  const until = Date.now() + UNDO_MS;
+  useRecentMove.setState({ id, from, to, until });
+  // The card's Undo goes when its ten seconds do.
+  setTimeout(() => {
+    if (useRecentMove.getState().until === until) useRecentMove.setState({ id: null, until: 0 });
+  }, UNDO_MS);
   toast(t("kitchen.move.done", { number, state: word(t, to) }), "ok", { undo: () => void undo(t, fmt) });
 }
 
 /** Moves the last order back, within its ten seconds. */
 export async function undo(t: TFunction, fmt: Formatter): Promise<void> {
   const recent = useRecentMove.getState();
-  if (recent.id === null || Date.now() > recent.until) return;
+  if (recent.id === null || Date.now() > recent.until) {
+    toast(t("kitchen.move.undoGone"), "warn");
+    return;
+  }
   useRecentMove.setState({ id: null, until: 0 });
   const order = useKitchen.getState().orders.find((o) => o.order.id === recent.id);
   const number = String(order?.order["number"] ?? "");

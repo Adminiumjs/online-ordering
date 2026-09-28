@@ -40,7 +40,11 @@ export function armSound(): void {
       context = new Ctor();
       watch(context);
     }
-    if (context.state !== "running") void context.resume().then(() => useSound.setState({ running: context?.state === "running" }));
+    if (context.state !== "running")
+      void context
+        .resume()
+        .then(() => useSound.setState({ running: context?.state === "running" }))
+        .catch(() => useSound.setState({ running: false }));
     else useSound.setState({ running: true });
   } catch {
     // No sound on this device: the pulse and the words still say it.
@@ -89,7 +93,12 @@ export function keepAwake(): () => void {
   const take = async () => {
     try {
       const nav = navigator as unknown as { wakeLock?: { request(kind: "screen"): Promise<{ release(): Promise<void> }> } };
-      if (nav.wakeLock !== undefined && document.visibilityState === "visible") lock = await nav.wakeLock.request("screen");
+      if (nav.wakeLock !== undefined && document.visibilityState === "visible") {
+        const got = await nav.wakeLock.request("screen");
+        // The board closed while it was asked for: let it go at once.
+        if (!live) void got.release().catch(() => undefined);
+        else lock = got;
+      }
     } catch {
       // The browser said no (battery saver, no permission): the board still works.
     }

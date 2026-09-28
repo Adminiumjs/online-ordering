@@ -204,10 +204,21 @@ export function PhoneOrder() {
   const place = async () => {
     if (reason !== null || p.placing) return;
     const result = await placePhone();
-    if ("number" in result) toast(t("kitchen.phoneOrder.done", { number: result.number }));
+    if ("number" in result) toast(result.confirmed ? t("kitchen.phoneOrder.done", { number: result.number }) : t("kitchen.phoneOrder.notConfirmed", { number: result.number }), result.confirmed ? undefined : "warn");
   };
   const field = { width: "100%", padding: "11px 13px", borderRadius: 11, border: "1px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--fg)", fontSize: 14, fontWeight: 600 } as const;
-  const error = p.error === "slot" ? t("kitchen.phoneOrder.errSlot") : p.error === "soldout" ? t("kitchen.phoneOrder.errSold") : p.error !== null ? t("kitchen.phoneOrder.errFailed") : null;
+  const error =
+    p.error === "slot"
+      ? t("kitchen.phoneOrder.errSlot")
+      : p.error === "soldout"
+        ? t("kitchen.phoneOrder.errSold")
+        : p.error === "price"
+          ? t("kitchen.phoneOrder.errPrice")
+          : p.error === "pending"
+            ? t("kitchen.phoneOrder.errPending")
+            : p.error !== null
+              ? t("kitchen.phoneOrder.errFailed")
+              : null;
   return (
     <Modal labelledBy={titleId} width={1100} z={540} tall onClose={close}>
       <div style={{ flex: "none", display: "flex", alignItems: "center", gap: 11, padding: "16px 20px", borderBlockEnd: "1px solid var(--border)" }}>
