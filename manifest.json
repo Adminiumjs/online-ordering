@@ -4621,13 +4621,29 @@
       "config": {
         "layout": {
           "version": 1,
+          "toolbar": {
+            "link": {
+              "label": "Open the kitchen",
+              "labels": {
+                "de-DE": "Küche öffnen",
+                "fr-FR": "Ouvrir la cuisine",
+                "da-DK": "Åbn køkkenet",
+                "cs-CZ": "Otevřít kuchyni",
+                "ar-EG": "افتح المطبخ",
+                "zh-CN": "打开厨房",
+                "zh-TW": "打開廚房"
+              },
+              "href": "@staff",
+              "icon": "external-link"
+            }
+          },
           "items": [
             {
               "i": "orders-today",
               "widget": "kpi-stat-card",
               "x": 0,
               "y": 0,
-              "w": 4,
+              "w": 3,
               "h": 3,
               "config": {
                 "title": "Orders today",
@@ -4645,6 +4661,7 @@
                 "deltaMode": "none",
                 "showSparkline": false,
                 "iconName": "receipt",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today&f.pickup_at=lte:today&f.status=neq:cancelled",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4667,7 +4684,8 @@
                         "confirmed",
                         "preparing",
                         "ready",
-                        "picked_up"
+                        "picked_up",
+                        "not_collected"
                       ]
                     }
                   ],
@@ -4683,9 +4701,9 @@
             {
               "i": "collected-today",
               "widget": "kpi-stat-card",
-              "x": 4,
+              "x": 3,
               "y": 0,
-              "w": 4,
+              "w": 3,
               "h": 3,
               "config": {
                 "title": "Collected today",
@@ -4703,6 +4721,7 @@
                 "deltaMode": "none",
                 "showSparkline": false,
                 "iconName": "banknote",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today&f.pickup_at=lte:today&f.status=eq:picked_up",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4725,7 +4744,7 @@
                     }
                   ],
                   "window": {
-                    "column": "picked_up_at",
+                    "column": "pickup_at",
                     "last": 1,
                     "unit": "day",
                     "calendar": true
@@ -4736,9 +4755,9 @@
             {
               "i": "to-collect",
               "widget": "kpi-stat-card",
-              "x": 8,
+              "x": 6,
               "y": 0,
-              "w": 4,
+              "w": 3,
               "h": 3,
               "config": {
                 "title": "Still to collect today",
@@ -4756,6 +4775,7 @@
                 "deltaMode": "none",
                 "showSparkline": false,
                 "iconName": "hand-coins",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today&f.pickup_at=lte:today&f.status=in:placed,confirmed,preparing,ready",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4792,11 +4812,72 @@
               }
             },
             {
+              "i": "average-today",
+              "widget": "kpi-stat-card",
+              "x": 9,
+              "y": 0,
+              "w": 3,
+              "h": 3,
+              "config": {
+                "title": "Average order today",
+                "titles": {
+                  "en-US": "Average order today",
+                  "de-DE": "Durchschnittliche Bestellung heute",
+                  "fr-FR": "Commande moyenne aujourd’hui",
+                  "da-DK": "Gennemsnitlig bestilling i dag",
+                  "cs-CZ": "Průměrná objednávka dnes",
+                  "ar-EG": "متوسط الطلب اليوم",
+                  "zh-CN": "今日平均订单",
+                  "zh-TW": "今日平均訂單"
+                },
+                "metricFormat": "currency",
+                "deltaMode": "none",
+                "showSparkline": false,
+                "iconName": "activity",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today&f.pickup_at=lte:today&f.status=neq:cancelled",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "metric+delta",
+                  "aggregations": [
+                    {
+                      "fn": "avg",
+                      "column": "total",
+                      "alias": "average"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "in",
+                      "value": [
+                        "placed",
+                        "confirmed",
+                        "preparing",
+                        "ready",
+                        "picked_up",
+                        "not_collected"
+                      ]
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 1,
+                    "unit": "day",
+                    "calendar": true
+                  }
+                }
+              }
+            },
+            {
               "i": "orders-week",
               "widget": "kpi-stat-card",
               "x": 0,
               "y": 3,
-              "w": 6,
+              "w": 3,
               "h": 3,
               "config": {
                 "title": "Orders, last 7 days",
@@ -4813,7 +4894,8 @@
                 "metricFormat": "plain",
                 "deltaMode": "none",
                 "showSparkline": false,
-                "iconName": "activity",
+                "iconName": "receipt",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today-6&f.pickup_at=lte:today&f.status=neq:cancelled",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4853,9 +4935,9 @@
             {
               "i": "collected-week",
               "widget": "kpi-stat-card",
-              "x": 6,
+              "x": 3,
               "y": 3,
-              "w": 6,
+              "w": 3,
               "h": 3,
               "config": {
                 "title": "Collected, last 7 days",
@@ -4873,6 +4955,7 @@
                 "deltaMode": "none",
                 "showSparkline": false,
                 "iconName": "banknote",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today-6&f.pickup_at=lte:today&f.status=eq:picked_up",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4895,7 +4978,7 @@
                     }
                   ],
                   "window": {
-                    "column": "picked_up_at",
+                    "column": "pickup_at",
                     "last": 7,
                     "unit": "day",
                     "calendar": true
@@ -4904,12 +4987,587 @@
               }
             },
             {
-              "i": "orders-by-day",
+              "i": "average-week",
+              "widget": "kpi-stat-card",
+              "x": 6,
+              "y": 3,
+              "w": 3,
+              "h": 3,
+              "config": {
+                "title": "Average order, last 7 days",
+                "titles": {
+                  "en-US": "Average order, last 7 days",
+                  "de-DE": "Durchschnittliche Bestellung, letzte 7 Tage",
+                  "fr-FR": "Commande moyenne, 7 derniers jours",
+                  "da-DK": "Gennemsnitlig bestilling, sidste 7 dage",
+                  "cs-CZ": "Průměrná objednávka, posledních 7 dní",
+                  "ar-EG": "متوسط الطلب، آخر ٧ أيام",
+                  "zh-CN": "平均订单（近 7 天）",
+                  "zh-TW": "平均訂單（近 7 天）"
+                },
+                "metricFormat": "currency",
+                "deltaMode": "none",
+                "showSparkline": false,
+                "iconName": "activity",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today-6&f.pickup_at=lte:today&f.status=neq:cancelled",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "metric+delta",
+                  "aggregations": [
+                    {
+                      "fn": "avg",
+                      "column": "total",
+                      "alias": "average"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "in",
+                      "value": [
+                        "placed",
+                        "confirmed",
+                        "preparing",
+                        "ready",
+                        "picked_up",
+                        "not_collected"
+                      ]
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 7,
+                    "unit": "day",
+                    "calendar": true
+                  }
+                }
+              }
+            },
+            {
+              "i": "cancelled-week",
+              "widget": "kpi-stat-card",
+              "x": 9,
+              "y": 3,
+              "w": 3,
+              "h": 3,
+              "config": {
+                "title": "Cancelled, last 7 days",
+                "titles": {
+                  "en-US": "Cancelled, last 7 days",
+                  "de-DE": "Storniert, letzte 7 Tage",
+                  "fr-FR": "Annulées, 7 derniers jours",
+                  "da-DK": "Annulleret, sidste 7 dage",
+                  "cs-CZ": "Zrušeno, posledních 7 dní",
+                  "ar-EG": "الملغاة، آخر ٧ أيام",
+                  "zh-CN": "已取消（近 7 天）",
+                  "zh-TW": "已取消（近 7 天）"
+                },
+                "metricFormat": "plain",
+                "deltaMode": "none",
+                "showSparkline": false,
+                "iconName": "calendar-x",
+                "iconTone": "warn",
+                "href": "/p/ordering-orders?f.pickup_at=gte:today-6&f.pickup_at=lte:today&f.status=eq:cancelled",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "metric+delta",
+                  "aggregations": [
+                    {
+                      "fn": "count",
+                      "alias": "orders"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "eq",
+                      "value": "cancelled"
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 7,
+                    "unit": "day",
+                    "calendar": true
+                  }
+                }
+              }
+            },
+            {
+              "i": "pickups-today",
               "widget": "chart-bar",
               "x": 0,
               "y": 6,
-              "w": 6,
-              "h": 8,
+              "w": 8,
+              "h": 7,
+              "config": {
+                "title": "Pickups today",
+                "titles": {
+                  "en-US": "Pickups today",
+                  "de-DE": "Abholungen heute",
+                  "fr-FR": "Retraits aujourd’hui",
+                  "da-DK": "Afhentninger i dag",
+                  "cs-CZ": "Dnešní vyzvednutí",
+                  "ar-EG": "الاستلام اليوم",
+                  "zh-CN": "今日取餐",
+                  "zh-TW": "今日取餐"
+                },
+                "subtitle": "Orders in each pickup time, today",
+                "subtitles": {
+                  "de-DE": "Bestellungen je Abholzeit, heute",
+                  "fr-FR": "Commandes par créneau de retrait, aujourd’hui",
+                  "da-DK": "Bestillinger pr. afhentningstid, i dag",
+                  "cs-CZ": "Objednávky v jednotlivých časech vyzvednutí, dnes",
+                  "ar-EG": "الطلبات في كل موعد استلام، اليوم",
+                  "zh-CN": "今天各取餐时段的订单",
+                  "zh-TW": "今天各取餐時段的訂單"
+                },
+                "emptyState": {
+                  "titleKey": "No pickup times today",
+                  "titles": {
+                    "de-DE": "Heute keine Abholzeiten",
+                    "fr-FR": "Aucun créneau de retrait aujourd’hui",
+                    "da-DK": "Ingen afhentningstider i dag",
+                    "cs-CZ": "Dnes žádné časy vyzvednutí",
+                    "ar-EG": "لا توجد مواعيد استلام اليوم",
+                    "zh-CN": "今天没有取餐时段",
+                    "zh-TW": "今天沒有取餐時段"
+                  }
+                },
+                "highlight": "none",
+                "series": [
+                  {
+                    "label": "Orders",
+                    "labels": {
+                      "de-DE": "Bestellungen",
+                      "fr-FR": "Commandes",
+                      "da-DK": "Bestillinger",
+                      "cs-CZ": "Objednávky",
+                      "ar-EG": "الطلبات",
+                      "zh-CN": "订单",
+                      "zh-TW": "訂單"
+                    }
+                  }
+                ],
+                "binding": {
+                  "kind": "capacity-counts",
+                  "source": {
+                    "name": "orders"
+                  },
+                  "shape": "categorical",
+                  "capacity": {
+                    "rule": 0
+                  }
+                }
+              }
+            },
+            {
+              "i": "next-on-board",
+              "widget": "mini-table",
+              "x": 8,
+              "y": 6,
+              "w": 4,
+              "h": 7,
+              "config": {
+                "title": "Next on the board",
+                "titles": {
+                  "en-US": "Next on the board",
+                  "de-DE": "Als Nächstes auf dem Board",
+                  "fr-FR": "Prochaines au tableau",
+                  "da-DK": "Næste på tavlen",
+                  "cs-CZ": "Další na tabuli",
+                  "ar-EG": "التالي على اللوحة",
+                  "zh-CN": "看板上的下一单",
+                  "zh-TW": "看板上的下一單"
+                },
+                "subtitle": "Still to hand over today, soonest first",
+                "subtitles": {
+                  "de-DE": "Heute noch zu übergeben, früheste zuerst",
+                  "fr-FR": "À remettre aujourd’hui, les plus proches d’abord",
+                  "da-DK": "Skal udleveres i dag, tidligste først",
+                  "cs-CZ": "Dnes ještě k předání, nejdřívější první",
+                  "ar-EG": "لم تُسلَّم بعد اليوم، الأقرب أولًا",
+                  "zh-CN": "今天待交付，最早的在前",
+                  "zh-TW": "今天待交付，最早的在前"
+                },
+                "emptyState": {
+                  "titleKey": "Nothing left on the board today",
+                  "titles": {
+                    "de-DE": "Heute nichts mehr auf dem Board",
+                    "fr-FR": "Plus rien au tableau aujourd’hui",
+                    "da-DK": "Intet tilbage på tavlen i dag",
+                    "cs-CZ": "Dnes už nic na tabuli",
+                    "ar-EG": "لم يتبقَّ شيء على اللوحة اليوم",
+                    "zh-CN": "今天看板上已经没有订单",
+                    "zh-TW": "今天看板上已經沒有訂單"
+                  }
+                },
+                "limit": 4,
+                "columns": [
+                  {
+                    "name": "number",
+                    "label": "Order",
+                    "format": "mono"
+                  },
+                  {
+                    "name": "pickup_at",
+                    "label": "Pickup",
+                    "logicalType": "timestamptz"
+                  },
+                  {
+                    "name": "status",
+                    "label": "Status",
+                    "logicalType": "enum"
+                  }
+                ],
+                "secondary": [
+                  "name"
+                ],
+                "viewAllHref": "/p/ordering-orders?f.pickup_at=gte:today&f.pickup_at=lte:today&f.status=in:placed,confirmed,preparing,ready",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "record-list",
+                  "select": [
+                    "id",
+                    "number",
+                    "name",
+                    "pickup_at",
+                    "status"
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "in",
+                      "value": [
+                        "placed",
+                        "confirmed",
+                        "preparing",
+                        "ready"
+                      ]
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 1,
+                    "unit": "day",
+                    "calendar": true
+                  },
+                  "orderBy": [
+                    {
+                      "column": "pickup_at",
+                      "dir": "asc"
+                    },
+                    {
+                      "column": "number",
+                      "dir": "asc"
+                    }
+                  ],
+                  "limit": 4
+                }
+              }
+            },
+            {
+              "i": "new-enquiries",
+              "widget": "mini-table",
+              "x": 0,
+              "y": 13,
+              "w": 4,
+              "h": 6,
+              "config": {
+                "title": "New enquiries",
+                "titles": {
+                  "en-US": "New enquiries",
+                  "de-DE": "Neue Anfragen",
+                  "fr-FR": "Nouvelles demandes",
+                  "da-DK": "Nye forespørgsler",
+                  "cs-CZ": "Nové poptávky",
+                  "ar-EG": "استفسارات جديدة",
+                  "zh-CN": "新的咨询",
+                  "zh-TW": "新的詢問"
+                },
+                "subtitle": "Large orders waiting for a call back",
+                "subtitles": {
+                  "de-DE": "Große Bestellungen, die auf einen Rückruf warten",
+                  "fr-FR": "Grandes commandes en attente d’un rappel",
+                  "da-DK": "Store bestillinger, der venter på et opkald",
+                  "cs-CZ": "Velké objednávky čekající na zavolání",
+                  "ar-EG": "طلبات كبيرة بانتظار معاودة الاتصال",
+                  "zh-CN": "等待回电的大额订单",
+                  "zh-TW": "等待回電的大量訂單"
+                },
+                "emptyState": {
+                  "titleKey": "No new enquiries",
+                  "titles": {
+                    "de-DE": "Keine neuen Anfragen",
+                    "fr-FR": "Aucune nouvelle demande",
+                    "da-DK": "Ingen nye forespørgsler",
+                    "cs-CZ": "Žádné nové poptávky",
+                    "ar-EG": "لا توجد استفسارات جديدة",
+                    "zh-CN": "没有新的咨询",
+                    "zh-TW": "沒有新的詢問"
+                  }
+                },
+                "limit": 3,
+                "columns": [
+                  {
+                    "name": "ref",
+                    "label": "Enquiry",
+                    "format": "mono"
+                  },
+                  {
+                    "name": "heads",
+                    "label": "People",
+                    "logicalType": "integer"
+                  },
+                  {
+                    "name": "wanted_on",
+                    "label": "For",
+                    "logicalType": "date"
+                  }
+                ],
+                "secondary": [
+                  "name"
+                ],
+                "viewAllHref": "/p/ordering-enquiries?f.status=eq:new",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "enquiries",
+                    "type": "table"
+                  },
+                  "shape": "record-list",
+                  "select": [
+                    "id",
+                    "ref",
+                    "name",
+                    "heads",
+                    "wanted_on"
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "eq",
+                      "value": "new"
+                    }
+                  ],
+                  "orderBy": [
+                    {
+                      "column": "created_at",
+                      "dir": "asc"
+                    }
+                  ],
+                  "limit": 3
+                }
+              }
+            },
+            {
+              "i": "paused-slots",
+              "widget": "mini-table",
+              "x": 4,
+              "y": 13,
+              "w": 4,
+              "h": 6,
+              "config": {
+                "title": "Paused slots",
+                "titles": {
+                  "en-US": "Paused slots",
+                  "de-DE": "Pausierte Abholzeiten",
+                  "fr-FR": "Créneaux en pause",
+                  "da-DK": "Tidspunkter på pause",
+                  "cs-CZ": "Pozastavené časy",
+                  "ar-EG": "المواعيد المتوقفة",
+                  "zh-CN": "已暂停时段",
+                  "zh-TW": "已暫停時段"
+                },
+                "subtitle": "Taking no online orders, from today on",
+                "subtitles": {
+                  "de-DE": "Keine Online-Bestellungen, ab heute",
+                  "fr-FR": "Pas de commande en ligne, à partir d’aujourd’hui",
+                  "da-DK": "Ingen onlinebestillinger, fra i dag",
+                  "cs-CZ": "Bez online objednávek, od dneška",
+                  "ar-EG": "لا تُقبل طلبات عبر الإنترنت، من اليوم",
+                  "zh-CN": "暂停在线点单（从今天起）",
+                  "zh-TW": "暫停線上點單（從今天起）"
+                },
+                "emptyState": {
+                  "titleKey": "No paused times",
+                  "titles": {
+                    "de-DE": "Keine pausierten Zeiten",
+                    "fr-FR": "Aucun créneau en pause",
+                    "da-DK": "Ingen tider på pause",
+                    "cs-CZ": "Žádné pozastavené časy",
+                    "ar-EG": "لا توجد مواعيد موقوفة",
+                    "zh-CN": "没有暂停的时段",
+                    "zh-TW": "沒有暫停的時段"
+                  }
+                },
+                "limit": 3,
+                "columns": [
+                  {
+                    "name": "slot_at",
+                    "label": "Pickup time",
+                    "logicalType": "timestamptz"
+                  },
+                  {
+                    "name": "paused_by",
+                    "label": "Paused by"
+                  }
+                ],
+                "viewAllHref": "/p/ordering-slot-pauses?f.active=eq:true",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "slot_pauses",
+                    "type": "table"
+                  },
+                  "shape": "record-list",
+                  "select": [
+                    "id",
+                    "slot_at",
+                    "paused_by"
+                  ],
+                  "filters": [
+                    {
+                      "column": "active",
+                      "op": "eq",
+                      "value": true
+                    },
+                    {
+                      "column": "slot_at",
+                      "op": "gte",
+                      "day": "today"
+                    }
+                  ],
+                  "orderBy": [
+                    {
+                      "column": "slot_at",
+                      "dir": "asc"
+                    }
+                  ],
+                  "limit": 3
+                }
+              }
+            },
+            {
+              "i": "not-collected",
+              "widget": "mini-table",
+              "x": 8,
+              "y": 13,
+              "w": 4,
+              "h": 6,
+              "config": {
+                "title": "Not collected, last 7 days",
+                "titles": {
+                  "en-US": "Not collected, last 7 days",
+                  "de-DE": "Nicht abgeholt, letzte 7 Tage",
+                  "fr-FR": "Non récupérées, 7 derniers jours",
+                  "da-DK": "Ikke hentet, sidste 7 dage",
+                  "cs-CZ": "Nevyzvednuto, posledních 7 dní",
+                  "ar-EG": "لم تُستلم، آخر ٧ أيام",
+                  "zh-CN": "未取餐（近 7 天）",
+                  "zh-TW": "未取餐（近 7 天）"
+                },
+                "subtitle": "Nothing was charged for these",
+                "subtitles": {
+                  "de-DE": "Dafür wurde nichts berechnet",
+                  "fr-FR": "Rien n’a été facturé pour celles-ci",
+                  "da-DK": "Der blev ikke opkrævet noget for dem",
+                  "cs-CZ": "Za ně se nic neúčtovalo",
+                  "ar-EG": "لم يُحاسَب على هذه الطلبات",
+                  "zh-CN": "这些订单没有收费",
+                  "zh-TW": "這些訂單沒有收費"
+                },
+                "emptyState": {
+                  "titleKey": "Every order was collected",
+                  "titles": {
+                    "de-DE": "Jede Bestellung wurde abgeholt",
+                    "fr-FR": "Toutes les commandes ont été récupérées",
+                    "da-DK": "Alle bestillinger blev hentet",
+                    "cs-CZ": "Všechny objednávky byly vyzvednuty",
+                    "ar-EG": "تم استلام كل الطلبات",
+                    "zh-CN": "所有订单都已取餐",
+                    "zh-TW": "所有訂單都已取餐"
+                  }
+                },
+                "limit": 3,
+                "columns": [
+                  {
+                    "name": "number",
+                    "label": "Order",
+                    "format": "mono"
+                  },
+                  {
+                    "name": "pickup_at",
+                    "label": "Pickup",
+                    "logicalType": "timestamptz"
+                  },
+                  {
+                    "name": "total",
+                    "label": "Total",
+                    "logicalType": "decimal",
+                    "semantic": "money"
+                  }
+                ],
+                "secondary": [
+                  "name"
+                ],
+                "viewAllHref": "/p/ordering-orders?f.pickup_at=gte:today-6&f.pickup_at=lte:today&f.status=eq:not_collected",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "record-list",
+                  "select": [
+                    "id",
+                    "number",
+                    "name",
+                    "pickup_at",
+                    "total"
+                  ],
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "eq",
+                      "value": "not_collected"
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 7,
+                    "unit": "day",
+                    "calendar": true
+                  },
+                  "orderBy": [
+                    {
+                      "column": "pickup_at",
+                      "dir": "desc"
+                    }
+                  ],
+                  "limit": 3
+                }
+              }
+            },
+            {
+              "i": "orders-by-day",
+              "widget": "chart-bar",
+              "x": 0,
+              "y": 19,
+              "w": 4,
+              "h": 7,
               "config": {
                 "title": "Orders by day",
                 "titles": {
@@ -4922,6 +5580,43 @@
                   "zh-CN": "每日订单",
                   "zh-TW": "每日訂單"
                 },
+                "subtitle": "Last 7 days, by day of pickup",
+                "subtitles": {
+                  "de-DE": "Letzte 7 Tage, nach Abholtag",
+                  "fr-FR": "7 derniers jours, par jour de retrait",
+                  "da-DK": "Sidste 7 dage, efter afhentningsdag",
+                  "cs-CZ": "Posledních 7 dní, podle dne vyzvednutí",
+                  "ar-EG": "آخر ٧ أيام، حسب يوم الاستلام",
+                  "zh-CN": "近 7 天，按取餐日",
+                  "zh-TW": "近 7 天，按取餐日"
+                },
+                "emptyState": {
+                  "titleKey": "No orders in the last 7 days",
+                  "titles": {
+                    "de-DE": "Keine Bestellungen in den letzten 7 Tagen",
+                    "fr-FR": "Aucune commande ces 7 derniers jours",
+                    "da-DK": "Ingen bestillinger de sidste 7 dage",
+                    "cs-CZ": "Žádné objednávky za posledních 7 dní",
+                    "ar-EG": "لا توجد طلبات في آخر ٧ أيام",
+                    "zh-CN": "近 7 天没有订单",
+                    "zh-TW": "近 7 天沒有訂單"
+                  }
+                },
+                "highlight": "current",
+                "series": [
+                  {
+                    "label": "Orders",
+                    "labels": {
+                      "de-DE": "Bestellungen",
+                      "fr-FR": "Commandes",
+                      "da-DK": "Bestillinger",
+                      "cs-CZ": "Objednávky",
+                      "ar-EG": "الطلبات",
+                      "zh-CN": "订单",
+                      "zh-TW": "訂單"
+                    }
+                  }
+                ],
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4965,10 +5660,10 @@
             {
               "i": "collected-by-day",
               "widget": "chart-bar",
-              "x": 6,
-              "y": 6,
-              "w": 6,
-              "h": 8,
+              "x": 4,
+              "y": 19,
+              "w": 4,
+              "h": 7,
               "config": {
                 "title": "Collected by day",
                 "titles": {
@@ -4981,6 +5676,43 @@
                   "zh-CN": "每日收款",
                   "zh-TW": "每日收款"
                 },
+                "subtitle": "Last 7 days, by day of pickup",
+                "subtitles": {
+                  "de-DE": "Letzte 7 Tage, nach Abholtag",
+                  "fr-FR": "7 derniers jours, par jour de retrait",
+                  "da-DK": "Sidste 7 dage, efter afhentningsdag",
+                  "cs-CZ": "Posledních 7 dní, podle dne vyzvednutí",
+                  "ar-EG": "آخر ٧ أيام، حسب يوم الاستلام",
+                  "zh-CN": "近 7 天，按取餐日",
+                  "zh-TW": "近 7 天，按取餐日"
+                },
+                "emptyState": {
+                  "titleKey": "Nothing collected in the last 7 days",
+                  "titles": {
+                    "de-DE": "In den letzten 7 Tagen nichts kassiert",
+                    "fr-FR": "Rien d’encaissé ces 7 derniers jours",
+                    "da-DK": "Intet opkrævet de sidste 7 dage",
+                    "cs-CZ": "Za posledních 7 dní nic nevybráno",
+                    "ar-EG": "لم يُحصَّل شيء في آخر ٧ أيام",
+                    "zh-CN": "近 7 天没有收款",
+                    "zh-TW": "近 7 天沒有收款"
+                  }
+                },
+                "highlight": "current",
+                "series": [
+                  {
+                    "label": "Collected",
+                    "labels": {
+                      "de-DE": "Kassiert",
+                      "fr-FR": "Encaissé",
+                      "da-DK": "Opkrævet",
+                      "cs-CZ": "Vybráno",
+                      "ar-EG": "المحصّل",
+                      "zh-CN": "已收款",
+                      "zh-TW": "已收款"
+                    }
+                  }
+                ],
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -4996,7 +5728,7 @@
                     }
                   ],
                   "bucket": {
-                    "column": "picked_up_at",
+                    "column": "pickup_at",
                     "unit": "day"
                   },
                   "filters": [
@@ -5007,11 +5739,281 @@
                     }
                   ],
                   "window": {
-                    "column": "picked_up_at",
+                    "column": "pickup_at",
                     "last": 7,
                     "unit": "day",
                     "calendar": true
                   }
+                }
+              }
+            },
+            {
+              "i": "portions-today",
+              "widget": "mini-table",
+              "x": 8,
+              "y": 19,
+              "w": 4,
+              "h": 7,
+              "config": {
+                "title": "Sold out and running low",
+                "titles": {
+                  "en-US": "Sold out and running low",
+                  "de-DE": "Ausverkauft und fast weg",
+                  "fr-FR": "Épuisés et presque épuisés",
+                  "da-DK": "Udsolgt og næsten udsolgt",
+                  "cs-CZ": "Vyprodáno a dochází",
+                  "ar-EG": "نفد أو يوشك على النفاد",
+                  "zh-CN": "已售罄和快售罄",
+                  "zh-TW": "已售罄和快售罄"
+                },
+                "subtitle": "Portions for today",
+                "subtitles": {
+                  "de-DE": "Portionen für heute",
+                  "fr-FR": "Portions du jour",
+                  "da-DK": "Portioner i dag",
+                  "cs-CZ": "Porce na dnešek",
+                  "ar-EG": "حصص اليوم",
+                  "zh-CN": "今日份数",
+                  "zh-TW": "今日份數"
+                },
+                "emptyState": {
+                  "titleKey": "No portions set for today",
+                  "titles": {
+                    "de-DE": "Für heute keine Portionen festgelegt",
+                    "fr-FR": "Aucune portion fixée pour aujourd’hui",
+                    "da-DK": "Ingen portioner sat for i dag",
+                    "cs-CZ": "Na dnešek nejsou nastavené žádné porce",
+                    "ar-EG": "لم تُحدَّد حصص لليوم",
+                    "zh-CN": "今天未设置份数",
+                    "zh-TW": "今天未設定份數"
+                  }
+                },
+                "limit": 6,
+                "columns": [
+                  {
+                    "name": "name",
+                    "label": "Dish"
+                  },
+                  {
+                    "name": "portions",
+                    "label": "Ordered",
+                    "semantic": "capacity-bar"
+                  }
+                ],
+                "viewAllHref": "/p/ordering-dishes?f.stock_on=eq:today",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "menu_items",
+                    "type": "table"
+                  },
+                  "shape": "record-list",
+                  "select": [
+                    "id",
+                    "name",
+                    "stock_today"
+                  ],
+                  "filters": [
+                    {
+                      "column": "stock_today",
+                      "op": "not_null"
+                    },
+                    {
+                      "column": "stock_on",
+                      "op": "eq",
+                      "day": "today"
+                    }
+                  ],
+                  "orderBy": [
+                    {
+                      "column": "stock_today",
+                      "dir": "asc"
+                    },
+                    {
+                      "column": "name",
+                      "dir": "asc"
+                    }
+                  ],
+                  "limit": 6,
+                  "counts": {
+                    "table": "order_items",
+                    "as": "portions"
+                  }
+                }
+              }
+            },
+            {
+              "i": "pickup-hours",
+              "widget": "chart-bar",
+              "x": 0,
+              "y": 26,
+              "w": 8,
+              "h": 7,
+              "config": {
+                "title": "When people pick up",
+                "titles": {
+                  "en-US": "When people pick up",
+                  "de-DE": "Wann abgeholt wird",
+                  "fr-FR": "Quand les clients passent",
+                  "da-DK": "Hvornår folk henter",
+                  "cs-CZ": "Kdy si lidé vyzvedávají",
+                  "ar-EG": "متى يستلم الناس",
+                  "zh-CN": "大家什么时候取餐",
+                  "zh-TW": "大家什麼時候取餐"
+                },
+                "subtitle": "Pickups by hour, last 7 days",
+                "subtitles": {
+                  "de-DE": "Abholungen nach Stunde, letzte 7 Tage",
+                  "fr-FR": "Retraits par heure, 7 derniers jours",
+                  "da-DK": "Afhentninger pr. time, sidste 7 dage",
+                  "cs-CZ": "Vyzvednutí podle hodin, posledních 7 dní",
+                  "ar-EG": "الاستلامات حسب الساعة، آخر ٧ أيام",
+                  "zh-CN": "按小时取餐（近 7 天）",
+                  "zh-TW": "按小時取餐（近 7 天）"
+                },
+                "emptyState": {
+                  "titleKey": "No orders in the last 7 days",
+                  "titles": {
+                    "de-DE": "Keine Bestellungen in den letzten 7 Tagen",
+                    "fr-FR": "Aucune commande ces 7 derniers jours",
+                    "da-DK": "Ingen bestillinger de sidste 7 dage",
+                    "cs-CZ": "Žádné objednávky za posledních 7 dní",
+                    "ar-EG": "لا توجد طلبات في آخر ٧ أيام",
+                    "zh-CN": "近 7 天没有订单",
+                    "zh-TW": "近 7 天沒有訂單"
+                  }
+                },
+                "highlight": "max",
+                "series": [
+                  {
+                    "label": "Pickups",
+                    "labels": {
+                      "de-DE": "Abholungen",
+                      "fr-FR": "Retraits",
+                      "da-DK": "Afhentninger",
+                      "cs-CZ": "Vyzvednutí",
+                      "ar-EG": "الاستلامات",
+                      "zh-CN": "取餐",
+                      "zh-TW": "取餐"
+                    }
+                  }
+                ],
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "orders",
+                    "type": "table"
+                  },
+                  "shape": "timeseries",
+                  "aggregations": [
+                    {
+                      "fn": "count",
+                      "alias": "pickups"
+                    }
+                  ],
+                  "bucket": {
+                    "column": "pickup_at",
+                    "unit": "hour-of-day"
+                  },
+                  "filters": [
+                    {
+                      "column": "status",
+                      "op": "in",
+                      "value": [
+                        "placed",
+                        "confirmed",
+                        "preparing",
+                        "ready",
+                        "picked_up",
+                        "not_collected"
+                      ]
+                    }
+                  ],
+                  "window": {
+                    "column": "pickup_at",
+                    "last": 7,
+                    "unit": "day",
+                    "calendar": true
+                  }
+                }
+              }
+            },
+            {
+              "i": "top-dishes",
+              "widget": "chart-ranking-bars",
+              "x": 8,
+              "y": 26,
+              "w": 4,
+              "h": 7,
+              "config": {
+                "title": "Top dishes, last 7 days",
+                "titles": {
+                  "en-US": "Top dishes, last 7 days",
+                  "de-DE": "Beliebteste Gerichte, letzte 7 Tage",
+                  "fr-FR": "Plats les plus commandés, 7 derniers jours",
+                  "da-DK": "Mest bestilte retter, sidste 7 dage",
+                  "cs-CZ": "Nejoblíbenější jídla, posledních 7 dní",
+                  "ar-EG": "الأطباق الأكثر طلبًا، آخر ٧ أيام",
+                  "zh-CN": "热门菜品（近 7 天）",
+                  "zh-TW": "熱門菜色（近 7 天）"
+                },
+                "subtitle": "By quantity ordered",
+                "subtitles": {
+                  "de-DE": "Nach bestellter Menge",
+                  "fr-FR": "Par quantité commandée",
+                  "da-DK": "Efter bestilt antal",
+                  "cs-CZ": "Podle objednaného množství",
+                  "ar-EG": "حسب الكمية المطلوبة",
+                  "zh-CN": "按点单数量",
+                  "zh-TW": "按點單數量"
+                },
+                "emptyState": {
+                  "titleKey": "No orders in the last 7 days",
+                  "titles": {
+                    "de-DE": "Keine Bestellungen in den letzten 7 Tagen",
+                    "fr-FR": "Aucune commande ces 7 derniers jours",
+                    "da-DK": "Ingen bestillinger de sidste 7 dage",
+                    "cs-CZ": "Žádné objednávky za posledních 7 dní",
+                    "ar-EG": "لا توجد طلبات في آخر ٧ أيام",
+                    "zh-CN": "近 7 天没有订单",
+                    "zh-TW": "近 7 天沒有訂單"
+                  }
+                },
+                "n": 5,
+                "metricFormat": "plain",
+                "href": "/p/ordering-dishes",
+                "binding": {
+                  "kind": "table-query",
+                  "source": {
+                    "name": "order_items",
+                    "type": "table"
+                  },
+                  "shape": "categorical",
+                  "groupBy": [
+                    "menu_item_id"
+                  ],
+                  "groupLabel": "menu_item_id.name",
+                  "aggregations": [
+                    {
+                      "fn": "sum",
+                      "column": "qty",
+                      "alias": "ordered"
+                    }
+                  ],
+                  "filters": [
+                    {
+                      "column": "order_id.status",
+                      "op": "neq",
+                      "value": "cancelled"
+                    }
+                  ],
+                  "window": {
+                    "column": "order_id.pickup_at",
+                    "last": 7,
+                    "unit": "day",
+                    "calendar": true
+                  },
+                  "limit": 5
                 }
               }
             }
