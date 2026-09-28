@@ -6,7 +6,7 @@
  *
  * The browser cannot carry the whole manifest to read these from, so they
  * are written into the source, between its two marker lines.
- * src/data/sample-drift.test.ts fails when the written part is out of date,
+ * src/sample/sample-bundle.test.ts fails when the written part is out of date,
  * so run this after every change to the manifest.
  */
 import { readFileSync, writeFileSync } from "node:fs";

@@ -52,7 +52,7 @@
  * Pure, and browser-safe: it imports nothing, and nothing that runs only in
  * Node — it ships in the demo bundle. The server's own resolver is in Adminium
  * (`apps/server/src/apps/sample-data.ts`); sampleRows.test.ts holds this one
- * to the same answers, and sample-drift.test.ts holds the written part below
+ * to the same answers, and src/sample/sample-bundle.test.ts holds the written part below
  * to manifest.json.
  */
 

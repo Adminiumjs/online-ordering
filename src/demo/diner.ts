@@ -456,7 +456,8 @@ export class DemoDiner implements DinerPort {
     }
     for (const column of e.requires as readonly string[]) if (row[column] === undefined || row[column] === null || row[column] === "") throw refusedValue(column);
     const heads = Number(row["heads"]);
-    if (!Number.isInteger(heads) || heads < 6 || heads > 120) throw refusedValue("heads", heads < 6 ? "too-small" : "too-large");
+    const range = MANIFEST_RULES.validation.enquiries.heads;
+    if (!Number.isInteger(heads) || heads < range.min || heads > range.max) throw refusedValue("heads", heads < range.min ? "too-small" : "too-large");
     if (!EMAIL.test(String(row["email"]))) throw refusedValue("email", "format");
     if (!PHONE.test(String(row["phone"]))) throw refusedValue("phone", "format");
     for (const column of (e.anonymous as { plainText: readonly string[] }).plainText) if (!plainText(row[column] === "" ? null : row[column])) throw refusedValue(column);
@@ -465,7 +466,7 @@ export class DemoDiner implements DinerPort {
       ...row,
       heads,
       ref_seq: seq,
-      ref: `LG-${String(seq).padStart(4, "0")}`,
+      ref: `${MANIFEST_RULES.formats.enquiries.ref.prefix}${String(seq).padStart(MANIFEST_RULES.formats.enquiries.ref.pad, "0")}`,
       status: "new",
       staff_note: null,
       handled_by: null,

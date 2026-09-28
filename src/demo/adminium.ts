@@ -7,6 +7,7 @@
 import { DemoDiner, NO_LATENCY, type Latency } from "./diner.ts";
 import { Engine } from "./engine.ts";
 import { DemoKitchen } from "./kitchen.ts";
+import { MANIFEST_RULES } from "./rules.ts";
 import { DEMO_START, World } from "./world.ts";
 
 export class DemoAdminium {
@@ -22,8 +23,12 @@ export class DemoAdminium {
     this.diner = new DemoDiner(this.engine, opts.latency ?? NO_LATENCY);
     this.kitchen = new DemoKitchen(this.engine);
     // A receipt is Invoices & Receipts' to draw: the card switches the add-on, and the feature with it.
-    this.engine.featureOn = (feature) =>
-      feature === "receipts" ? this.kitchen.addOns.invoices : feature === "holiday-closures" ? this.kitchen.addOns.holidays : false;
+    // A feature is on while every add-on it needs is attached (the manifest names them).
+    const attached = (addOn: string) => (addOn === "invoices" ? this.kitchen.addOns.invoices : addOn === "holiday-calendars" ? this.kitchen.addOns.holidays : false);
+    this.engine.featureOn = (feature) => {
+      const needs = MANIFEST_RULES.features.find((f) => f.id === feature)?.requires;
+      return needs !== undefined && needs.every(attached);
+    };
   }
 
   get now(): number {

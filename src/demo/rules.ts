@@ -275,6 +275,108 @@ export const MANIFEST_RULES = {
       ]
     }
   },
+  "validation": {
+    "settings": {
+      "phone": {
+        "format": "phone"
+      },
+      "tax_rate": {
+        "min": 0,
+        "max": 100
+      },
+      "slot_minutes": {
+        "min": 5,
+        "max": 120
+      },
+      "slot_capacity": {
+        "min": 1,
+        "max": 200
+      },
+      "lead_minutes": {
+        "min": 0,
+        "max": 720
+      },
+      "preorder_days": {
+        "min": 0,
+        "max": 14
+      },
+      "prep_minutes": {
+        "min": 0,
+        "max": 240
+      },
+      "max_items": {
+        "min": 1,
+        "max": 200
+      },
+      "first_order_number": {
+        "min": 1
+      }
+    },
+    "menu_items": {
+      "stock_today": {
+        "min": 0
+      }
+    },
+    "customers": {
+      "email": {
+        "format": "email"
+      }
+    },
+    "orders": {
+      "phone": {
+        "format": "phone"
+      },
+      "email": {
+        "format": "email"
+      }
+    },
+    "order_items": {
+      "qty": {
+        "min": 1,
+        "max": 20
+      }
+    },
+    "enquiries": {
+      "heads": {
+        "min": 6,
+        "max": 120
+      },
+      "phone": {
+        "format": "phone"
+      },
+      "email": {
+        "format": "email"
+      }
+    }
+  },
+  "formats": {
+    "orders": {
+      "number": {
+        "from": "number_seq"
+      }
+    },
+    "enquiries": {
+      "ref": {
+        "from": "ref_seq",
+        "prefix": "LG-",
+        "pad": 4
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "receipts",
+      "requires": [
+        "invoices"
+      ]
+    },
+    {
+      "id": "holiday-closures",
+      "requires": [
+        "holiday-calendars"
+      ]
+    }
+  ],
   "capacity": {
     "orders": {
       "kind": "slot",

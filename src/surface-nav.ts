@@ -48,6 +48,12 @@ export const SURFACE_NAV = [
  * surface gate reads this list and looks for each in the customer bundle's
  * source maps.
  */
+/**
+ * Where the sample's fiction lives (Juniper Kitchen's Tuesday): the surface gate fingerprints it
+ * and looks for it in both hosted bundles, which must carry none of it.
+ */
+export const SURFACE_DEMO_DATA = "src/sample/juniper.ts";
+
 export const SURFACE_STAFF_ONLY = [
   "src/screens/Kitchen.tsx",
   "src/kitchen/KitchenApp.tsx",

@@ -86,11 +86,15 @@ Then open the URL Vite prints (default http://localhost:5173).
 | Script | What it does |
 | --- | --- |
 | `npm run dev` | Start the Vite dev server. |
-| `npm run build` | Type-check and build to `dist/`. |
-| `npm run build:demo` | Build the website's demo, at base `/demo/online-ordering/app/`. |
+| `npm run build` | Type-check and build to `dist/`. With no Adminium configured (no `VITE_ADMINIUM_*`), this build runs on the built-in sample kitchen, as the website's card does. |
+| `npm run build:demo` | Build the website's card, at base `/demo/online-ordering/app/`. |
 | `npm run build:surface` | Build the two sides Adminium serves (`dist-surface/`). |
 | `npm run manifest` | Write `manifest.json` from `src/manifest/`. |
+| `npm run sample` | Write the sample bundle (`seeds/ordering.sample.json`) from `src/sample/`. |
+| `npm run demo-rules` | Write the rules the built-in sample kitchen plays, from `manifest.json`. |
 | `npm test` | Run the suite. |
+| `npm run contract` | Run the contract against a built Adminium checkout (`ADMINIUM_REPO`, and `ADD_ONS_REPO` for the add-ons), on SQLite and, with `TEST_POSTGRES_URL` / `TEST_MYSQL_URL`, Postgres and MySQL. |
+| `npm run e2e` | Walk the order page and the kitchen in a browser (Playwright). |
 
 `manifest.json` is written from the typed modules in `src/manifest/`; edit
 those and run `npm run manifest`. A test fails when the two disagree.
@@ -99,15 +103,24 @@ those and run `npm run manifest`. A test fails when the two disagree.
 
 ```
 manifest.json  what Adminium installs (written from src/manifest/)
+seeds/         the sample bundle Adminium adds on request (written from src/sample/)
 src/
-  manifest/    the tables and their rules, the pages, the roles, the diners'
-               doors, the emails, the add-ons the app works better with
-  app/         the app shell
-  data/        the data the screens read, through one DataSource seam
+  manifest/    the tables and their rules, the pages and the Overview, the roles,
+               the diners' doors, the emails, the add-ons it works better with
+  app/         the shell each side boots into
+  data/        the two doors the screens go through: the order page's (the
+               public API) and the kitchen's (the staff session)
+  diner/       the order page's screens
+  kitchen/     the kitchen's screens
+  state/       what each screen holds, and the writes it makes
+  demo/        the built-in sample kitchen: the manifest's rules played in the
+               browser, for the website's card (never in a hosted build)
+  sample/      Juniper Kitchen's Tuesday, the sample both the bundle and the
+               card are made from
+  contract/    the contract with a built Adminium (`npm run contract`)
   i18n/        the 8-locale runtime and the keyed strings
-  lib/         formatting and the order helpers
-  screens/     the diner's screens and the kitchen's
-  components/  shells, overlays, order-line pieces, primitives
+  lib/         formatting, the kitchen's clock, the order helpers
+  components/  overlays, toasts, icons, primitives
   styles/      design tokens and stylesheets
   testing/     the product's manifest validator, vendored for the tests
 public/fonts/  self-hosted Manrope + JetBrains Mono (woff2)
@@ -115,4 +128,4 @@ public/fonts/  self-hosted Manrope + JetBrains Mono (woff2)
 
 ## License
 
-[AGPL-3.0](LICENSE) © 2026 Online Ordering. A demo shipped with Adminium.
+[AGPL-3.0](LICENSE) © 2026 Online Ordering. An example app for Adminium.

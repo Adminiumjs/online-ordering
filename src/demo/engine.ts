@@ -46,7 +46,23 @@ export interface Writer {
 export const CLOCK: Writer = { origin: "automation", name: "Timed move", roles: [] };
 
 
-const COUNTED = ["placed", "confirmed", "preparing", "ready", "picked_up"];
+/** The limits as the manifest declares them: a pickup time's, and a dish's portions. */
+const SLOT = MANIFEST_RULES.capacity.orders;
+const PORTIONS = MANIFEST_RULES.capacity.order_items;
+const COUNTED: readonly string[] = SLOT.countWhere.values;
+type Entry = Record<string, unknown>;
+const ENTRIES = MANIFEST_RULES.publicAccess as readonly Entry[];
+/** The order page's create: how many lines it takes, how many options a line, how many items in all. */
+const LINES = (ENTRIES.find((e) => e["table"] === "orders" && (e["methods"] as readonly string[]).includes("POST") && e["children"] !== undefined)!["children"] as Entry)["order_items"] as {
+  min: number;
+  max: number;
+  sumMax: { max: { column: string } };
+  children: { order_item_modifiers: { max: number } };
+};
+/** Below how many a dish's "N left" is said. */
+const SHOW_LEFT = (ENTRIES.find((e) => e["table"] === "order_items" && e["kind"] === "availability")!["showLeft"] as { below: number }).below;
+/** A line's quantity, as the column holds it. */
+const QTY = MANIFEST_RULES.validation.order_items.qty as { min: number; max: number };
 const iso = (ms: number) => new Date(ms).toISOString();
 const empty = (value: unknown) => value === null || value === undefined || (typeof value === "string" && value.trim() === "");
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -96,7 +112,7 @@ export class Engine {
   grid(day: Day): { time: string; at: number }[] {
     const h = this.dayHours(day);
     if (!h.open) return [];
-    const step = this.num("slot_minutes");
+    const step = this.num(SLOT.slotMinutes.column);
     const out: { time: string; at: number }[] = [];
     for (let m = minutesOf(h.opens); m <= minutesOf(h.closes) - step; m += step) out.push({ time: hhmm(m), at: instantOf(day, hhmm(m), this.world.zone) });
     return out;
@@ -114,13 +130,13 @@ export class Engine {
   /** Whether a diner may still take a time: not past, with the notice given, inside the days ahead. */
   private takeable(at: number, day: Day): boolean {
     if (at < this.now) return false;
-    if (this.now + this.num("lead_minutes") * 60_000 > at) return false;
-    return daysBetween(this.today(), day) <= this.num("preorder_days");
+    if (this.now + this.num(SLOT.noticeMinutes.column) * 60_000 > at) return false;
+    return daysBetween(this.today(), day) <= this.num(SLOT.windowDays.column);
   }
 
   /** `GET /public/availability/orders?date=`: each time of the day, free, full or paused. */
   slotAnswer(day: Day): SlotTime[] {
-    const size = this.num("slot_capacity");
+    const size = this.num(SLOT.perSlot.column);
     return this.grid(day).map(({ time, at }) => {
       if (this.pauseAt(at) !== undefined) return { time, state: "paused" };
       return { time, state: this.taken(at) + 1 <= size && this.takeable(at, day) ? "free" : "full" };
@@ -129,7 +145,7 @@ export class Engine {
 
   /** The kitchen's counts: each slot of a day, what it holds, and its pause. */
   slotCounts(day: Day): SlotCount[] {
-    const size = this.num("slot_capacity");
+    const size = this.num(SLOT.perSlot.column);
     return this.grid(day).map(({ time, at }) => {
       const pause = this.pauseAt(at);
       return { time, at: iso(at), taken: this.taken(at), size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null } };
@@ -154,18 +170,19 @@ export class Engine {
     if (pickupAt === undefined || pickupAt === null || pickupAt === "") refuse("required");
     const at = toMs(String(pickupAt));
     if (Number.isNaN(at)) refuse("out-of-range");
+    // In Adminium's order: a closed day, a time outside the day's hours (the close itself is inside them,
+    // and no slot), off the grid, paused (a diner's), past, without the notice (a diner's), too far ahead.
     const day = venueDay(at, this.world.zone);
     const h = this.dayHours(day);
-    if (!h.open) refuse("closed");
+    if (h.closure !== null) refuse("closed");
     const minute = venueMinutes(at, this.world.zone);
-    if (minute < minutesOf(h.opens) || minute >= minutesOf(h.closes)) refuse("out-of-hours");
-    const onGrid = this.grid(day).some((slot) => slot.at === at);
-    if (!onGrid || at < this.now || daysBetween(this.today(), day) > this.num("preorder_days")) refuse("out-of-range");
-    if (origin === "public") {
-      if (this.pauseAt(at) !== undefined) refuse("paused");
-      if (!this.takeable(at, day)) refuse("out-of-range");
-    }
-    if (this.taken(at, except) + 1 > this.num("slot_capacity")) {
+    if (!h.open || minute < minutesOf(h.opens) || minute > minutesOf(h.closes)) refuse("out-of-hours");
+    if (!this.grid(day).some((slot) => slot.at === at)) refuse("out-of-range");
+    if (origin === "public" && this.pauseAt(at) !== undefined) refuse("paused");
+    if (at < this.now) refuse("out-of-range");
+    if (origin === "public" && this.now + this.num(SLOT.noticeMinutes.column) * 60_000 > at) refuse("out-of-range");
+    if (daysBetween(this.today(), day) > this.num(SLOT.windowDays.column)) refuse("out-of-range");
+    if (this.taken(at, except) + 1 > this.num(SLOT.perSlot.column)) {
       if (origin === "public") throw new ApiError(409, "PUBLIC_SLOT_FULL", "That time is full.", { column: "pickup_at" });
       throw new ApiError(409, "CAPACITY_FULL", "That time is full.", { column: "pickup_at", rule: 0, kind: "slot", pool: { key: iso(at), at: day }, left: 0 });
     }
@@ -185,18 +202,19 @@ export class Engine {
 
   /** A dish's portions on a day: its limit (none when it is set for another day) and what is left. */
   portions(dish: Row, day: Day, exceptOrder?: Id): { size: number | null; left: number | null } {
-    const size = dish["stock_today"] === null || dish["stock_today"] === undefined || dish["stock_on"] !== day ? null : Number(dish["stock_today"]);
+    const [portions, onDay] = [PORTIONS.size.column, PORTIONS.size.onDay];
+    const size = dish[portions] === null || dish[portions] === undefined || dish[onDay] !== day ? null : Number(dish[portions]);
     return { size, left: size === null ? null : size - this.ordered(dish.id, day, exceptOrder) };
   }
 
   /** `GET /public/availability/order_items?date=&qty=`: each dish a diner may read, on sale or sold out. */
   dishAnswer(day: Day, qty = 1, readable: (dish: Row) => boolean): DishState[] {
     // A page may ask about no more than it is shown: "fewer than five left".
-    const asked = Math.max(1, Math.min(qty, 5));
+    const asked = Math.max(1, Math.min(qty, SHOW_LEFT));
     return this.world.where("menu_items", readable).map((dish) => {
       const { left } = this.portions(dish, day);
       const soldout = left !== null && left < asked;
-      const shown = left !== null && left < 5 ? Math.max(0, left) : undefined;
+      const shown = left !== null && left < SHOW_LEFT ? Math.max(0, left) : undefined;
       // Below five, how many are left is said — none left too.
       return { id: String(dish.id), state: soldout ? "soldout" : "on", ...(shown === undefined ? {} : { left: shown }) };
     });
@@ -218,8 +236,8 @@ export class Engine {
     const pub = writer.origin === "public";
     // A diner's lines are held to the entry's 1 to 20; the kitchen's are not (a staff tree takes up to 200).
     const refused = (params: Record<string, unknown>) => treeRefused(params, writer.origin);
-    if (pub && lines.length === 0) throw refused({ child: "order_items", reason: "too-few" });
-    if (lines.length > (pub ? 20 : 200)) throw refused({ child: "order_items", reason: "too-many" });
+    if (pub && lines.length < LINES.min) throw refused({ child: "order_items", reason: "too-few" });
+    if (lines.length > (pub ? LINES.max : 200)) throw refused({ child: "order_items", reason: "too-many" });
     const at = (i: number) => ({ child: "order_items", index: i, path: ["order_items", i] });
     const optionAt = (i: number, j: number) => ({ child: "order_item_modifiers", index: j, path: ["order_items", i, "order_item_modifiers", j] });
 
@@ -228,8 +246,8 @@ export class Engine {
       const dish = this.world.get("menu_items", Number(line.values["menu_item_id"]));
       if (dish === undefined || !opts.readableDish(dish)) throw refused({ ...at(i), column: "menu_item_id", reason: "not-offered" });
       const qty = Number(line.values["qty"] ?? 1);
-      if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw refused({ ...at(i), column: "qty", reason: qty < 1 ? "too-small" : "too-large" });
-      if (line.options.length > 20) throw refused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], reason: "too-many" });
+      if (!Number.isInteger(qty) || qty < QTY.min || qty > QTY.max) throw refused({ ...at(i), column: "qty", reason: qty < QTY.min ? "too-small" : "too-large" });
+      if (line.options.length > LINES.children.order_item_modifiers.max) throw refused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], reason: "too-many" });
       const options = line.options.map((option, j) => {
         const modifier = this.world.get("modifiers", Number(option["modifier_id"]));
         if (modifier === undefined || !opts.readableOption(modifier)) throw refused({ ...optionAt(i, j), column: "modifier_id", reason: "not-offered" });
@@ -250,7 +268,7 @@ export class Engine {
 
     // No more items than an online order holds.
     const items = built.reduce((n, line) => n + line.qty, 0);
-    if (items > this.num("max_items")) throw refused({ child: "order_items", column: "qty", reason: "too-many" });
+    if (items > this.num(LINES.sumMax.max.column)) throw refused({ child: "order_items", column: "qty", reason: "too-many" });
 
     // The pickup time — a quote too: an order is priced only on a time it could hold — then each dish's portions on its day.
     this.judgeSlot(values["pickup_at"], writer.origin, opts.except);

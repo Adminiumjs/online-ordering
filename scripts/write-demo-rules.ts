@@ -25,9 +25,19 @@ export function demoRulesText(manifest: Json): string {
   const enums = Object.fromEntries(
     tables.map((t) => [t["ref"], Object.fromEntries((t["columns"] as Json[]).filter((c) => c["type"] === "enum").map((c) => [c["ref"], c["enum"]]))]),
   );
+  /** Per table, each column's own rule of a kind (`validation`, `format`), by column. */
+  const columnRule = (kind: string) =>
+    Object.fromEntries(
+      tables
+        .map((t) => [t["ref"], Object.fromEntries((t["columns"] as Json[]).filter((c) => (c["rules"] as Json | undefined)?.[kind] !== undefined).map((c) => [c["ref"], (c["rules"] as Json)[kind]]))])
+        .filter(([, columns]) => Object.keys(columns as Json).length > 0),
+    );
   const body = {
     stamps,
     enums,
+    validation: columnRule("validation"),
+    formats: columnRule("format"),
+    features: ((manifest["addOns"] as Json | undefined)?.["features"] as Json[] | undefined)?.map((f) => ({ id: f["id"], requires: f["requires"] })) ?? [],
     capacity: of("capacity"),
     states: of("states"),
     publicAccess: manifest["publicAccess"],
