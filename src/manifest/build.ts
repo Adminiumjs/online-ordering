@@ -93,7 +93,7 @@ export function buildManifest(): Record<string, unknown> {
       file: "seeds/ordering.sample.json",
       skipWhenShared: {
         table: "menu_items",
-        skip: ["menu_categories", "menu_items", "modifier_groups", "modifiers", "orders", "order_items", "order_item_modifiers", "messages"],
+        skip: ["menu_categories", "menu_items", "modifier_groups", "modifiers", "orders", "order_items", "order_item_modifiers", "customers", "messages"],
       },
     },
   };

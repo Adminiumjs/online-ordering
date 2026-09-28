@@ -13,7 +13,8 @@
  * confirmation email carries — so the diner can follow it without signing
  * in, and cancel it while the kitchen has not taken it yet.
  *
- * What never leaves: who in the kitchen moved an order, the exact portions
+ * What never leaves through these keys: who in the kitchen moved an order (the receipt Invoices &
+ * Receipts draws names who handed it over, as a till receipt does), the exact portions
  * left (only "N left" below five), anyone else's order, the order's link code
  * and retry key.
  */
@@ -175,6 +176,8 @@ export const PUBLIC_ACCESS = [
     identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name" } },
     shareLink: "link_token",
     anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", "note"] },
+    // A signed-in diner holds at most three orders still to pick up: the caps above are for strangers.
+    maxOpen: { column: "status", values: ["placed", "confirmed", "preparing", "ready"], n: 3, upcoming: "pickup_at" },
     children: {
       order_items: {
         via: "order_id",
@@ -210,7 +213,7 @@ export const PUBLIC_ACCESS = [
     select: ["id", "ref", "heads", "wanted_on", "status"],
     writable: ["heads", "wanted_on", "notes", "name", "phone", "email", "language", "client_key"],
     requires: ["heads", "wanted_on", "name", "phone", "email"],
-    anonymous: { perValue: { columns: ["email"], n: 5 }, perKeyHour: 60, plainText: ["name", "notes"] },
+    anonymous: { perValue: { columns: ["email"], n: 5 }, perIpHour: 3, perKeyHour: 60, plainText: ["name", "notes"] },
     clientKey: "client_key",
   },
 

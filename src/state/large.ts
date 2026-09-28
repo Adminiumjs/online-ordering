@@ -95,7 +95,9 @@ export async function sendEnquiry(language: string): Promise<boolean> {
   } catch (error) {
     // A lost answer keeps the key: sending again files the same enquiry, once.
     const limit = isApiError(error) && (error.code === "PUBLIC_RATE_LIMITED" || error.code === "PUBLIC_LIMIT_REACHED");
-    set({ sending: false, failed: limit ? "limit" : "other", ...(isApiError(error) && error.status !== 0 ? { clientKey: null } : {}) });
+    // No answer, or a proxy's or the server's error: the enquiry may be in, and the key is kept.
+    const mayBeIn = !isApiError(error) || error.status === 0 || error.status >= 500 || error.code === "PUBLIC_UPSTREAM_UNAVAILABLE";
+    set({ sending: false, failed: limit ? "limit" : "other", ...(mayBeIn ? {} : { clientKey: null }) });
     return false;
   }
 }

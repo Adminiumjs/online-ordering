@@ -75,8 +75,11 @@ function useBlock(): string | null {
   if (!EMAIL.test(f.email.trim())) return t("co.block.email");
   if (phoneBad(f.phone)) return t("co.block.phone");
   if (lines.some((l) => l.sold)) return t("co.block.sold");
-  if (lines.some((l) => l.gone !== null)) return t("co.block.gone");
-  const over = lines.find((l) => l.over !== null);
+  if (lines.some((l) => l.gone !== null || l.options)) return t("co.block.gone");
+  if (s.fieldErrors.name !== undefined) return t("co.block.name");
+  if (s.fieldErrors.email !== undefined) return t("co.block.email");
+  if (s.fieldErrors.phone !== undefined) return t("co.block.phone");
+  const over = lines.find((l) => l.over !== null || l.fewer);
   if (over !== undefined) return t("co.block.over", { name: over.dish?.name ?? "" });
   if (cartCount(s.cart) > rules.maxItems) return t("sheet.full", { max: fmt.number(rules.maxItems) });
   if (validPick(day.now) === null) return t("co.block.time");
@@ -123,9 +126,9 @@ export function Checkout() {
   const block = useBlock();
   const reasonId = useId();
   const f = s.form;
-  const nameErr = s.touched.name === true && f.name.trim().length < 2;
-  const emailErr = s.touched.email === true && !EMAIL.test(f.email.trim());
-  const phoneErr = f.phone.trim().length > 3 && phoneBad(f.phone);
+  const nameErr = (s.touched.name === true && f.name.trim().length < 2) || s.fieldErrors.name !== undefined;
+  const emailErr = (s.touched.email === true && !EMAIL.test(f.email.trim())) || s.fieldErrors.email !== undefined;
+  const phoneErr = (f.phone.trim().length > 3 && phoneBad(f.phone)) || s.fieldErrors.phone !== undefined;
   const pick = validPick(day.now);
   const pickWord = pick === null ? t("co.pickATime") : t("co.pickup", { day: pick.day === day.today ? t("pick.today") : pick.day === day.tomorrow ? t("pick.tomorrow") : fmt.weekday(pick.day), time: fmt.wall(pick.day, pick.time) });
   const total = fresh === null ? null : fmt.money(fresh.data["total"]);
@@ -165,7 +168,7 @@ export function Checkout() {
                 {t("co.details")}
               </span>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 16, marginBlockStart: 16 }}>
-                <Field id="jn-co-name" label={t("co.name")} hint={t("co.name.hint")} error={nameErr ? t("co.name.error") : null}>
+                <Field id="jn-co-name" label={t("co.name")} hint={t("co.name.hint")} error={nameErr ? t(s.fieldErrors.name === "plain" ? "co.name.plain" : "co.name.error") : null}>
                   <input id="jn-co-name" className="jn-fld" autoComplete="given-name" value={f.name} maxLength={NAME_MAX} onChange={(e) => setField("name", e.target.value)} onBlur={() => touch("name")} placeholder={t("co.name.placeholder")} aria-invalid={nameErr} aria-describedby="jn-co-name-msg" style={fieldStyle(nameErr)} />
                 </Field>
                 <Field id="jn-co-email" label={t("co.email")} hint={t("co.email.hint")} error={emailErr ? t("co.email.error") : null}>
@@ -288,7 +291,7 @@ function PlaceError() {
   const venue = useVenue();
   const error = useDiner((s) => s.placeError);
   if (error === null) return null;
-  const warn = error === "toomany" || error === "busy" || error === "limit";
+  const warn = error === "toomany" || error === "busy" || error === "limit" || error === "pending";
   const phone = venue.phone;
   const call =
     phone === null ? (
@@ -312,6 +315,8 @@ function PlaceError() {
         ? t("sheet.full", { max: fmt.number(rulesOf().maxItems) })
         : error === "offline"
           ? t("co.err.offline")
+          : error === "pending"
+            ? t("co.err.pending")
           : error === "busy"
             ? t("co.err.busy")
             : error === "limit"
@@ -353,8 +358,8 @@ function PriceChanged() {
         <h2 id={titleId} style={{ margin: "12px 0 0", fontSize: 21, fontWeight: 800, letterSpacing: "-.03em", textWrap: "pretty" }}>
           {t("price.title")}
         </h2>
-        {changed.lines.map((l) => (
-          <div key={l.name} style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBlockStart: 16, padding: "13px 15px", borderRadius: 13, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+        {changed.lines.map((l, i) => (
+          <div key={`${String(i)}-${l.name}`} style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBlockStart: 16, padding: "13px 15px", borderRadius: 13, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
             <span style={{ fontSize: 14, fontWeight: 700 }}>{l.name}</span>
             <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 13.5, fontWeight: 600 }}>
               <span style={{ color: "var(--fg-subtle)", textDecoration: "line-through" }}>{fmt.money(l.from)}</span> → {fmt.money(l.to)}
@@ -398,9 +403,13 @@ function SoldOut() {
   const name = dish?.name ?? "";
   const today = sold.day === day.today;
   const title = sold.short
-    ? today
-      ? t("soldout.shortToday", { name, count: fmt.number(sold.left ?? 0) }, sold.left ?? 0)
-      : t("soldout.shortFor", { name, count: fmt.number(sold.left ?? 0), day: fmt.weekday(sold.day) }, sold.left ?? 0)
+    ? sold.left === null
+      ? today
+        ? t("soldout.fewerToday", { name })
+        : t("soldout.fewerFor", { name, day: fmt.weekday(sold.day) })
+      : today
+        ? t("soldout.shortToday", { name, count: fmt.number(sold.left) }, sold.left)
+        : t("soldout.shortFor", { name, count: fmt.number(sold.left), day: fmt.weekday(sold.day) }, sold.left)
     : today
       ? t("soldout.titleToday", { name })
       : t("soldout.titleFor", { name, day: fmt.weekday(sold.day) });

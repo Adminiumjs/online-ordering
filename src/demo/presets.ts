@@ -130,7 +130,7 @@ const PRESETS: Record<string, Preset> = {
   checking: { ui: async () => { kwameCart(); kwame(); goDiner("checkout"); await quoted(); useDiner.setState({ quote: { key: "checking", state: "busy", reply: null } }); } },
   checkout: { ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); } },
   placing: { ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); useDiner.setState({ placing: true }); } },
-  price: { ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); useDiner.setState({ priceChanged: { lines: [{ name: "Signature grain bowl", from: 18, to: 18.5 }], total: 23.82 } }); } },
+  price: { ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); useDiner.setState({ priceChanged: { lines: [{ name: "Signature grain bowl", from: 18, to: 18.5 }], total: 23.82, totalText: "23.82" } }); } },
   "slot-filled": {
     world: () => fillSlot(demo(), "12:15"),
     ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); useDiner.setState({ slotNotice: { time: "12:15", day: today(), reason: "full" }, pick: null }); },

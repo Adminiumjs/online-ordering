@@ -39,9 +39,16 @@ export interface Sheet {
 export type LineAlert =
   | { kind: "soldout"; day: Day }
   | { kind: "short"; left: number; day: Day }
+  /** Fewer are left than the line asks for, but more than the page is told the number of. */
+  | { kind: "fewer"; day: Day }
+  /** The dish's option rules changed under the line: its options are to be chosen again. */
+  | { kind: "options" }
   | { kind: "gone"; name: string; dish: boolean };
 
-export type PlaceError = "stopped" | "toomany" | "offline" | "limit" | "busy" | "failed";
+export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed";
+
+/** A detail Adminium refused as the diner typed it. */
+export type FieldError = "invalid" | "plain";
 
 /** Why the chosen time went: it filled, it is too soon now, it was paused, the day closed. */
 export type SlotNotice = { time: string; day: Day; reason: "full" | "too-soon" | "paused" | "closed" };
@@ -83,11 +90,16 @@ interface DinerState {
   alerts: Record<string, LineAlert>;
   form: { name: string; email: string; phone: string; note: string };
   touched: Partial<Record<"name" | "email" | "phone", boolean>>;
+  /** Details Adminium refused, by field, until the diner changes them. */
+  fieldErrors: Partial<Record<"name" | "email" | "phone", FieldError>>;
+  /** The first visit's time is chosen for the diner; after that only the diner chooses. */
+  autoPick: boolean;
   placing: boolean;
   placeError: PlaceError | null;
   /** Kept from the first press until an answer: a retry lands on the same order. */
   clientKey: string | null;
-  priceChanged: { lines: { name: string; from: number; to: number }[]; total: number } | null;
+  /** The total the dialog showed, as Adminium wrote it: what "Place order" then sends. */
+  priceChanged: { lines: { name: string; from: number; to: number }[]; total: number; totalText: string } | null;
   soldOut: { dishId: Id; short: boolean; left: number | null; day: Day } | null;
   slotNotice: SlotNotice | null;
   placed: Placed | null;
@@ -121,6 +133,8 @@ export const useDiner = create<DinerState>(() => ({
   touched: {},
   placing: false,
   placeError: null,
+  fieldErrors: {},
+  autoPick: true,
   clientKey: null,
   priceChanged: null,
   soldOut: null,
@@ -239,10 +253,21 @@ export async function reloadAll(): Promise<void> {
 
 /** The first visit's time: the earliest free one of the day being ordered for. Never changes a chosen one. */
 function preselect(now: number): void {
-  if (get().pick !== null) return;
+  if (get().pick !== null || !get().autoPick) return;
   const day = activeDay(now);
   const first = slotsOn(day, now).find((s) => !s.off);
-  if (first !== undefined) set({ pick: { day: first.day, time: first.time } });
+  if (first !== undefined) set({ pick: { day: first.day, time: first.time }, autoPick: false });
+}
+
+/**
+ * While a press of "Place order" is unanswered (the kitchen could not be
+ * reached), the order stays as it was sent: pressing again lands on it, and a
+ * change first would make a second order.
+ */
+function pendingRetry(): boolean {
+  if (get().clientKey === null || get().placing) return false;
+  set({ placeError: "pending" });
+  return true;
 }
 
 // ── the cart ────────────────────────────────────────────────────────────────
@@ -252,6 +277,7 @@ export { lineKey } from "../lib/menu.ts";
 export const cartCount = (cart: readonly CartLine[]): number => cart.reduce((n, l) => n + l.qty, 0);
 
 function setCart(cart: CartLine[]): void {
+  if (pendingRetry()) return;
   const alerts = Object.fromEntries(Object.entries(get().alerts).filter(([key]) => cart.some((l) => l.key === key)));
   set({ cart, alerts, placeError: null });
   scheduleQuote();
@@ -334,7 +360,8 @@ export function setDrawer(open: boolean): void {
 // ── the pickup time ────────────────────────────────────────────────────────
 
 export function choose(day: Day, time: string): void {
-  set({ pick: { day, time }, slotNotice: null, placeError: null });
+  if (pendingRetry()) return;
+  set({ pick: { day, time }, slotNotice: null, placeError: null, autoPick: false });
   scheduleQuote();
 }
 
@@ -412,7 +439,7 @@ export async function runQuote(): Promise<void> {
   } catch (error) {
     if (quoteKeyOf() !== key) return scheduleQuote();
     set({ quote: { key, state: "err", reply: null } });
-    if (isApiError(error)) await readRefusal(error, "quote");
+    if (isApiError(error)) await readRefusal(error, "quote").catch(() => false);
   }
 }
 
@@ -440,9 +467,11 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     await refreshAvailability(now);
     const state = get().dishes[day]?.find((d) => d.id === String(target.dishId));
     const left = state?.left ?? null;
-    const alert: LineAlert = state?.state === "on" && left !== null && left > 0 ? { kind: "short", left, day } : { kind: "soldout", day };
+    // Still on sale: some are left — how many, the page is told only below five.
+    const alert: LineAlert =
+      state?.state === "on" ? (left !== null && left > 0 ? { kind: "short", left, day } : { kind: "fewer", day }) : { kind: "soldout", day };
     set({ alerts: { ...get().alerts, [target.key]: alert } });
-    if (during === "place") set({ soldOut: { dishId: target.dishId, short: alert.kind === "short", left: alert.kind === "short" ? alert.left : null, day } });
+    if (during === "place") set({ soldOut: { dishId: target.dishId, short: alert.kind !== "soldout", left: alert.kind === "short" ? alert.left : null, day } });
     return true;
   }
   const reason = error.params["reason"];
@@ -455,6 +484,19 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     await reloadAll();
     return true;
   }
+  // A detail as the diner typed it: the field says so.
+  const column = error.params["column"];
+  if (error.code === "PUBLIC_WRITE_REFUSED" && line === null && (column === "name" || column === "email" || column === "phone")) {
+    const kind: FieldError = column === "email" || column === "phone" || reason === "format" ? "invalid" : "plain";
+    set({ fieldErrors: { ...get().fieldErrors, [column]: kind }, touched: { ...get().touched, [column]: true } });
+    return true;
+  }
+  // A dish's option rules moved under the line (fewer or more to choose now): chosen again.
+  if (error.code === "PUBLIC_WRITE_REFUSED" && target !== undefined && error.params["group"] !== undefined) {
+    set({ alerts: { ...get().alerts, [target.key]: { kind: "options" } } });
+    await reloadAll();
+    return true;
+  }
   if (error.code === "PUBLIC_WRITE_REFUSED" && reason === "too-many" && error.params["column"] === "qty" && line === null) {
     if (during === "place") set({ placeError: "toomany" });
     return true;
@@ -462,7 +504,7 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
   if ((error.code === "PUBLIC_SLOT_FULL" || (error.code === "PUBLIC_WRITE_REFUSED" && error.params["column"] === "pickup_at")) && s.pick !== null) {
     // `out-of-hours`: the day's hours moved under the time; `out-of-range`: too soon now, or too far ahead.
     const why: SlotNotice["reason"] = error.code === "PUBLIC_SLOT_FULL" ? "full" : reason === "paused" ? "paused" : reason === "closed" || reason === "out-of-hours" ? "closed" : "too-soon";
-    set({ slotNotice: { time: s.pick.time, day: s.pick.day, reason: why }, pick: null });
+    set({ slotNotice: { time: s.pick.time, day: s.pick.day, reason: why }, pick: null, autoPick: false });
     await refreshAvailability(now);
     return true;
   }
@@ -473,7 +515,7 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     const changed = lines
       .map((l, i) => ({ name: s.data?.menu.dish(s.cart[i]?.dishId ?? -1)?.name ?? "", from: before[i] ?? 0, to: Number(l.data["unit_total"] ?? 0) }))
       .filter((l) => l.from !== l.to);
-    set({ priceChanged: { lines: changed, total: Number(error.params["total"] ?? 0) } });
+    set({ priceChanged: { lines: changed, total: Number(error.params["total"] ?? 0), totalText: String(error.params["total"] ?? "") } });
     return true;
   }
   return false;
@@ -488,7 +530,9 @@ function freshQuoteLines(): number[] {
 // ── checkout ────────────────────────────────────────────────────────────────
 
 export function setField(name: keyof DinerState["form"], value: string): void {
-  set({ form: { ...get().form, [name]: value }, placeError: null });
+  if (pendingRetry()) return;
+  const { [name as "name"]: _was, ...fieldErrors } = get().fieldErrors;
+  set({ form: { ...get().form, [name]: value }, placeError: null, fieldErrors });
 }
 
 export function touch(name: "name" | "email" | "phone"): void {
@@ -507,7 +551,7 @@ function mintKey(): string {
  * they were shown. A lost answer keeps the retry key — pressing again lands
  * on the same order — and a busy slot is tried once more, quietly.
  */
-export async function placeOrder(language: string): Promise<Placed | null> {
+export async function placeOrder(language: string, shownTotal?: string): Promise<Placed | null> {
   const s = get();
   const quote = freshQuote();
   if (s.placing || quote === null || s.pick === null) return null;
@@ -522,7 +566,8 @@ export async function placeOrder(language: string): Promise<Placed | null> {
     language,
     client_key: clientKey,
   };
-  const body = { ...orderBody(values), expect: { total: Number(quote.data["total"]).toFixed(2) } };
+  // The total the diner was shown, exactly as Adminium wrote it (a currency may have three places).
+  const body = { ...orderBody(values), expect: { total: shownTotal ?? String(quote.data["total"]) } };
   for (let attempt = 0; ; attempt += 1) {
     try {
       const reply = await port().place(body, clientKey);
@@ -542,8 +587,8 @@ export async function placeOrder(language: string): Promise<Placed | null> {
     } catch (error) {
       if (isApiError(error) && error.code === "PUBLIC_SLOT_BUSY" && attempt === 0) continue;
       set({ placing: false });
-      if (!isApiError(error) || error.status === 0) {
-        // The order may be in: the key is kept, and pressing again lands on it.
+      if (!isApiError(error) || error.status === 0 || error.status >= 500 || error.code === "PUBLIC_UPSTREAM_UNAVAILABLE") {
+        // The order may be in (no answer, or a proxy's or the server's error after it was made): the key is kept, and pressing again lands on it.
         set({ placeError: "offline" });
         return null;
       }
@@ -551,7 +596,7 @@ export async function placeOrder(language: string): Promise<Placed | null> {
       set({ clientKey: null });
       if (error.code === "PUBLIC_LIMIT_REACHED") set({ placeError: "limit" });
       else if (error.code === "PUBLIC_RATE_LIMITED") set({ placeError: "busy" });
-      else if (!(await readRefusal(error, "place"))) set({ placeError: "failed" });
+      else if (!(await readRefusal(error, "place").catch(() => false))) set({ placeError: "failed" });
       if (error.code !== "PUBLIC_PRICE_CHANGED") scheduleQuote();
       return null;
     }
@@ -560,9 +605,11 @@ export async function placeOrder(language: string): Promise<Placed | null> {
 
 /** The price changed: accept the new total and place again. */
 export async function acceptNewPrice(language: string): Promise<Placed | null> {
+  const shown = get().priceChanged?.totalText;
   set({ priceChanged: null });
   await runQuote();
-  return placeOrder(language);
+  // The total the dialog showed: if it moved again meanwhile, Adminium says so once more.
+  return placeOrder(language, shown === "" ? undefined : shown);
 }
 
 export function dismissPriceChanged(): void {

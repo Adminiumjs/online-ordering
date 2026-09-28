@@ -101,7 +101,7 @@ const DE: Sentences = {
   cancelSubject: "Wir mussten #{{order.number}} stornieren",
   confirmName: "Bestellbestätigung",
   confirmPhoneName: "Bestellbestätigung (Telefon)",
-  confirmSubject: "Deine Bestellung #{{order.number}} ist da",
+  confirmSubject: "Deine Bestellung #{{order.number}} ist eingegangen",
   confirmPreheader: "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
   confirmBody: "Wir haben deine Bestellung #{{order.number}} für {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} um {{order.pickup_at.time}}.",
   follow: "Bestellung verfolgen",

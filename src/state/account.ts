@@ -126,13 +126,18 @@ export async function openSignInLink(token: string): Promise<boolean> {
   set({ find: { ...freshFind(), step: "signing" } });
   try {
     await port().verifyLink(token);
-    await signedIn();
-    set({ find: freshFind() });
-    return true;
   } catch {
     set({ find: { ...freshFind(), linkExpired: true } });
     return false;
   }
+  // Signed in: a link is used once, so a read that fails now is tried again, never called expired.
+  set({ find: freshFind() });
+  try {
+    await signedIn();
+  } catch {
+    await signedIn().catch(() => undefined);
+  }
+  return true;
 }
 
 /** Reads who is signed in on this browser, and their orders. */
@@ -156,7 +161,11 @@ export function toggleAccountMenu(open?: boolean): void {
 }
 
 export async function signOut(): Promise<void> {
-  await port().signOut();
+  try {
+    await port().signOut();
+  } catch {
+    // Signed out on this page whatever the answer: the tab's session is gone.
+  }
   set({ person: null, orders: null, menuOpen: false, notice: null });
 }
 
@@ -192,7 +201,7 @@ export async function deleteDetails(language: string): Promise<"deleted" | "step
     set({ busy: false, deleteAsk: false });
     if (isApiError(error) && error.code === "PUBLIC_CODE_STEP_UP") {
       const email = get().person?.email;
-      if (email !== undefined) await port().requestSignIn(email, language);
+      if (email !== undefined) await port().requestSignIn(email, language).catch(() => undefined);
       set({ deletePending: true });
       return "stepUp";
     }

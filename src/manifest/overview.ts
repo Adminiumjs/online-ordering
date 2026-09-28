@@ -225,7 +225,7 @@ export const OVERVIEW_LAYOUT = {
           { name: "slot_at", label: "Pickup time", logicalType: "timestamptz" },
           { name: "paused_by", label: "Paused by" },
         ],
-        viewAllHref: "/p/ordering-slot-pauses?f.active=eq:true",
+        viewAllHref: "/p/ordering-paused-slots?f.active=eq:true",
         binding: list("slot_pauses", {
           select: ["id", "slot_at", "paused_by"],
           filters: [eq("active", true), day("slot_at", "gte", "today")],

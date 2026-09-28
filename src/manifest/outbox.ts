@@ -106,6 +106,6 @@ export const OUTBOX = {
     ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }) })),
     // Drawn by Invoices & Receipts: without it attached, no receipt is queued at all.
     { kind: "order-receipt", link: "order_id", gate: { feature: "receipts" }, ...onOrder("status", "picked_up"), ...heldWhileUndone(["ready"]) },
-    { kind: "enquiry-received", link: "enquiry_id", onCreate: { table: "enquiries" }, recipient: { column: "email", name: "name" } },
+    { kind: "enquiry-received", link: "enquiry_id", onCreate: { table: "enquiries" }, recipient: { column: "email", name: "name", language: "language" } },
   ],
 };

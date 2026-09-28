@@ -79,10 +79,16 @@ export async function openTrack(token: string, first = false): Promise<void> {
   useTrack.setState({ state: "loading", token, first, order: null, stale: false, source: "link" });
   try {
     await sources().diner.openLink(token);
-    await readTrack();
   } catch (error) {
-    useTrack.setState({ state: isApiError(error) && (error.code === "LINK_EXPIRED" || error.code === "PUBLIC_REF_NOT_FOUND") ? "expired" : "error" });
+    const expired = isApiError(error) && (error.code === "LINK_EXPIRED" || error.code === "PUBLIC_REF_NOT_FOUND");
+    // A link that opens nothing any more is not this device's to keep.
+    if (expired && lastLink() === token) forgetLink();
+    useTrack.setState({ state: expired ? "expired" : "error" });
+    return;
   }
+  await readTrack();
+  // Opened, but the first read did not answer: said, with its Retry, never an endless skeleton.
+  if (useTrack.getState().state === "loading") useTrack.setState({ state: "error" });
 }
 
 /** Shows an order placed on this page whose reply carried no link (a replay): its figures, no reading. */
@@ -110,6 +116,8 @@ export async function readTrack(): Promise<void> {
   try {
     const order = await sources().diner.linkedOrder();
     useTrack.setState({ state: "ok", order, updatedAt: sources().clock.now(), stale: false });
+    // A finished order is not kept for "Track an order": the next person on this device sees nothing of it.
+    if (!moving(order) && token !== null && lastLink() === token) forgetLink();
   } catch (error) {
     // The link's session lapsed (a fixed half hour): the order reads as nobody's, and the kept code opens it again.
     if (isApiError(error) && (error.status === 401 || error.code === "PUBLIC_REF_NOT_FOUND") && token !== null) {
@@ -142,7 +150,17 @@ export async function cancelTracked(): Promise<"cancelled" | "started" | "failed
   useTrack.setState({ cancelling: true });
   try {
     if (useTrack.getState().source === "account") await sources().diner.cancelMine(order.order.id);
-    else await sources().diner.cancelLinked(order.order.id);
+    else {
+      try {
+        await sources().diner.cancelLinked(order.order.id);
+      } catch (error) {
+        // The link's own session lapsed (half an hour): opened again with its code, the cancel is asked once more.
+        const token = useTrack.getState().token;
+        if (!isApiError(error) || error.status !== 404 || token === null) throw error;
+        await sources().diner.openLink(token);
+        await sources().diner.cancelLinked(order.order.id);
+      }
+    }
     await readTrack();
     return "cancelled";
   } catch (error) {

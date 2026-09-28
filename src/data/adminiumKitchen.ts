@@ -77,7 +77,12 @@ export interface KitchenDoorOptions {
   reload?: () => Promise<StaffConfig | null>;
 }
 
+/** `EventSource.CLOSED`: the browser will not try again by itself. */
+const CLOSED = 2;
+
 export interface EventSourceLike {
+  /** 0 connecting, 1 open, 2 closed for good. */
+  readonly readyState?: number;
   onopen: ((event: unknown) => void) | null;
   onerror: ((event: unknown) => void) | null;
   addEventListener(type: string, listener: (event: { data: string }) => void): void;
@@ -441,35 +446,64 @@ export class AdminiumKitchen implements KitchenPort {
   subscribe(listener: (frame: LiveFrame) => void, onState?: (state: "live" | "reconnecting") => void): () => void {
     let source: EventSourceLike | null = null;
     let closed = false;
-    void (async () => {
-      const conn = this.cfg.connectionId ?? (await this.t.connection());
-      // Only the tables this person may read: one channel refused refuses the stream.
-      const readable = LIVE.filter((table) => this.cfg.access === null || this.cfg.access.tables[table]?.includes("read") === true);
-      const ids = await Promise.all(readable.map(async (table) => [await this.t.tableId(this.real(table)), table] as const));
-      const byChannel = new Map(ids.map(([id, table]) => [`widget-data:${conn}:${id}`, table]));
-      if (closed || byChannel.size === 0) return;
-      const url = `/api/v1/events?channels=${[...byChannel.keys()].map(encodeURIComponent).join(",")}`;
-      source = (this.opts.stream ?? ((u: string) => new EventSource(u, { withCredentials: true }) as unknown as EventSourceLike))(url);
-      source.onopen = () => onState?.("live");
-      source.onerror = () => onState?.("reconnecting");
-      const hear = (op: LiveFrame["op"]) => (event: { data: string }) => {
-        try {
-          const frame = JSON.parse(event.data) as { channel?: string; data?: { pk?: { id?: unknown } } };
-          const table = byChannel.get(String(frame.channel));
-          if (table === undefined) return;
-          // A frame's row is masked for everyone: it says what changed, and the screens read it again.
-          listener({ table, id: Number(frame.data?.pk?.id ?? 0), op });
-        } catch {
-          // not a frame
-        }
-      };
-      source.addEventListener("record.create", hear("insert"));
-      source.addEventListener("record.update", hear("update"));
-      source.addEventListener("record.delete", hear("delete"));
-      source.addEventListener("record.bulk-create", hear("insert"));
-    })();
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
+    /**
+     * A browser gives a stream up for good on any reply but a 200 (a deploy's 502, a 503): the
+     * stream is opened again, waiting longer each time up to half a minute, and so is one whose
+     * setting up failed. The board shows it is reconnecting the whole while.
+     */
+    const again = () => {
+      if (closed) return;
+      onState?.("reconnecting");
+      const wait = Math.min(30_000, 1_000 * 2 ** attempt);
+      attempt += 1;
+      retry = setTimeout(() => void open(), wait);
+    };
+    const open = async () => {
+      try {
+        const conn = this.cfg.connectionId ?? (await this.t.connection());
+        // Only the tables this person may read: one channel refused refuses the stream.
+        const readable = LIVE.filter((table) => this.cfg.access === null || this.cfg.access.tables[table]?.includes("read") === true);
+        const ids = await Promise.all(readable.map(async (table) => [await this.t.tableId(this.real(table)), table] as const));
+        const byChannel = new Map(ids.map(([id, table]) => [`widget-data:${conn}:${id}`, table]));
+        if (closed || byChannel.size === 0) return;
+        const url = `/api/v1/events?channels=${[...byChannel.keys()].map(encodeURIComponent).join(",")}`;
+        const opened = (this.opts.stream ?? ((u: string) => new EventSource(u, { withCredentials: true }) as unknown as EventSourceLike))(url);
+        source = opened;
+        opened.onopen = () => {
+          attempt = 0;
+          onState?.("live");
+        };
+        opened.onerror = () => {
+          if (opened.readyState === CLOSED) {
+            opened.close();
+            again();
+          } else onState?.("reconnecting");
+        };
+        const hear = (op: LiveFrame["op"]) => (event: { data: string }) => {
+          try {
+            const frame = JSON.parse(event.data) as { channel?: string; data?: { pk?: { id?: unknown } } };
+            const table = byChannel.get(String(frame.channel));
+            if (table === undefined) return;
+            // A frame's row is masked for everyone: it says what changed, and the screens read it again.
+            listener({ table, id: Number(frame.data?.pk?.id ?? 0), op });
+          } catch {
+            // not a frame
+          }
+        };
+        opened.addEventListener("record.create", hear("insert"));
+        opened.addEventListener("record.update", hear("update"));
+        opened.addEventListener("record.delete", hear("delete"));
+        opened.addEventListener("record.bulk-create", hear("insert"));
+      } catch {
+        again();
+      }
+    };
+    void open();
     return () => {
       closed = true;
+      if (retry !== null) clearTimeout(retry);
       source?.close();
     };
   }

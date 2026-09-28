@@ -10,7 +10,7 @@ import { useI18n } from "../i18n/index.tsx";
 import { useNow } from "../data/sources.ts";
 import { loadDiner, refreshAvailability, useDiner } from "../state/diner.ts";
 import { openSignInLink, resumeDelete, signedIn } from "../state/account.ts";
-import { openTrack, readTrack, useTrack } from "../state/track.ts";
+import { openTrack, useTrack } from "../state/track.ts";
 import { goDiner, useUi, type DinerView } from "../state/ui.ts";
 import { DinerShell } from "../diner/Shell.tsx";
 import { Home } from "../diner/Home.tsx";
@@ -59,7 +59,6 @@ export default function DinerApp({ link }: { link: BootLink | null }) {
     if (!loaded) return;
     // A read the network drops is read again at the next minute: the page keeps what it showed.
     refreshAvailability(now).catch(() => undefined);
-    if (useUi.getState().dinerView === "track" && useTrack.getState().state === "ok") void readTrack();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minute, loaded]);
 

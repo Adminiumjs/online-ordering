@@ -38,11 +38,20 @@ export interface LineState {
   sold: boolean;
   /** Fewer are left than the line asks for: how many. */
   over: number | null;
+  /** Fewer are left than the line asks for, and the page is not told how many. */
+  fewer: boolean;
+  /** The dish's choices changed: its options are to be picked again. */
+  options: boolean;
   left: number | null;
   day: Day;
 }
 
 /** What the page knows about a line on the pickup day: gone from the menu, sold out, or asking for more than is left. */
+/** Why a chosen time went, in words: it filled, it was paused, the kitchen closed it, or it is too soon now. */
+function lapsedKey(reason: "full" | "too-soon" | "paused" | "closed" | undefined): "pick.lapsed" | "pick.lapsed.full" | "pick.lapsed.paused" | "pick.lapsed.closed" {
+  return reason === "full" ? "pick.lapsed.full" : reason === "paused" ? "pick.lapsed.paused" : reason === "closed" ? "pick.lapsed.closed" : "pick.lapsed";
+}
+
 export function useLineStates(): { states: Map<string, LineState>; day: Day } {
   const day = useDay();
   const cart = useDiner((s) => s.cart);
@@ -69,7 +78,8 @@ export function useLineStates(): { states: Map<string, LineState>; day: Day } {
     const sold = gone === null && (p.soldOut || alert?.kind === "soldout");
     const left = alert?.kind === "short" ? alert.left : p.left;
     const over = !sold && gone === null && left !== null && line.qty > left ? left : null;
-    states.set(line.key, { dish, gone, sold, over, left, day: forDay });
+    const fewer = !sold && gone === null && over === null && alert?.kind === "fewer";
+    states.set(line.key, { dish, gone, sold, over, fewer, options: gone === null && alert?.kind === "options", left, day: forDay });
   }
   return { states, day: forDay };
 }
@@ -129,6 +139,8 @@ export function CartLineRow({ line, index, state, size }: { line: CartLine; inde
         {state.sold && chip("danger", "circle-slash", dayWord === null ? t("cart.soldToday") : t("cart.soldFor", { day: dayWord }))}
         {state.over !== null &&
           chip("warn", "alert-circle", dayWord === null ? t("cart.onlyLeftToday", { count: fmt.number(state.over) }, state.over) : t("cart.onlyLeftFor", { count: fmt.number(state.over), day: dayWord }, state.over))}
+        {state.fewer && chip("warn", "alert-circle", dayWord === null ? t("cart.fewerToday") : t("cart.fewerFor", { day: dayWord }))}
+        {state.options && chip("warn", "alert-circle", t("cart.optionsAgain"))}
         {state.gone !== null && (
           <div role="alert" style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 8, padding: "10px 12px", borderRadius: 10, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 12.5, fontWeight: 700, lineHeight: 1.45 }}>
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -232,7 +244,7 @@ export function PickupPicker({ compact }: { compact: boolean }) {
       {lapsed !== null && (
         <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: compact ? "10px 12px" : "11px 13px", borderRadius: 11, background: "var(--warn-soft)", color: "var(--warn)", fontSize: compact ? 12.5 : 13, fontWeight: 700, lineHeight: 1.5 }}>
           <Icon name="timer-off" size={14} style={{ marginBlockStart: 2 }} />
-          <span>{t("pick.lapsed", { time: fmt.wall(lapsed.day, lapsed.time) })}</span>
+          <span>{t(lapsedKey(slotNotice?.reason), { time: fmt.wall(lapsed.day, lapsed.time) })}</span>
         </div>
       )}
       {dayNote !== null && (

@@ -499,8 +499,7 @@ export const MANIFEST_RULES = {
           "not_collected"
         ],
         "except": [
-          "link_stopped",
-          "paid_method"
+          "link_stopped"
         ]
       },
       "children": {
@@ -990,6 +989,17 @@ export const MANIFEST_RULES = {
           "note"
         ]
       },
+      "maxOpen": {
+        "column": "status",
+        "values": [
+          "placed",
+          "confirmed",
+          "preparing",
+          "ready"
+        ],
+        "n": 3,
+        "upcoming": "pickup_at"
+      },
       "children": {
         "order_items": {
           "via": "order_id",
@@ -1109,6 +1119,7 @@ export const MANIFEST_RULES = {
           ],
           "n": 5
         },
+        "perIpHour": 3,
         "perKeyHour": 60,
         "plainText": [
           "name",
@@ -1267,7 +1278,55 @@ export const MANIFEST_RULES = {
     },
     {
       "key": "manager",
-      "limits": null
+      "limits": {
+        "orders": {
+          "writable": [
+            "number_seq",
+            "number",
+            "status",
+            "pickup_at",
+            "name",
+            "phone",
+            "email",
+            "channel",
+            "note",
+            "item_count",
+            "subtotal",
+            "tax_rate",
+            "tax",
+            "total",
+            "paid_method",
+            "cancel_code",
+            "cancel_dish",
+            "cancel_note",
+            "placed_at",
+            "confirmed_at",
+            "confirmed_by",
+            "preparing_at",
+            "ready_at",
+            "ready_by",
+            "picked_up_at",
+            "picked_up_by",
+            "cancelled_at",
+            "cancelled_by",
+            "not_collected_at",
+            "language",
+            "customer_id",
+            "link_token",
+            "link_expires",
+            "link_stopped",
+            "client_key"
+          ],
+          "writableValues": {
+            "cancel_code": [
+              "ran_out",
+              "too_busy",
+              "customer_asked",
+              "other"
+            ]
+          }
+        }
+      }
     }
   ],
   "producers": [
@@ -1431,7 +1490,8 @@ export const MANIFEST_RULES = {
       },
       "recipient": {
         "column": "email",
-        "name": "name"
+        "name": "name",
+        "language": "language"
       }
     }
   ],

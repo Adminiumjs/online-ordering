@@ -2195,8 +2195,7 @@
               "not_collected"
             ],
             "except": [
-              "link_stopped",
-              "paid_method"
+              "link_stopped"
             ]
           },
           "children": {
@@ -2375,8 +2374,8 @@
                     "da-DK": "Ny",
                     "cs-CZ": "Nová",
                     "ar-EG": "جديد",
-                    "zh-CN": "新订单",
-                    "zh-TW": "新訂單"
+                    "zh-CN": "新",
+                    "zh-TW": "新"
                   },
                   "confirmed": {
                     "en-US": "Confirmed",
@@ -2535,14 +2534,14 @@
               "phone"
             ],
             "label": {
-              "en-US": "Taken",
-              "de-DE": "Belegt",
-              "fr-FR": "Pris",
-              "da-DK": "Optaget",
-              "cs-CZ": "Obsazeno",
-              "ar-EG": "محجوز",
-              "zh-CN": "已订",
-              "zh-TW": "已訂"
+              "en-US": "Channel",
+              "de-DE": "Kanal",
+              "fr-FR": "Canal",
+              "da-DK": "Kanal",
+              "cs-CZ": "Kanál",
+              "ar-EG": "القناة",
+              "zh-CN": "渠道",
+              "zh-TW": "管道"
             },
             "default": "online",
             "rules": {
@@ -3553,7 +3552,7 @@
             "nullable": true,
             "label": {
               "en-US": "Each",
-              "de-DE": "Stück",
+              "de-DE": "Einzelpreis",
               "fr-FR": "L’unité",
               "da-DK": "Pr. stk.",
               "cs-CZ": "Za kus",
@@ -3832,8 +3831,8 @@
                     "da-DK": "Ny",
                     "cs-CZ": "Nová",
                     "ar-EG": "جديد",
-                    "zh-CN": "新订单",
-                    "zh-TW": "新訂單"
+                    "zh-CN": "新",
+                    "zh-TW": "新"
                   },
                   "called": {
                     "en-US": "Called",
@@ -3905,8 +3904,8 @@
               "da-DK": "Til",
               "cs-CZ": "Na",
               "ar-EG": "لـ",
-              "zh-CN": "用于",
-              "zh-TW": "用於"
+              "zh-CN": "需要日期",
+              "zh-TW": "需要日期"
             }
           },
           {
@@ -4371,14 +4370,14 @@
             "type": "text",
             "maxLength": 254,
             "label": {
-              "en-US": "To",
-              "de-DE": "Bis",
-              "fr-FR": "Au",
-              "da-DK": "Til",
-              "cs-CZ": "Do",
-              "ar-EG": "إلى",
-              "zh-CN": "至",
-              "zh-TW": "至"
+              "en-US": "Sent to",
+              "de-DE": "Gesendet an",
+              "fr-FR": "Envoyé à",
+              "da-DK": "Sendt til",
+              "cs-CZ": "Odesláno na",
+              "ar-EG": "أُرسلت إلى",
+              "zh-CN": "发送至",
+              "zh-TW": "寄送至"
             },
             "nullable": true,
             "semantic": "email"
@@ -5425,7 +5424,7 @@
                     "label": "Paused by"
                   }
                 ],
-                "viewAllHref": "/p/ordering-slot-pauses?f.active=eq:true",
+                "viewAllHref": "/p/ordering-paused-slots?f.active=eq:true",
                 "binding": {
                   "kind": "table-query",
                   "source": {
@@ -7220,7 +7219,56 @@
         "table:@customers:read_pii",
         "table:@enquiries:read_pii",
         "table:@messages:read_pii"
-      ]
+      ],
+      "limits": {
+        "orders": {
+          "writable": [
+            "number_seq",
+            "number",
+            "status",
+            "pickup_at",
+            "name",
+            "phone",
+            "email",
+            "channel",
+            "note",
+            "item_count",
+            "subtotal",
+            "tax_rate",
+            "tax",
+            "total",
+            "paid_method",
+            "cancel_code",
+            "cancel_dish",
+            "cancel_note",
+            "placed_at",
+            "confirmed_at",
+            "confirmed_by",
+            "preparing_at",
+            "ready_at",
+            "ready_by",
+            "picked_up_at",
+            "picked_up_by",
+            "cancelled_at",
+            "cancelled_by",
+            "not_collected_at",
+            "language",
+            "customer_id",
+            "link_token",
+            "link_expires",
+            "link_stopped",
+            "client_key"
+          ],
+          "writableValues": {
+            "cancel_code": [
+              "ran_out",
+              "too_busy",
+              "customer_asked",
+              "other"
+            ]
+          }
+        }
+      }
     }
   ],
   "publicKeys": {
@@ -7606,6 +7654,17 @@
           "note"
         ]
       },
+      "maxOpen": {
+        "column": "status",
+        "values": [
+          "placed",
+          "confirmed",
+          "preparing",
+          "ready"
+        ],
+        "n": 3,
+        "upcoming": "pickup_at"
+      },
       "children": {
         "order_items": {
           "via": "order_id",
@@ -7725,6 +7784,7 @@
           ],
           "n": 5
         },
+        "perIpHour": 3,
         "perKeyHour": 60,
         "plainText": [
           "name",
@@ -8053,7 +8113,8 @@
         },
         "recipient": {
           "column": "email",
-          "name": "name"
+          "name": "name",
+          "language": "language"
         }
       }
     ]
@@ -8191,7 +8252,7 @@
           "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
         },
         "de-DE": {
-          "subject": "Deine Bestellung #{{order.number}} ist da",
+          "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
           "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
           "blocks": [
             {
@@ -9029,7 +9090,7 @@
           "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
         },
         "de-DE": {
-          "subject": "Deine Bestellung #{{order.number}} ist da",
+          "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
           "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
           "blocks": [
             {
@@ -11569,6 +11630,7 @@
         "orders",
         "order_items",
         "order_item_modifiers",
+        "customers",
         "messages"
       ]
     }

@@ -10,7 +10,7 @@ import { Bdi } from "../components/Bdi.tsx";
 import { useI18n, LOCALES, LOCALE_TAGS, type LocaleTag } from "../i18n/index.tsx";
 import { telHref } from "../lib/format.ts";
 import { cartCount, setDrawer, useDiner } from "../state/diner.ts";
-import { lastLink } from "../state/track.ts";
+import { lastLink, openTrack, useTrack } from "../state/track.ts";
 import { goDiner, setTheme, useUi } from "../state/ui.ts";
 import { useFmt, useVenue } from "../app/venue.ts";
 import { useDay, type DayFacts } from "./useDay.ts";
@@ -66,6 +66,7 @@ export function trackAnOrder(): void {
   if (link !== null) {
     window.location.hash = link;
     goDiner("track");
+    if (useTrack.getState().token !== link || useTrack.getState().state !== "ok") void openTrack(link);
   } else goDiner("find");
 }
 

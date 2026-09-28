@@ -34,6 +34,11 @@ export interface DinerDoorOptions {
   fetch?: typeof fetch;
   /** The tab's storage, or none (a private window, a test). */
   storage?: Storage | null;
+  /**
+   * The browser's storage every tab shares (a sign-in link opens in a new tab): it holds only the
+   * address the diner typed, while their own row cannot be read back, until they sign out.
+   */
+  shared?: Storage | null;
   clock?: () => number;
 }
 
@@ -45,6 +50,17 @@ const PAGE = 200;
 /** A session as the tab keeps it: the client's, and when it was opened (the wire never says). */
 interface Kept extends HeldSession {
   at: number;
+}
+
+const TYPED = "ordering.signin.email";
+
+/** The storage every tab shares, or none. */
+function sharedStorage(): Storage | null {
+  try {
+    return typeof localStorage === "undefined" ? null : localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /** The tab's storage, or none. */
@@ -77,6 +93,7 @@ export class AdminiumDiner implements DinerPort {
   private readonly served: DinerServed;
   private readonly refs: Refs;
   private readonly storage: Storage | null;
+  private readonly shared: Storage | null;
   private readonly clock: () => number;
   private readonly customer: PublicClient;
   private readonly link: PublicClient | null;
@@ -86,6 +103,7 @@ export class AdminiumDiner implements DinerPort {
     this.served = served;
     this.refs = publicRefs(served.tables);
     this.storage = options.storage === undefined ? tabStorage() : options.storage;
+    this.shared = options.shared === undefined ? sharedStorage() ?? this.storage : options.shared;
     this.clock = options.clock ?? Date.now;
     const client = (name: string, publishableKey: string, humanCheck: PublicClientHumanCheck) =>
       createPublicClient({
@@ -315,13 +333,20 @@ export class AdminiumDiner implements DinerPort {
 
   // ── signing in ──────────────────────────────────────────────────────────────
 
-  /** The address the diner typed, kept for the tab: their own row does not read it back yet. */
+  /** The address the diner typed, kept until they sign out: their own row does not read it back yet. */
   private typed(email?: string): string | null {
     try {
-      if (email !== undefined) this.storage?.setItem("ordering.signin.email", email);
-      return this.storage?.getItem("ordering.signin.email") ?? null;
+      if (email !== undefined) this.shared?.setItem(TYPED, email);
+      return this.shared?.getItem(TYPED) ?? null;
     } catch {
       return email ?? null;
+    }
+  }
+  private forgetTyped(): void {
+    try {
+      this.shared?.removeItem(TYPED);
+    } catch {
+      // storage refused: nothing was kept
     }
   }
 
@@ -400,6 +425,7 @@ export class AdminiumDiner implements DinerPort {
         await this.customer.signOut();
       } finally {
         this.keep("customer", null);
+        this.forgetTyped();
       }
     });
   }
@@ -410,6 +436,7 @@ export class AdminiumDiner implements DinerPort {
         await this.customer.signOutEverywhere();
       } finally {
         this.keep("customer", null);
+        this.forgetTyped();
       }
     });
   }
@@ -419,6 +446,7 @@ export class AdminiumDiner implements DinerPort {
       await this.customer.forgetMe();
       // Their orders' own links were made afresh: the one this tab followed opens nothing now.
       this.dropAll();
+      this.forgetTyped();
     });
   }
 

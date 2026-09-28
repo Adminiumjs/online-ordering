@@ -145,7 +145,7 @@ describe("the diner's writes are the few the page needs", () => {
 describe("the order's life is Adminium's", () => {
   it("moves one step at a time, refuses a second screen's repeat, and locks a finished order with its lines", () => {
     expect(states()["strict"]).toBe(true);
-    expect(states()["lock"]).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped", "paid_method"] });
+    expect(states()["lock"]).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] });
     expect(states()["children"]).toEqual({ order_items: { via: "order_id", lock: true } });
   });
 
@@ -251,5 +251,16 @@ describe("every word the manifest shows", () => {
     const { untranslated } = await import("./labels.ts");
     buildManifest();
     expect(untranslated()).toEqual([]);
+  });
+});
+
+describe("the Overview's links", () => {
+  it("open pages the app declares", () => {
+    const manifest = buildManifest() as { pages: { ref: string; config?: { layout?: { items: { config: Record<string, unknown> }[] } } }[] };
+    const refs = new Set(manifest.pages.map((p) => p.ref));
+    const overview = manifest.pages.find((p) => p.ref === "ordering-overview")!;
+    const hrefs = overview.config!.layout!.items.flatMap((item) => [item.config["href"], item.config["viewAllHref"]]).filter((h): h is string => typeof h === "string");
+    expect(hrefs.length).toBeGreaterThan(10);
+    expect(hrefs.map((h) => /^\/p\/([^?]+)/.exec(h)?.[1]).filter((ref) => ref === undefined || !refs.has(ref))).toEqual([]);
   });
 });

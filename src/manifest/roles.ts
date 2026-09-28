@@ -18,7 +18,7 @@
  * the limits below are what refuse the write — a hidden button is not a lock.
  */
 import { PAGE_REFS } from "./pages.ts";
-import { KITCHEN_CANCEL_CODES, MENU_TABLES, TABLE_REFS } from "./tables.ts";
+import { KITCHEN_CANCEL_CODES, MENU_TABLES, TABLE_REFS, TABLES } from "./tables.ts";
 
 const grant = (table: string, ...actions: string[]) => actions.map((action) => `table:@${table}:${action}`);
 const view = (page: string) => `page:@${page}:view`;
@@ -70,5 +70,12 @@ export const ROLES = [
       ...PAGE_REFS.flatMap((page) => [view(page), `page:@${page}:edit`]),
       ...["orders", "customers", "enquiries", "messages"].map(pii),
     ],
+    limits: {
+      // "Cancelled by the customer" and "not ready by closing" are the diner's and the clock's to give, never a person's here.
+      orders: {
+        writable: TABLES.find((t) => t.ref === "orders")!.columns.map((c) => c.ref).filter((ref) => ref !== "id"),
+        writableValues: { cancel_code: KITCHEN_CANCEL_CODES },
+      },
+    },
   },
 ];

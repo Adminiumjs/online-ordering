@@ -345,7 +345,7 @@ export const TABLES: Table[] = [
       },
       // A finished order is never re-priced: its lines are locked with it. How it
       // was paid stays open, so a hand-over taken back is unpaid again.
-      lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped", "paid_method"] },
+      lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] },
       children: { order_items: { via: "order_id", lock: true } },
       timed: [
         { from: "ready", to: "not_collected", at: closing() },
@@ -374,7 +374,7 @@ export const TABLES: Table[] = [
       text("phone", 32, "Phone", { ...opt, rules: { validation: { format: "phone" } } }),
       // A phone order may have none; the diner's own order always has one.
       text("email", 254, "Email", { ...opt, semantic: "email", rules: { validation: { format: "email" } } }),
-      choice("channel", "Taken", { online: "Online", phone: "Phone" }, { default: "online" }),
+      choice("channel", "Channel", { online: "Online", phone: "Phone" }, { default: "online" }),
       text("note", 140, "Note for the kitchen", opt),
       int("item_count", "Items", { ...opt, rules: { rollup: { from: "order_items", via: "order_id", sum: "qty" } } }),
       money("subtotal", "Subtotal", { rollup: { from: "order_items", via: "order_id", sum: "line_total" } }),
@@ -501,7 +501,7 @@ export const TABLES: Table[] = [
         default: "queued",
         tones: { queued: "info", sent: "pos", failed: "danger", skipped: "neutral" },
       }),
-      text("to_address", 254, "To", { ...opt, semantic: "email" }),
+      text("to_address", 254, "Sent to", { ...opt, semantic: "email" }),
       text("language", 16, "Language", opt),
       fk("order_id", "orders", "Order", opt),
       fk("enquiry_id", "enquiries", "Large order", opt),

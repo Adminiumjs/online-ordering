@@ -251,8 +251,12 @@ export async function refreshAll(): Promise<void> {
   }
 }
 
-/** Listens to the live stream while the kitchen is open. */
+/**
+ * Listens to the live stream while the kitchen is open. Each time it opens — the first time too —
+ * the board is read once, so nothing that changed before the stream was there is missed.
+ */
 export function goLive(): () => void {
+  set({ conn: "reconnecting" });
   return port().subscribe(
     (frame) => refresh([frame.table]),
     (state) => {
