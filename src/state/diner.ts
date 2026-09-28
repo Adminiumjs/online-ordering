@@ -128,6 +128,11 @@ export const useDiner = create<DinerState>(() => ({
   placed: null,
 }));
 
+// A cart waiting for the free times to be priced on: priced as soon as they are read.
+useDiner.subscribe((state, before) => {
+  if (state.slots !== before.slots && state.cart.length > 0 && state.quote === null) scheduleQuote();
+});
+
 useDiner.subscribe((state, before) => {
   if (state.cart === before.cart) return;
   try {
@@ -401,10 +406,11 @@ export async function runQuote(): Promise<void> {
   set({ quote: { key, state: "busy", reply: get().quote?.reply ?? null } });
   try {
     const reply = await port().quote(orderBody({}, true));
-    if (quoteKeyOf() !== key) return;
+    // The cart, the time or the free times moved while it was asked: ask again for what is there now.
+    if (quoteKeyOf() !== key) return scheduleQuote();
     set({ quote: { key, state: "ok", reply }, alerts: {} });
   } catch (error) {
-    if (quoteKeyOf() !== key) return;
+    if (quoteKeyOf() !== key) return scheduleQuote();
     set({ quote: { key, state: "err", reply: null } });
     if (isApiError(error)) await readRefusal(error, "quote");
   }
@@ -531,7 +537,7 @@ export async function placeOrder(language: string): Promise<Placed | null> {
         replayed: reply.replayed === true,
       };
       set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {} });
-      void refreshAvailability(sources().clock.now());
+      refreshAvailability(sources().clock.now()).catch(() => undefined);
       return placed;
     } catch (error) {
       if (isApiError(error) && error.code === "PUBLIC_SLOT_BUSY" && attempt === 0) continue;

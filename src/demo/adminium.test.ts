@@ -53,6 +53,17 @@ function kwame(overrides: Partial<Record<string, unknown>> = {}, lines?: OrderBo
 }
 const line = (name: string, qty: number) => ({ values: { menu_item_id: dish(name).id, qty } });
 
+/**
+ * A real order — Kwame's, placed on the page — moved on by the kitchen to a
+ * state: the sample's own orders are sample data, and no email is ever about one.
+ */
+async function real(to: "placed" | "confirmed" | "preparing" | "ready" = "placed", key = "real"): Promise<number> {
+  const placed = await demo.diner.place(kwame(), `${key}-${to}-0123456789abcdef`);
+  const steps = ["placed", "confirmed", "preparing", "ready"];
+  for (let i = 1; i <= steps.indexOf(to); i += 1) await demo.kitchen.move(placed.data.id, steps[i - 1]!, steps[i]!);
+  return placed.data.id;
+}
+
 async function refusal(promise: Promise<unknown>): Promise<ApiError> {
   try {
     await promise;
@@ -274,10 +285,13 @@ describe("the kitchen's moves", () => {
   });
 
   it("undoes Ready within the minute: the ready stamps cleared, the cooking kept, the email dropped", async () => {
-    const id = order("2114").id;
-    await demo.kitchen.move(id, "preparing", "ready");
-    const back = await demo.kitchen.move(id, "ready", "preparing");
+    const sample = order("2114").id;
+    await demo.kitchen.move(sample, "preparing", "ready");
+    const back = await demo.kitchen.move(sample, "ready", "preparing");
     expect([back["status"], back["ready_at"], back["ready_by"], back["preparing_at"]]).toEqual(["preparing", null, null, at("11:28")]);
+    // The email, on a real order: the sample's are sample data.
+    const id = await real("ready");
+    await demo.kitchen.move(id, "ready", "preparing");
     demo.advance(1);
     expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-ready").map((m) => m["status"])).toEqual(["skipped"]);
     // Ready again: the email goes this time.
@@ -294,15 +308,18 @@ describe("the kitchen's moves", () => {
   });
 
   it("cancels only with a reason, and \"ran out\" emails the diner that reason", async () => {
-    const id = order("2116").id;
+    const id = await real();
     expect((await refusal(demo.kitchen.move(id, "placed", "cancelled"))).code).toBe("STATE_MOVE_REFUSED");
     const cancelled = await demo.kitchen.cancel(id, "placed", "ran_out", "Wild mushroom", null);
     expect([cancelled["cancel_code"], cancelled["cancel_dish"], cancelled["cancelled_by"]]).toEqual(["ran_out", "Wild mushroom", "Sam"]);
     expect(demo.world.where("messages", (m) => m["order_id"] === id).map((m) => m["kind"])).toContain("order-cancelled-ran-out");
+    // A sample order's cancel says nothing to anyone.
+    await demo.kitchen.cancel(order("2116").id, "placed", "ran_out", "Wild mushroom", null);
+    expect(demo.world.where("messages", (m) => m["order_id"] === order("2116").id && String(m["kind"]).startsWith("order-cancelled"))).toEqual([]);
   });
 
   it("hands over only with how it was paid, then locks the order and its lines", async () => {
-    const id = order("2113").id;
+    const id = await real("ready");
     const handed = await demo.kitchen.handOff(id, "card");
     expect([handed["status"], handed["paid_method"], handed["picked_up_by"]]).toEqual(["picked_up", "card", "Sam"]);
     const locked = await refusal(demo.kitchen.cancel(id, "picked_up", "other", null, "x"));
@@ -312,10 +329,13 @@ describe("the kitchen's moves", () => {
   });
 
   it("lets a manager take a hand-over back: ready and unpaid again, the held receipt dropped", async () => {
-    const id = order("2113").id;
-    await demo.kitchen.handOff(id, "cash");
-    const back = await demo.kitchen.move(id, "picked_up", "ready");
+    const sample = order("2113").id;
+    await demo.kitchen.handOff(sample, "cash");
+    const back = await demo.kitchen.move(sample, "picked_up", "ready");
     expect([back["status"], back["paid_method"], back["picked_up_at"], back["picked_up_by"], back["ready_at"]]).toEqual(["ready", null, null, null, at("11:34")]);
+    const id = await real("ready");
+    await demo.kitchen.handOff(id, "cash");
+    await demo.kitchen.move(id, "picked_up", "ready");
     demo.advance(1);
     expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt").map((m) => [m["status"], m["skip_reason"]])).toEqual([["skipped", "no-longer-needed"]]);
   });
@@ -331,7 +351,7 @@ describe("the kitchen's moves", () => {
 
   it("queues no receipt at all without Invoices & Receipts", async () => {
     demo.kitchen.addOns.invoices = false;
-    const id = order("2113").id;
+    const id = await real("ready");
     await demo.kitchen.handOff(id, "card");
     demo.advance(1);
     expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt")).toEqual([]);
@@ -347,12 +367,15 @@ describe("the kitchen's moves", () => {
 
 describe("the clock", () => {
   it("marks a ready order not collected at closing, and cancels an unfinished one half an hour later", async () => {
+    const mine = await real();
     demo.advanceTo(instantOf(TODAY, "21:00", ZONE));
     expect(order("2113")["status"]).toBe("not_collected");
     expect(order("2116")["status"]).toBe("placed");
     demo.advanceTo(instantOf(TODAY, "21:30", ZONE));
     expect([order("2116")["status"], order("2116")["cancel_code"], order("2114")["status"]]).toEqual(["cancelled", "closed", "cancelled"]);
-    expect(demo.world.where("messages", (m) => m["order_id"] === order("2116").id).map((m) => m["kind"])).toContain("order-cancelled-closed");
+    // A real order's diner is told why; nobody hears of the sample's.
+    expect(demo.world.where("messages", (m) => m["order_id"] === mine).map((m) => m["kind"])).toContain("order-cancelled-closed");
+    expect(demo.world.where("messages", (m) => m["order_id"] === order("2116").id && String(m["kind"]).startsWith("order-cancelled"))).toEqual([]);
     // Tomorrow's pre-order is not today's to sweep.
     expect(order("2107")["status"]).toBe("placed");
   });

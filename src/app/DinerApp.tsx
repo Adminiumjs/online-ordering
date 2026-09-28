@@ -51,13 +51,14 @@ export default function DinerApp({ link }: { link: BootLink | null }) {
         goDiner(ok ? "orders" : "find");
         if (ok) resumeDelete();
       });
-    else void signedIn();
+    else signedIn().catch(() => undefined);
   }, [link]);
 
   // The kitchen's clock moved: what is free now, and where the followed order stands.
   useEffect(() => {
     if (!loaded) return;
-    void refreshAvailability(now);
+    // A read the network drops is read again at the next minute: the page keeps what it showed.
+    refreshAvailability(now).catch(() => undefined);
     if (useUi.getState().dinerView === "track" && useTrack.getState().state === "ok") void readTrack();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minute, loaded]);

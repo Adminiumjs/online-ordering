@@ -145,7 +145,8 @@ export class Engine {
    */
   judgeSlot(pickupAt: unknown, origin: Writer["origin"], except?: Id): void {
     const refuse = (code: "closed" | "out-of-hours" | "out-of-range" | "paused" | "required"): never => {
-      if (origin === "public") throw refusedValue("pickup_at", code === "required" ? "out-of-range" : code);
+      // A diner's order with no pickup time at all is refused naming nothing: the page always sends one.
+      if (origin === "public") throw code === "required" ? refusedWrite() : refusedValue("pickup_at", code);
       const reason = code === "required" ? undefined : `CAPACITY_${code.toUpperCase().replace(/-/g, "_")}`;
       throw new ApiError(422, "VALIDATION_FAILED", "Some values were refused.", { fields: { pickup_at: { code } }, ...(reason === undefined ? {} : { reason }) });
     };
@@ -196,7 +197,8 @@ export class Engine {
       const { left } = this.portions(dish, day);
       const soldout = left !== null && left < asked;
       const shown = left !== null && left < 5 ? Math.max(0, left) : undefined;
-      return { id: String(dish.id), state: soldout ? "soldout" : "on", ...(shown === undefined || soldout ? {} : { left: shown }) };
+      // Below five, how many are left is said — none left too.
+      return { id: String(dish.id), state: soldout ? "soldout" : "on", ...(shown === undefined ? {} : { left: shown }) };
     });
   }
 
@@ -450,6 +452,8 @@ export class Engine {
 
   /** Queues what the producers queue for a write (a create when `before` is null). */
   produce(table: Table, before: Row | null, after: Row): void {
+    // A row the sample added is sample data: no email is ever about it.
+    if (this.world.isSample(table, after.id)) return;
     for (const producer of MANIFEST_RULES.producers as readonly Record<string, unknown>[]) {
       const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
       if (source.table !== table) continue;

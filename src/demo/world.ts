@@ -68,6 +68,15 @@ export class World {
       if (n !== null) Object.assign(enquiry, { ref_seq: n, ref: `LG-${String(n).padStart(4, "0")}` });
     }
     this.nextIds = Object.fromEntries(TABLES.map((t) => [t, Math.max(0, ...this.rows[t].map((r) => r.id)) + 1])) as Record<Table, number>;
+    this.firstReal = { ...this.nextIds };
+  }
+
+  /** The first key of each table after the sample's rows. */
+  private readonly firstReal: Record<Table, number>;
+
+  /** Whether a row is one the sample added: Adminium sends no email about one. */
+  isSample(table: Table, id: Id): boolean {
+    return id < this.firstReal[table];
   }
 
   all(table: Table): Row[] {

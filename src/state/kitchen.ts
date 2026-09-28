@@ -527,7 +527,8 @@ export function phoneDay(p: PhoneDraft): Day {
 function quoteTime(p: PhoneDraft): string | null {
   if (p.time !== null) return p.time;
   const day = phoneDay(p);
-  const firstMinute = day === kToday() ? Math.ceil(venueMinutes(now(), get().zone) / 15) * 15 : 0;
+  // A minute's margin: a quarter-hour just passing is past by the time the quote lands.
+  const firstMinute = day === kToday() ? Math.ceil((venueMinutes(now(), get().zone) + 1) / 15) * 15 : 0;
   return (get().slots[day] ?? []).find((s) => minutesOf(s.time) >= firstMinute && s.taken < s.size)?.time ?? null;
 }
 
