@@ -94,6 +94,12 @@ export interface StaffConfig {
   timezoneSource: string | null;
   serverTimezone: string | null;
   currency: string | null;
+  /**
+   * The server's clock when the config was answered (ISO): a screen keeps
+   * the difference and builds "today" from it, never from the browser's
+   * clock. Absent from servers up to 0.3.4 (and from older copies of this file).
+   */
+  now?: string | null;
   user: { id: string; name: string; email: string } | null;
   csrfToken: string | null;
   /**
@@ -197,6 +203,7 @@ export async function loadStaffConfig(opts: StaffConfigOptions = {}): Promise<St
       timezoneSource: text(d.timezoneSource),
       serverTimezone: text(d.serverTimezone),
       currency: text(d.currency),
+      now: text(d.now),
       user:
         text(user.id) === null
           ? null

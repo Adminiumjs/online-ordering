@@ -883,6 +883,7 @@ export const MANIFEST_RULES = {
         "GET"
       ],
       "select": [
+        "id",
         "venue_name",
         "headline",
         "intro",

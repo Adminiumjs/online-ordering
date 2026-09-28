@@ -77,6 +77,8 @@ const MENU_FILTERS: Record<string, unknown[]> = {
 
 /** The kitchen's public face: its words, its photos, its rules for a slot. */
 export const SETTINGS_SELECT = [
+  // The row's key: its photos are addressed by it.
+  "id",
   "venue_name",
   "headline",
   "intro",
