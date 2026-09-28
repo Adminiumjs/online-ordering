@@ -125,7 +125,8 @@ describe("placing an order", () => {
 
   it("refuses the third Wild mushroom today, naming the line", async () => {
     const error = await refusal(demo.diner.place(kwame({}, [line("Margherita", 1), line("Wild mushroom", 3)]), "k".repeat(22)));
-    expect([error.code, error.params]).toEqual(["PUBLIC_SOLD_OUT", { child: "order_items", index: 1, path: ["order_items", 1], column: "qty" }]);
+    // The line, and its link to what ran out.
+    expect([error.code, error.params]).toEqual(["PUBLIC_SOLD_OUT", { child: "order_items", index: 1, path: ["order_items", 1], column: "menu_item_id" }]);
     await expect(demo.diner.place(kwame({}, [line("Wild mushroom", 2)]), "m".repeat(22))).resolves.toBeDefined();
     expect((await demo.diner.dishes(TODAY)).find((s) => s.id === String(dish("Wild mushroom").id))!.state).toBe("soldout");
   });
@@ -167,11 +168,8 @@ describe("placing an order", () => {
   it("refuses a time too soon, a paused one, a full one, and one on a closed day", async () => {
     expect((await refusal(demo.diner.place(kwame({ pickup_at: at("11:45") }), "a".repeat(22)))).params).toEqual({ column: "pickup_at", reason: "out-of-range" });
     expect((await refusal(demo.diner.place(kwame({ pickup_at: at("13:00") }), "b".repeat(22)))).params).toEqual({ column: "pickup_at", reason: "paused" });
-    for (let i = 0; i < 4; i += 1) await demo.diner.place(kwame({ email: `fill${String(i)}@mail.example` }, [line("Lemonade", 1)]), `fill-${String(i)}-0123456789abcdef`);
-    await demo.diner.place(kwame({ email: "a@mail.example", pickup_at: at("12:15") }, [line("Lemonade", 1)]), "x".repeat(22));
-    await demo.diner.place(kwame({ email: "b@mail.example", pickup_at: at("12:15") }, [line("Lemonade", 1)]), "y".repeat(22));
-    await demo.diner.place(kwame({ email: "c@mail.example", pickup_at: at("12:15") }, [line("Lemonade", 1)]), "z".repeat(22));
-    await demo.diner.place(kwame({ email: "d@mail.example", pickup_at: at("12:15") }, [line("Lemonade", 1)]), "w".repeat(22));
+    // 12:15 holds two; the kitchen takes four by phone (a stranger's hour allows ten tries on this page, the two above included).
+    for (const name of ["A.", "B.", "C.", "D."]) await demo.kitchen.phoneOrder({ values: { name, phone: "(555) 010-0000", pickup_at: at("12:15") }, children: { order_items: [line("Lemonade", 1)] } }, `phone-${name}-0123456789abcdef`);
     const full = await refusal(demo.diner.place(kwame({ pickup_at: at("12:15") }), "c".repeat(22)));
     expect([full.status, full.code, full.params]).toEqual([409, "PUBLIC_SLOT_FULL", { column: "pickup_at" }]);
     expect((await demo.diner.slots(TODAY)).find((s) => s.time === "12:15")!.state).toBe("full");
@@ -181,14 +179,23 @@ describe("placing an order", () => {
     await demo.kitchen.setOnline(false);
     expect((await refusal(demo.diner.quote(kwame()))).code).toBe("PUBLIC_SWITCHED_OFF");
     expect((await refusal(demo.diner.place(kwame(), "k".repeat(22)))).status).toBe(403);
-    const phone = await demo.kitchen.phoneOrder({ values: { name: "Grace T.", phone: "(555) 014-2290", pickup_at: at("13:00") }, children: { order_items: [line("Margherita", 2)] } });
+    const phone = await demo.kitchen.phoneOrder({ values: { name: "Grace T.", phone: "(555) 014-2290", pickup_at: at("13:00") }, children: { order_items: [line("Margherita", 2)] } }, "grace-0123456789abcdef0");
     expect([phone.data["channel"], phone.data["status"], phone.data["email"] ?? null]).toEqual(["phone", "placed", null]);
   });
 
   it("refuses an eleventh order from one address in a day: the limit on an order nobody signed in for", async () => {
-    for (let i = 0; i < 9; i += 1) await demo.diner.place(kwame({ pickup_at: at(["12:30", "12:45", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45"][i]!) }, [line("Lemonade", 1)]), `cap-${String(i)}-0123456789abcdef`);
-    const error = await refusal(demo.diner.place(kwame({ pickup_at: at("15:00") }, [line("Lemonade", 1)]), "cap-last-0123456789abcdef"));
+    for (let i = 0; i < 10; i += 1) await demo.diner.place(kwame({ pickup_at: at(["12:30", "12:45", "13:15", "13:30", "13:45", "14:00", "14:15", "14:30", "14:45", "15:00"][i]!) }, [line("Lemonade", 1)]), `cap-${String(i)}-0123456789abcdef`);
+    const error = await refusal(demo.diner.place(kwame({ pickup_at: at("15:15") }, [line("Lemonade", 1)]), "cap-last-0123456789abcdef"));
     expect([error.status, error.code]).toEqual([409, "PUBLIC_LIMIT_REACHED"]);
+  });
+
+  it("counts a refused try against the limit, and hands back the charge of a value the diner typed wrong", async () => {
+    // Nine tries at a paused time: each keeps its charge.
+    for (let i = 0; i < 9; i += 1) await refusal(demo.diner.place(kwame({ pickup_at: at("13:00") }), `try-${String(i)}-0123456789abcdef`));
+    // A malformed phone is the diner's own value: handed back.
+    expect((await refusal(demo.diner.place(kwame({ phone: "call me" }), "bad-phone-0123456789abcdef"))).params).toEqual({ column: "phone", reason: "format" });
+    await demo.diner.place(kwame({ pickup_at: at("12:30") }), "tenth-0123456789abcdef");
+    expect((await refusal(demo.diner.place(kwame({ pickup_at: at("12:45") }), "eleventh-0123456789abcdef"))).code).toBe("PUBLIC_LIMIT_REACHED");
   });
 
   it("refuses a time on a day the kitchen is closed", async () => {
@@ -198,7 +205,8 @@ describe("placing an order", () => {
   });
 
   it("keeps what a stranger types plain text", async () => {
-    expect((await refusal(demo.diner.place(kwame({ name: "see https://x.example" }), "k".repeat(22)))).params).toEqual({ column: "name", reason: "plain-text" });
+    // Named, with no reason: the form says why.
+    expect((await refusal(demo.diner.place(kwame({ name: "see https://x.example" }), "k".repeat(22)))).params).toEqual({ column: "name" });
   });
 });
 
@@ -216,8 +224,9 @@ describe("the order's own link", () => {
     expect([cancelled["status"], cancelled["cancel_code"]]).toEqual(["cancelled", "self"]);
     expect(demo.world.get("orders", id)!["cancelled_by"]).toBe("customer");
     expect(demo.world.where("messages", (m) => m["order_id"] === id).map((m) => m["kind"])).toEqual(["order-confirmation", "order-cancelled-by-you"]);
+    // Cancelled already: the window rides in the change, and nothing matches.
     const twice = await refusal(demo.diner.cancelLinked(id));
-    expect([twice.status, twice.params]).toEqual([400, { column: "status", reason: "unchanged" }]);
+    expect([twice.status, twice.code]).toEqual([404, "PUBLIC_REF_NOT_FOUND"]);
   });
 
   it("answers a cancel after the kitchen confirmed as no such order", async () => {
@@ -260,7 +269,8 @@ describe("the kitchen's moves", () => {
     const id = order("2114").id;
     await demo.kitchen.move(id, "preparing", "ready");
     const error = await refusal(demo.kitchen.move(id, "confirmed", "preparing"));
-    expect([error.code, error.params]).toEqual(["STATE_MOVE_REFUSED", { from: "ready", to: "preparing" }]);
+    // The state it is in now, and the one the stale screen named.
+    expect([error.code, error.params]).toEqual(["STATE_MOVE_REFUSED", { column: "status", from: "ready", to: "preparing", named: "confirmed" }]);
   });
 
   it("undoes Ready within the minute: the ready stamps cleared, the cooking kept, the email dropped", async () => {
@@ -315,7 +325,7 @@ describe("the kitchen's moves", () => {
     await demo.kitchen.handOff(id, "card");
     demo.kitchen.person.roles.splice(demo.kitchen.person.roles.indexOf("manager"), 1);
     const error = await refusal(demo.kitchen.move(id, "picked_up", "ready"));
-    expect([error.code, error.params["roles"]]).toEqual(["STATE_MOVE_REFUSED", ["manager"]]);
+    expect([error.code, error.params["roles"]]).toEqual(["STATE_MOVE_REFUSED", ["ordering-manager"]]);
     demo.kitchen.person.roles.push("manager");
   });
 
@@ -370,11 +380,17 @@ describe("signing in", () => {
     expect(numbers).toEqual(["2109", "2009", "1951", "1872"]);
   });
 
-  it("locks the code after five wrong tries, for a quarter of an hour", async () => {
+  it("spends a code after five wrong tries, and locks the address's codes after ten in a day — its link still opens", async () => {
     await demo.diner.requestSignIn("kwame.b@mail.example");
     for (let i = 0; i < 5; i += 1) await refusal(demo.diner.verifyCode("kwame.b@mail.example", "000000"));
+    const spent = await refusal(demo.diner.verifyCode("kwame.b@mail.example", DEMO_SIGN_IN.code));
+    expect([spent.status, spent.code]).toEqual([410, "PUBLIC_CODE_EXPIRED"]);
+    await demo.diner.requestSignIn("kwame.b@mail.example");
+    for (let i = 0; i < 5; i += 1) await refusal(demo.diner.verifyCode("kwame.b@mail.example", "000000"));
+    await demo.diner.requestSignIn("kwame.b@mail.example");
     const locked = await refusal(demo.diner.verifyCode("kwame.b@mail.example", DEMO_SIGN_IN.code));
-    expect([locked.status, locked.code, locked.params]).toEqual([429, "PUBLIC_CODE_LOCKED", { retryAfter: 900 }]);
+    expect([locked.status, locked.code]).toEqual([403, "PUBLIC_CLAIM_LOCKED"]);
+    await expect(demo.diner.verifyLink(DEMO_SIGN_IN.token)).resolves.toBeDefined();
   });
 
   it("asks a sign-in older than ten minutes to sign in again before deleting details", async () => {
@@ -408,6 +424,6 @@ describe("a large order", () => {
     expect(sent["ref"]).toBe("LG-0099");
     expect((await demo.diner.enquire(values, "e".repeat(22)))["ref"]).toBe("LG-0099");
     expect(demo.world.all("enquiries")).toHaveLength(3);
-    expect((await refusal(demo.diner.enquire({ ...values, heads: 5 }, "f".repeat(22)))).params).toEqual({ column: "heads", reason: "invalid" });
+    expect((await refusal(demo.diner.enquire({ ...values, heads: 5 }, "f".repeat(22)))).params).toEqual({ column: "heads", reason: "too-small" });
   });
 });

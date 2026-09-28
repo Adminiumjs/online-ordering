@@ -22,7 +22,7 @@ export interface FindState {
   /** When the last link went, for the resend cool-down. */
   sentAt: number;
   sends: number;
-  error: { kind: "wrong"; triesLeft: number } | { kind: "locked"; minutes: number } | { kind: "expired" } | null;
+  error: { kind: "wrong"; triesLeft: number } | { kind: "locked" } | { kind: "expired" } | null;
   /** An emailed link that no longer works. */
   linkExpired: boolean;
   busy: boolean;
@@ -113,8 +113,8 @@ export async function signInWithCode(): Promise<boolean> {
     return true;
   } catch (error) {
     if (isApiError(error) && error.code === "PUBLIC_CODE_WRONG") setFind({ error: { kind: "wrong", triesLeft: Number(error.params["triesLeft"] ?? 0) } });
-    else if (isApiError(error) && (error.code === "PUBLIC_CODE_LOCKED" || error.code === "PUBLIC_CLAIM_LOCKED"))
-      setFind({ error: { kind: "locked", minutes: Math.max(1, Math.ceil(Number(error.params["retryAfter"] ?? 900) / 60)) } });
+    // Ten wrong codes in a day: the address's codes are locked (its emailed link still opens).
+    else if (isApiError(error) && error.code === "PUBLIC_CLAIM_LOCKED") setFind({ error: { kind: "locked" } });
     else setFind({ error: { kind: "expired" } });
     setFind({ busy: false });
     return false;
@@ -146,7 +146,8 @@ export async function readOrders(): Promise<void> {
   try {
     set({ orders: await port().myOrders() });
   } catch (error) {
-    if (isApiError(error) && error.status === 401) set({ person: null, orders: null, notice: "lapsed" });
+    // A session that ended (idle, or signed out elsewhere) reads the diner's own rows as nobody's: "no such thing".
+    if (isApiError(error) && (error.status === 401 || error.code === "PUBLIC_REF_NOT_FOUND")) set({ person: null, orders: null, notice: "lapsed" });
   }
 }
 

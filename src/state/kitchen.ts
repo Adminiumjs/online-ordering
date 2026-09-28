@@ -11,11 +11,11 @@
 import { create } from "zustand";
 
 import type { KitchenPerson, Menu, OrderWithLines } from "../data/ports.ts";
-import type { Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
+import type { ApiError, Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
 import { menuModel, type MenuModel } from "../lib/menu.ts";
-import { addDays, instantOf, venueDay, type Day } from "../lib/venueTime.ts";
+import { addDays, instantOf, minutesOf, venueDay, venueMinutes, type Day } from "../lib/venueTime.ts";
 import { lineKey } from "./diner.ts";
 
 export type KitchenTab = "queue" | "slots" | "shelf" | "menu" | "hours";
@@ -45,6 +45,8 @@ export interface PhoneDraft {
   quote: { key: string; state: "busy" | "ok" | "err"; reply: QuoteReply | null } | null;
   placing: boolean;
   error: string | null;
+  /** Minted with the draft and kept until it is placed: a retried Confirm lands on the same order. */
+  clientKey: string;
 }
 
 export interface CancelDraft {
@@ -484,7 +486,14 @@ export const setOnline = (on: boolean) => managerWrite(() => port().setOnline(on
 
 // ── the phone order ─────────────────────────────────────────────────────────
 
-export const freshPhone = (): PhoneDraft => ({ day: "today", time: null, lines: [], name: "", phone: "", email: "", note: "", category: "all", sheet: null, quote: null, placing: false, error: null });
+export const freshPhone = (): PhoneDraft => ({ day: "today", time: null, lines: [], name: "", phone: "", email: "", note: "", category: "all", sheet: null, quote: null, placing: false, error: null, clientKey: mintKey() });
+
+/** A retry key as the data API wants one: 32 characters of base64url. */
+function mintKey(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
 
 export function setPhone(patch: Partial<PhoneDraft>): void {
   const p = get().phone;
@@ -510,10 +519,24 @@ export function phoneDay(p: PhoneDraft): Day {
   return p.day === "today" ? today : addDays(today, 1);
 }
 
-export function phoneBody(p: PhoneDraft, values: Record<string, unknown> = {}): OrderBody {
+/**
+ * The time a phone quote is asked for before one is picked: Adminium prices
+ * an order only on a time it could hold, so the figures are asked for the
+ * day's first time the phone screen offers that is not full (a paused one
+ * too — the kitchen may take it). Prices are the same at any time.
+ */
+function quoteTime(p: PhoneDraft): string | null {
+  if (p.time !== null) return p.time;
   const day = phoneDay(p);
+  const firstMinute = day === kToday() ? Math.ceil(venueMinutes(now(), get().zone) / 15) * 15 : 0;
+  return (get().slots[day] ?? []).find((s) => minutesOf(s.time) >= firstMinute && s.taken < s.size)?.time ?? null;
+}
+
+export function phoneBody(p: PhoneDraft, values: Record<string, unknown> = {}, forQuote = false): OrderBody {
+  const day = phoneDay(p);
+  const time = forQuote ? quoteTime(p) : p.time;
   return {
-    values: { ...values, ...(p.time === null ? {} : { pickup_at: slotAt(day, p.time) }) },
+    values: { ...values, ...(time === null ? {} : { pickup_at: slotAt(day, time) }) },
     children: {
       order_items: p.lines.map((l) => ({
         values: { menu_item_id: l.dishId, qty: l.qty },
@@ -524,7 +547,7 @@ export function phoneBody(p: PhoneDraft, values: Record<string, unknown> = {}): 
 }
 
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
-const phoneKey = (p: PhoneDraft) => JSON.stringify([p.lines, p.day, p.time]);
+const phoneKey = (p: PhoneDraft) => JSON.stringify([p.lines, p.day, p.time ?? quoteTime(p)]);
 
 function schedulePhoneQuote(): void {
   if (quoteTimer !== null) clearTimeout(quoteTimer);
@@ -541,8 +564,13 @@ async function runPhoneQuote(): Promise<void> {
   const p = get().phone;
   if (p === null || p.lines.length === 0) return;
   const key = phoneKey(p);
+  // No time left the screen could offer: nothing to price.
+  if (quoteTime(p) === null) {
+    set({ phone: { ...p, quote: null } });
+    return;
+  }
   try {
-    const reply = await port().phoneQuote(phoneBody(p));
+    const reply = await port().phoneQuote(phoneBody(p, {}, true));
     const now2 = get().phone;
     if (now2 !== null && phoneKey(now2) === key) set({ phone: { ...now2, quote: { key, state: "ok", reply } } });
   } catch (error) {
@@ -554,6 +582,19 @@ async function runPhoneQuote(): Promise<void> {
 
 export function freshPhoneQuote(p: PhoneDraft | null): QuoteReply | null {
   return p?.quote !== null && p?.quote !== undefined && p.quote.state === "ok" && p.quote.key === phoneKey(p) ? p.quote.reply : null;
+}
+
+/**
+ * What a refused phone order means on the screen, from the data API's answer:
+ * the time (full, or no longer one the day holds), a dish that ran out, a
+ * price that moved, or anything else.
+ */
+export function phoneRefusal(error: ApiError): "slot" | "soldout" | "price" | "failed" {
+  const fields = error.params["fields"] as Record<string, unknown> | undefined;
+  if (error.code === "CAPACITY_FULL") return error.params["kind"] === "parent" ? "soldout" : "slot";
+  if (error.params["column"] === "pickup_at" || fields?.["pickup_at"] !== undefined) return "slot";
+  if (error.code === "PRICE_CHANGED") return "price";
+  return "failed";
 }
 
 /**
@@ -574,13 +615,18 @@ export async function placePhone(): Promise<{ number: string; id: Id } | { error
       ...(p.email.trim() === "" ? {} : { email: p.email.trim() }),
       ...(p.note.trim() === "" ? {} : { note: p.note.trim() }),
     };
-    const reply = await port().phoneOrder(phoneBody(p, values));
+    // The total the screen showed: a price moved since writes nothing.
+    const quote = freshPhoneQuote(p);
+    const body = { ...phoneBody(p, values), ...(quote === null ? {} : { expect: { total: Number(quote.data["total"]).toFixed(2) } }) };
+    const reply = await port().phoneOrder(body, p.clientKey);
     id = reply.data.id;
     number = String(reply.data["number"]);
     ownPhone.add(id);
   } catch (error) {
-    const code = isApiError(error) ? (error.code === "PUBLIC_SLOT_FULL" || error.params["column"] === "pickup_at" ? "slot" : error.code === "PUBLIC_SOLD_OUT" ? "soldout" : "failed") : "failed";
+    const code = isApiError(error) ? phoneRefusal(error) : "failed";
     set({ phone: { ...get().phone!, placing: false, error: code } });
+    // A price that moved since the screen showed it: the new figures, for the next press.
+    if (code === "price") schedulePhoneQuote();
     signedOutBy(error);
     await refreshNow(["orders"]);
     return { error: code };

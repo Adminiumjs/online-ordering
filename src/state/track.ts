@@ -111,7 +111,8 @@ export async function readTrack(): Promise<void> {
     const order = await sources().diner.linkedOrder();
     useTrack.setState({ state: "ok", order, updatedAt: sources().clock.now(), stale: false });
   } catch (error) {
-    if (isApiError(error) && error.status === 401 && token !== null) {
+    // The link's session lapsed (a fixed half hour): the order reads as nobody's, and the kept code opens it again.
+    if (isApiError(error) && (error.status === 401 || error.code === "PUBLIC_REF_NOT_FOUND") && token !== null) {
       try {
         await sources().diner.openLink(token);
         const order = await sources().diner.linkedOrder();
@@ -146,7 +147,8 @@ export async function cancelTracked(): Promise<"cancelled" | "started" | "failed
     return "cancelled";
   } catch (error) {
     await readTrack();
-    if (isApiError(error) && (error.status === 404 || error.params["reason"] === "unchanged")) {
+    // Taken by the kitchen, or cancelled already: the window rides in the change, and nothing matched.
+    if (isApiError(error) && error.status === 404) {
       return String(useTrack.getState().order?.order["status"]) === "cancelled" ? "cancelled" : "started";
     }
     return "failed";

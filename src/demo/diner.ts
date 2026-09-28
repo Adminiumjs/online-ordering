@@ -12,8 +12,8 @@
  */
 import type { DinerPort, Menu, OrderWithLines } from "../data/ports.ts";
 import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime } from "../data/wire.ts";
-import { toMs, venueDay } from "../lib/venueTime.ts";
-import { Engine, refusedValue, type Writer } from "./engine.ts";
+import { toMs } from "../lib/venueTime.ts";
+import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
 type Entry = (typeof MANIFEST_RULES.publicAccess)[number] & Record<string, unknown>;
@@ -30,10 +30,10 @@ function entry(table: string, method: "GET" | "POST" | "PATCH", key?: string): E
   return found;
 }
 
-/** A row as an entry lets it out: its selected columns, and its key. */
+/** A row as an entry lets it out: its selected columns — its key only when the entry selects it. */
 function project(row: Row, select: readonly string[] | undefined): Row {
   if (select === undefined) return { ...row };
-  const out: Record<string, unknown> = { id: row.id };
+  const out: Record<string, unknown> = {};
   for (const column of select) out[column] = row[column] ?? null;
   return out as Row;
 }
@@ -48,6 +48,9 @@ function passes(row: Row, filters: readonly Record<string, unknown>[] | undefine
     return true;
   });
 }
+
+/** A refusal of the diner's own value (what the form already says): its charge on the caps is handed back. */
+const OWN_VALUE: ReadonlySet<string> = new Set(["too-long", "format", "required", "invalid-character", "too-short", "too-small", "too-large", "unknown"]);
 
 const LINK = /(https?:\/\/|www\.|<a\s)/i;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -65,7 +68,12 @@ export const DEMO_LATENCY: Latency = { read: 120, quote: 450, write: 850 };
 export class DemoDiner implements DinerPort {
   private linkSession: { orderId: Id } | null = null;
   private signIn: { customerId: Id; at: number } | null = null;
-  private challenge: { email: string; tries: number; lockedUntil: number } | null = null;
+  /** The code emailed last: five tries, then it has expired. */
+  private challenge: { email: string; tries: number } | null = null;
+  /** Wrong codes per address, by when: ten in a day lock the code path (the emailed link still opens). */
+  private wrongCodes: { email: string; at: number }[] = [];
+  /** What the caps on an order nobody signed in for have been charged: every save, by address and when. */
+  private charged: { email: string; at: number }[] = [];
   private readonly keys = new Map<string, Id>();
   /** A fault the demo card arms for the next placing (the network drops, the slot fills, a price moves). */
   fault: "offline" | null = null;
@@ -149,27 +157,28 @@ export class DemoDiner implements DinerPort {
     const writable = new Set(e.writable as readonly string[]);
     const values: Record<string, unknown> = {};
     for (const [column, value] of Object.entries(body.values)) {
-      if (!writable.has(column)) throw refusedValue(column, "not-writable");
+      if (!writable.has(column)) throw refusedWrite();
       values[column] = typeof value === "string" ? value.trim() : value;
     }
     for (const column of e.requires as readonly string[]) {
       if (values[column] !== undefined && values[column] !== null && values[column] !== "") continue;
-      if (!dry) throw refusedValue(column, "required");
+      if (!dry) throw refusedValue(column);
       values[column] = column === "email" ? "quote@placeholder.invalid" : "Quote";
     }
-    if (!EMAIL.test(String(values["email"]))) throw refusedValue("email", "invalid");
-    if (values["phone"] !== undefined && values["phone"] !== null && values["phone"] !== "" && !PHONE.test(String(values["phone"]))) throw refusedValue("phone", "invalid");
+    if (!EMAIL.test(String(values["email"]))) throw refusedValue("email", "format");
+    if (values["phone"] !== undefined && values["phone"] !== null && values["phone"] !== "" && !PHONE.test(String(values["phone"]))) throw refusedValue("phone", "format");
     if (values["phone"] === "") values["phone"] = null;
     if (values["note"] === "") values["note"] = null;
+    // Plain text is asked of a stranger only: a signed-in diner's own words are theirs.
     const anonymous = e.anonymous as { plainText: readonly string[] };
-    for (const column of anonymous.plainText) if (typeof values[column] === "string" && LINK.test(String(values[column]))) throw refusedValue(column, "plain-text");
+    if (this.signIn === null) for (const column of anonymous.plainText) if (typeof values[column] === "string" && LINK.test(String(values[column]))) throw refusedValue(column);
     return values;
   }
 
   private lines(body: OrderBody) {
-    return body.children.order_items.map((line) => {
+    return body.children.order_items.map((line, i) => {
       if (typeof line.values["note"] === "string" && LINK.test(String(line.values["note"]))) {
-        throw refusedValue("note", "plain-text");
+        throw treeRefused({ child: "order_items", index: i, path: ["order_items", i], column: "note" });
       }
       return { values: line.values, options: (line.children?.["order_item_modifiers"] ?? []).map((o) => o.values) };
     });
@@ -208,17 +217,23 @@ export class DemoDiner implements DinerPort {
     // A retry of an order already made answers that order, whatever it sends now — without its link.
     const replayed = this.keys.get(clientKey);
     if (replayed !== undefined) return { ...this.reply(replayed), replayed: true };
-    const tree = this.judged(body, false);
-    const email = String(tree.order["email"]).toLowerCase();
-    const today = this.today();
-    const cap = (entry("orders", "POST").anonymous as { perValue: { n: number } }).perValue.n;
-    if (this.world.where("orders", (o) => String(o["email"] ?? "").toLowerCase() === email && venueDay(String(o["placed_at"]), this.world.zone) === today).length >= cap) {
-      throw new ApiError(409, "PUBLIC_LIMIT_REACHED", "You already have as many of these as can be made online.");
+    // The caps on an order nobody signed in for count every save, refused ones too: only a refusal
+    // of the diner's own value (a line's option, a quantity) gives its charge back.
+    const charge = this.signIn === null ? this.charge(String(body.values["email"] ?? "").trim().toLowerCase()) : null;
+    let tree: ReturnType<DemoDiner["judged"]>;
+    try {
+      tree = this.judged(body, false);
+    } catch (error) {
+      if (charge !== null && error instanceof ApiError && error.code === "PUBLIC_WRITE_REFUSED" && error.params["column"] !== undefined && OWN_VALUE.has(String(error.params["reason"]))) {
+        this.charged = this.charged.filter((c) => c !== charge);
+      }
+      throw error;
     }
+    const email = String(tree.order["email"]).toLowerCase();
     if (body.expect !== undefined && Number(body.expect.total).toFixed(2) !== Number(tree.order["total"]).toFixed(2)) {
       throw new ApiError(409, "PUBLIC_PRICE_CHANGED", "The price changed.", {
         total: Number(tree.order["total"]).toFixed(2),
-        lines: tree.lines.map((l) => ({ data: { unit_total: l.line["unit_total"], line_total: l.line["line_total"] } })),
+        lines: { order_items: tree.lines.map((l) => ({ data: l.line, children: { order_item_modifiers: l.options.map((o) => ({ data: o })) } })) },
       });
     }
     // The person the order is for, found by the address typed, or made.
@@ -229,6 +244,18 @@ export class DemoDiner implements DinerPort {
     this.keys.set(clientKey, order.id);
     this.linkSession = { orderId: order.id };
     return { ...this.reply(order.id), link: { key: "link", token } };
+  }
+
+  /** Charges the caps for one save by a stranger: an address's rolling day, and one visitor's hour on this entry. */
+  private charge(email: string): { email: string; at: number } {
+    const anonymous = entry("orders", "POST").anonymous as { perValue: { n: number }; perIpHour: number };
+    const now = this.engine.now;
+    const day = this.charged.filter((c) => c.email === email && c.at > now - 24 * 3_600_000).length;
+    const hour = this.charged.filter((c) => c.at > now - 3_600_000).length;
+    if (day >= anonymous.perValue.n || hour >= anonymous.perIpHour) throw new ApiError(409, "PUBLIC_LIMIT_REACHED", "You already have as many of these as can be made online.");
+    const charge = { email, at: now };
+    this.charged.push(charge);
+    return charge;
   }
 
   /** An order as a create's reply carries it. */
@@ -271,7 +298,8 @@ export class DemoDiner implements DinerPort {
 
   async linkedOrder(): Promise<OrderWithLines> {
     await this.wait(this.latency.read);
-    if (this.linkSession === null) throw new ApiError(401, "PUBLIC_CLAIM_REQUIRED", "Open the order's link first.");
+    // No session held (or it lapsed): the order reads as nobody's.
+    if (this.linkSession === null) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such order.");
     return this.withLines(this.linkSession.orderId, "link");
   }
 
@@ -285,8 +313,7 @@ export class DemoDiner implements DinerPort {
   private ownCancel(id: Id, e: Entry): Row {
     const order = this.world.get("orders", id)!;
     const when = (e.writableWhen as Record<string, readonly string[]>)["status"]!;
-    if (order["status"] === "cancelled") throw new ApiError(400, "PUBLIC_WRITE_REFUSED", "Already cancelled.", { column: "status", reason: "unchanged" });
-    // The window rides in the change itself: an order the kitchen took matches nothing.
+    // The window rides in the change itself: an order the kitchen took, or one already cancelled, matches nothing.
     if (!when.includes(String(order["status"]))) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such order.");
     const row = this.engine.updateOrder(id, { status: "cancelled", ...(e.defaults as Record<string, unknown>) }, GUEST);
     return project(row, e.select as readonly string[]);
@@ -315,7 +342,7 @@ export class DemoDiner implements DinerPort {
   async requestSignIn(email: string): Promise<{ sentTo: string }> {
     await this.wait(this.latency.write);
     if (!EMAIL.test(email.trim())) throw new ApiError(400, "PUBLIC_WRITE_REFUSED", "That address cannot be used.");
-    this.challenge = { email: email.trim().toLowerCase(), tries: 0, lockedUntil: 0 };
+    this.challenge = { email: email.trim().toLowerCase(), tries: 0 };
     return { sentTo: maskAddress(email.trim()) };
   }
 
@@ -340,15 +367,16 @@ export class DemoDiner implements DinerPort {
 
   async verifyCode(email: string, code: string): Promise<ClaimReply> {
     await this.wait(this.latency.write);
+    const address = email.trim().toLowerCase();
+    // Ten wrong codes in a day lock the address's code path (its emailed link still opens).
+    const now = this.engine.now;
+    if (this.wrongCodes.filter((w) => w.email === address && w.at > now - 24 * 3_600_000).length >= 10) throw new ApiError(403, "PUBLIC_CLAIM_LOCKED", "Too many tries today. Use the link in the email instead.");
     const c = this.challenge;
-    if (c === null || c.email !== email.trim().toLowerCase()) throw new ApiError(410, "PUBLIC_CODE_EXPIRED", "That code has expired. Ask for a new link.");
-    if (c.lockedUntil > this.engine.now || c.tries >= 5) {
-      c.lockedUntil = Math.max(c.lockedUntil, this.engine.now + 15 * 60_000);
-      throw new ApiError(429, "PUBLIC_CODE_LOCKED", "Too many tries.", { retryAfter: Math.ceil((c.lockedUntil - this.engine.now) / 1000) });
-    }
+    // A code lasts five tries: then it has expired, as one never sent has.
+    if (c === null || c.email !== address || c.tries >= 5) throw new ApiError(410, "PUBLIC_CODE_EXPIRED", "That code has expired. Ask for a new link.");
     if (code !== DEMO_SIGN_IN.code) {
       c.tries += 1;
-      if (c.tries >= 5) c.lockedUntil = this.engine.now + 15 * 60_000;
+      this.wrongCodes.push({ email: address, at: now });
       throw new ApiError(403, "PUBLIC_CODE_WRONG", "That code isn't right.", { triesLeft: Math.max(0, 5 - c.tries) });
     }
     const customer = this.person(c.email) ?? this.person("kwame.b@mail.example")!;
@@ -363,7 +391,8 @@ export class DemoDiner implements DinerPort {
   }
 
   private mine(): Id {
-    if (this.signIn === null) throw new ApiError(401, "PUBLIC_CLAIM_REQUIRED", "Sign in first.");
+    // No session held (or it lapsed): the diner's own rows read as nobody's.
+    if (this.signIn === null) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such record.");
     return this.signIn.customerId;
   }
 
@@ -421,15 +450,15 @@ export class DemoDiner implements DinerPort {
     const row: Record<string, unknown> = {};
     for (const [column, value] of Object.entries(values)) {
       if (column === "client_key") continue;
-      if (!writable.has(column)) throw refusedValue(column, "not-writable");
+      if (!writable.has(column)) throw refusedWrite();
       row[column] = typeof value === "string" ? value.trim() : value;
     }
-    for (const column of e.requires as readonly string[]) if (row[column] === undefined || row[column] === null || row[column] === "") throw refusedValue(column, "required");
+    for (const column of e.requires as readonly string[]) if (row[column] === undefined || row[column] === null || row[column] === "") throw refusedValue(column);
     const heads = Number(row["heads"]);
-    if (!Number.isInteger(heads) || heads < 6 || heads > 120) throw refusedValue("heads", "invalid");
-    if (!EMAIL.test(String(row["email"]))) throw refusedValue("email", "invalid");
-    if (!PHONE.test(String(row["phone"]))) throw refusedValue("phone", "invalid");
-    for (const column of (e.anonymous as { plainText: readonly string[] }).plainText) if (typeof row[column] === "string" && LINK.test(String(row[column]))) throw refusedValue(column, "plain-text");
+    if (!Number.isInteger(heads) || heads < 6 || heads > 120) throw refusedValue("heads", heads < 6 ? "too-small" : "too-large");
+    if (!EMAIL.test(String(row["email"]))) throw refusedValue("email", "format");
+    if (!PHONE.test(String(row["phone"]))) throw refusedValue("phone", "format");
+    for (const column of (e.anonymous as { plainText: readonly string[] }).plainText) if (typeof row[column] === "string" && LINK.test(String(row[column]))) throw refusedValue(column);
     const seq = this.world.nextNumber("enquiries", "ref_seq");
     const written = this.world.insert("enquiries", {
       ...row,

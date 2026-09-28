@@ -343,10 +343,28 @@ export function choosePickDay(which: "today" | "tomorrow"): void {
 
 // ── Adminium's price ────────────────────────────────────────────────────────
 
-/** The order as it would be sent: the diner's values, each line with its options. */
-export function orderBody(values: Record<string, unknown> = {}): OrderBody {
+/**
+ * The time a quote is asked for before the diner has picked one: Adminium
+ * prices an order only on a pickup time it could hold, so the figures are
+ * asked for the first free time of the day shown (else the other day) —
+ * the prices are the same at any time; only what is sold out is the day's.
+ */
+function quoteTime(): { day: Day; time: string } | null {
   const s = get();
-  const pick = s.pick;
+  if (s.pick !== null) return s.pick;
+  const today = todayOf(sources().clock.now());
+  const days = s.pickDay === "today" ? [today, addDays(today, 1)] : [addDays(today, 1), today];
+  for (const day of days) {
+    const free = (s.slots[day] ?? []).find((slot) => slot.state === "free");
+    if (free !== undefined) return { day, time: free.time };
+  }
+  return null;
+}
+
+/** The order as it would be sent: the diner's values, each line with its options (a quote's at the time it is asked for). */
+export function orderBody(values: Record<string, unknown> = {}, forQuote = false): OrderBody {
+  const s = get();
+  const pick = forQuote ? quoteTime() : s.pick;
   return {
     values: { ...values, ...(pick === null ? {} : { pickup_at: new Date(instantOf(pick.day, pick.time, zoneOf())).toISOString() }) },
     children: {
@@ -358,7 +376,7 @@ export function orderBody(values: Record<string, unknown> = {}): OrderBody {
   };
 }
 
-const quoteKeyOf = () => JSON.stringify([get().cart, get().pick]);
+const quoteKeyOf = () => JSON.stringify([get().cart, get().pick ?? quoteTime()]);
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Asks Adminium for the order's figures once the cart has been still for a moment. */
@@ -375,9 +393,14 @@ export function scheduleQuote(): void {
 export async function runQuote(): Promise<void> {
   const key = quoteKeyOf();
   if (get().cart.length === 0) return;
+  // No free time today or tomorrow: nothing can be priced, and nothing ordered.
+  if (quoteTime() === null) {
+    set({ quote: null });
+    return;
+  }
   set({ quote: { key, state: "busy", reply: get().quote?.reply ?? null } });
   try {
-    const reply = await port().quote(orderBody());
+    const reply = await port().quote(orderBody({}, true));
     if (quoteKeyOf() !== key) return;
     set({ quote: { key, state: "ok", reply }, alerts: {} });
   } catch (error) {
@@ -426,19 +449,21 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     await reloadAll();
     return true;
   }
-  if (error.code === "PUBLIC_WRITE_REFUSED" && reason === "too-many" && error.params["column"] === "qty") {
+  if (error.code === "PUBLIC_WRITE_REFUSED" && reason === "too-many" && error.params["column"] === "qty" && line === null) {
     if (during === "place") set({ placeError: "toomany" });
     return true;
   }
   if ((error.code === "PUBLIC_SLOT_FULL" || (error.code === "PUBLIC_WRITE_REFUSED" && error.params["column"] === "pickup_at")) && s.pick !== null) {
-    const why: SlotNotice["reason"] = error.code === "PUBLIC_SLOT_FULL" ? "full" : reason === "paused" ? "paused" : reason === "closed" ? "closed" : "too-soon";
+    // `out-of-hours`: the day's hours moved under the time; `out-of-range`: too soon now, or too far ahead.
+    const why: SlotNotice["reason"] = error.code === "PUBLIC_SLOT_FULL" ? "full" : reason === "paused" ? "paused" : reason === "closed" || reason === "out-of-hours" ? "closed" : "too-soon";
     set({ slotNotice: { time: s.pick.time, day: s.pick.day, reason: why }, pick: null });
     await refreshAvailability(now);
     return true;
   }
   if (error.code === "PUBLIC_PRICE_CHANGED" && during === "place") {
     const before = freshQuoteLines();
-    const lines = (error.params["lines"] as { data: Record<string, unknown> }[] | undefined) ?? [];
+    // The lines as the save would have written them, under their list: `{order_items: [{data, children}]}`.
+    const lines = (error.params["lines"] as { order_items?: { data: Record<string, unknown> }[] } | undefined)?.order_items ?? [];
     const changed = lines
       .map((l, i) => ({ name: s.data?.menu.dish(s.cart[i]?.dishId ?? -1)?.name ?? "", from: before[i] ?? 0, to: Number(l.data["unit_total"] ?? 0) }))
       .filter((l) => l.from !== l.to);

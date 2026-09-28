@@ -137,24 +137,36 @@ export class Engine {
   }
 
   /**
-   * A pickup time judged for a write: its day open, on the grid, not past,
-   * inside the days ahead, with room — and, for a diner, not paused and with
-   * the notice given.
+   * A pickup time judged for a write: its day open, inside its hours, on the
+   * grid, not past, inside the days ahead, with room — and, for a diner, not
+   * paused and with the notice given. A diner hears the public API's refusal
+   * (`{column, reason}`); the kitchen the data API's (`fields.pickup_at`, and
+   * the limit's own `CAPACITY_FULL`).
    */
   judgeSlot(pickupAt: unknown, origin: Writer["origin"], except?: Id): void {
+    const refuse = (code: "closed" | "out-of-hours" | "out-of-range" | "paused" | "required"): never => {
+      if (origin === "public") throw refusedValue("pickup_at", code === "required" ? "out-of-range" : code);
+      const reason = code === "required" ? undefined : `CAPACITY_${code.toUpperCase().replace(/-/g, "_")}`;
+      throw new ApiError(422, "VALIDATION_FAILED", "Some values were refused.", { fields: { pickup_at: { code } }, ...(reason === undefined ? {} : { reason }) });
+    };
+    // An order holds a pickup time: none is priced without one.
+    if (pickupAt === undefined || pickupAt === null || pickupAt === "") refuse("required");
     const at = toMs(String(pickupAt));
-    if (Number.isNaN(at)) throw refusedValue("pickup_at", "invalid");
+    if (Number.isNaN(at)) refuse("out-of-range");
     const day = venueDay(at, this.world.zone);
     const h = this.dayHours(day);
-    if (!h.open) throw refusedValue("pickup_at", "closed");
+    if (!h.open) refuse("closed");
+    const minute = venueMinutes(at, this.world.zone);
+    if (minute < minutesOf(h.opens) || minute >= minutesOf(h.closes)) refuse("out-of-hours");
     const onGrid = this.grid(day).some((slot) => slot.at === at);
-    if (!onGrid || at < this.now || daysBetween(this.today(), day) > this.num("preorder_days")) throw refusedValue("pickup_at", "out-of-range");
+    if (!onGrid || at < this.now || daysBetween(this.today(), day) > this.num("preorder_days")) refuse("out-of-range");
     if (origin === "public") {
-      if (this.pauseAt(at) !== undefined) throw refusedValue("pickup_at", "paused");
-      if (!this.takeable(at, day)) throw refusedValue("pickup_at", "out-of-range");
+      if (this.pauseAt(at) !== undefined) refuse("paused");
+      if (!this.takeable(at, day)) refuse("out-of-range");
     }
     if (this.taken(at, except) + 1 > this.num("slot_capacity")) {
-      throw new ApiError(409, origin === "public" ? "PUBLIC_SLOT_FULL" : "CAPACITY_FULL", "That time is full.", { column: "pickup_at" });
+      if (origin === "public") throw new ApiError(409, "PUBLIC_SLOT_FULL", "That time is full.", { column: "pickup_at" });
+      throw new ApiError(409, "CAPACITY_FULL", "That time is full.", { column: "pickup_at", rule: 0, kind: "slot", pool: { key: iso(at), at: day }, left: 0 });
     }
   }
 
@@ -202,33 +214,33 @@ export class Engine {
     opts: { dry: boolean; readableDish: (dish: Row) => boolean; readableOption: (option: Row) => boolean; except?: Id },
   ): { order: Record<string, unknown>; lines: { line: Record<string, unknown>; options: Record<string, unknown>[] }[] } {
     const pub = writer.origin === "public";
-    if (lines.length === 0) throw treeRefused({ child: "order_items", reason: "too-few" });
-    if (lines.length > 20) throw treeRefused({ child: "order_items", reason: "too-many" });
+    // A diner's lines are held to the entry's 1 to 20; the kitchen's are not (a staff tree takes up to 200).
+    const refused = (params: Record<string, unknown>) => treeRefused(params, writer.origin);
+    if (pub && lines.length === 0) throw refused({ child: "order_items", reason: "too-few" });
+    if (lines.length > (pub ? 20 : 200)) throw refused({ child: "order_items", reason: "too-many" });
     const at = (i: number) => ({ child: "order_items", index: i, path: ["order_items", i] });
     const optionAt = (i: number, j: number) => ({ child: "order_item_modifiers", index: j, path: ["order_items", i, "order_item_modifiers", j] });
 
     // Each line: a dish the writer may read, a whole quantity of 1 to 20.
     const built = lines.map((line, i) => {
       const dish = this.world.get("menu_items", Number(line.values["menu_item_id"]));
-      if (dish === undefined || !opts.readableDish(dish)) throw treeRefused({ ...at(i), column: "menu_item_id", reason: "not-offered" });
+      if (dish === undefined || !opts.readableDish(dish)) throw refused({ ...at(i), column: "menu_item_id", reason: "not-offered" });
       const qty = Number(line.values["qty"] ?? 1);
-      if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw treeRefused({ ...at(i), column: "qty", reason: "invalid" });
-      if (line.options.length > 20) throw treeRefused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], reason: "too-many" });
-      const seen = new Set<Id>();
+      if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw refused({ ...at(i), column: "qty", reason: qty < 1 ? "too-small" : "too-large" });
+      if (line.options.length > 20) throw refused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], reason: "too-many" });
       const options = line.options.map((option, j) => {
         const modifier = this.world.get("modifiers", Number(option["modifier_id"]));
-        if (modifier === undefined || !opts.readableOption(modifier)) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "not-offered" });
+        if (modifier === undefined || !opts.readableOption(modifier)) throw refused({ ...optionAt(i, j), column: "modifier_id", reason: "not-offered" });
+        // An option of another dish is not one this line is offered.
         const group = this.world.get("modifier_groups", Number(modifier["group_id"]));
-        if (group === undefined || group["item_id"] !== dish.id) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "disagrees" });
-        if (seen.has(modifier.id)) throw treeRefused({ ...optionAt(i, j), column: "modifier_id", reason: "duplicate" });
-        seen.add(modifier.id);
+        if (group === undefined || group["item_id"] !== dish.id) throw refused({ ...optionAt(i, j), column: "modifier_id", reason: "not-offered" });
         return { modifier, group };
       });
-      // Every group of the dish, chosen within its least and its most.
+      // Every group of the dish, chosen within its least and its most — judged on the line (an option twice counts twice).
       for (const group of this.world.where("modifier_groups", (g) => g["item_id"] === dish.id)) {
         const n = options.filter((o) => o.group.id === group.id).length;
         if (n < Number(group["min"] ?? 0) || n > Number(group["max"] ?? Infinity)) {
-          throw treeRefused({ child: "order_item_modifiers", path: ["order_items", i, "order_item_modifiers"], column: "modifier_id", reason: n < Number(group["min"] ?? 0) ? "too-few" : "too-many" });
+          throw refused({ ...at(i), reason: n < Number(group["min"] ?? 0) ? "too-few" : "too-many", group: group.id });
         }
       }
       return { dish, qty, note: line.values["note"] ?? null, options };
@@ -236,18 +248,19 @@ export class Engine {
 
     // No more items than an online order holds.
     const items = built.reduce((n, line) => n + line.qty, 0);
-    if (items > this.num("max_items")) throw treeRefused({ child: "order_items", column: "qty", reason: "too-many" });
+    if (items > this.num("max_items")) throw refused({ child: "order_items", column: "qty", reason: "too-many" });
 
-    // The pickup time, then each dish's portions on its day. A quote with no time yet is priced for today.
-    const timed = values["pickup_at"] !== undefined && values["pickup_at"] !== null && values["pickup_at"] !== "";
-    if (timed || !opts.dry) this.judgeSlot(values["pickup_at"], writer.origin, opts.except);
-    const day = timed ? venueDay(String(values["pickup_at"]), this.world.zone) : this.today();
+    // The pickup time — a quote too: an order is priced only on a time it could hold — then each dish's portions on its day.
+    this.judgeSlot(values["pickup_at"], writer.origin, opts.except);
+    const day = venueDay(String(values["pickup_at"]), this.world.zone);
     const wanted = new Map<Id, number>();
     built.forEach((line, i) => {
       wanted.set(line.dish.id, (wanted.get(line.dish.id) ?? 0) + line.qty);
       const { left } = this.portions(line.dish, day, opts.except);
       if (left !== null && wanted.get(line.dish.id)! > left) {
-        throw new ApiError(409, pub ? "PUBLIC_SOLD_OUT" : "CAPACITY_FULL", "That is sold out.", { ...at(i), column: "qty" });
+        // The line's link to what ran out; the kitchen hears the limit's own answer, naming the dish.
+        if (pub) throw new ApiError(409, "PUBLIC_SOLD_OUT", "That is sold out.", { ...at(i), column: "menu_item_id" });
+        throw new ApiError(409, "CAPACITY_FULL", "That is sold out.", { column: "menu_item_id", rule: 0, kind: "parent", row: i, pool: { key: String(line.dish.id), at: day }, left: Math.max(0, left) });
       }
     });
 
@@ -322,7 +335,7 @@ export class Engine {
       throw new ApiError(409, "STATE_UNCHANGED", `Already ${was}.`, { column: "status", state: was, at, by });
     }
     if (to !== was) {
-      if (opts.from !== undefined && opts.from !== was) throw new ApiError(409, "STATE_MOVE_REFUSED", `It is ${was} now.`, { from: was, to });
+      if (opts.from !== undefined && opts.from !== was) throw new ApiError(409, "STATE_MOVE_REFUSED", `It is ${was} now.`, { column: "status", from: was, to, named: opts.from });
       const listed = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => (typeof m === "string" ? m : (m as { to: string }).to) === to) as
         | string
         | {
@@ -332,31 +345,33 @@ export class Engine {
             requires?: { where?: readonly { column: string; isNull?: boolean }[]; time?: { before?: { column: string; plus?: { minutes?: number } } } };
           }
         | undefined;
-      if (listed === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { from: was, to });
+      if (listed === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { column: "status", from: was, to });
       const move = typeof listed === "object" ? listed : { to };
       if (move.roles !== undefined && writer.origin !== "automation" && !writer.roles.some((r) => move.roles!.includes(r))) {
-        throw new ApiError(409, "STATE_MOVE_REFUSED", `Not yours to move from ${was} to ${to}.`, { from: was, to, roles: move.roles });
+        // The roles by their slugs, as the installed app names them.
+        throw new ApiError(409, "STATE_MOVE_REFUSED", `Not yours to move from ${was} to ${to}.`, { column: "status", from: was, to, roles: move.roles.map((r) => `ordering-${r}`) });
       }
       // An undo only from the state the screen showed.
-      if (move.undo === true && opts.from === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", "Name the state it was in.", { from: was, to, undo: true });
+      if (move.undo === true && opts.from === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", "Name the state it was in.", { column: "status", from: was, to, undo: true });
       // What it waits for, judged on the row as it stands.
       const until = move.requires?.time?.before;
       if (until !== undefined) {
         const base = stored[until.column];
-        if (empty(base) || this.now >= toMs(String(base)) + (until.plus?.minutes ?? 0) * 60_000) {
-          throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to take it back.", { from: was, to });
+        const by = empty(base) ? null : toMs(String(base)) + (until.plus?.minutes ?? 0) * 60_000;
+        if (by === null || this.now >= by) {
+          throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to take it back.", { column: "status", from: was, to, requires: "time", bound: "before", ...(by === null ? {} : { at: iso(by) }) });
         }
       }
       const after = { ...stored, ...values };
       for (const condition of move.requires?.where ?? []) {
         if (condition.isNull === false && empty(after[condition.column])) {
-          throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { from: was, to, requires: { column: condition.column } });
+          throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { column: "status", from: was, to, requires: condition.column });
         }
       }
     } else if (lock.includes(was)) {
       const except = (states.lock.except ?? []) as readonly string[];
       const locked = Object.keys(values).filter((c) => !except.includes(c));
-      if (locked.length > 0) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { columns: locked, state: was });
+      if (locked.length > 0) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { column: locked[0], state: was });
     }
     let change: Record<string, unknown> = { ...values };
     const listedTo = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => typeof m === "object" && (m as { to: string }).to === to) as { undo?: true } | undefined;
@@ -512,12 +527,24 @@ function settleFormulas(table: string, row: Record<string, unknown>): void {
   }
 }
 
-/** A diner's value refused: which column, and why. */
-export function refusedValue(column: string, reason: string): ApiError {
-  return new ApiError(400, "PUBLIC_WRITE_REFUSED", `${column}: ${reason}`, { column, reason });
+/** A diner's value refused: which column, and why (the public API names no reason for a missing or not plain-text value). */
+export function refusedValue(column: string, reason?: string): ApiError {
+  return new ApiError(400, "PUBLIC_WRITE_REFUSED", `${column}: ${reason ?? "refused"}`, reason === undefined ? { column } : { column, reason });
 }
 
-/** A row of an order's tree refused: its list, its place, and why. */
-export function treeRefused(params: Record<string, unknown>): ApiError {
-  return new ApiError(400, "PUBLIC_WRITE_REFUSED", `refused: ${String(params["reason"])}`, params);
+/** A value a diner may not write at all: refused, naming nothing. */
+export function refusedWrite(): ApiError {
+  return new ApiError(400, "PUBLIC_WRITE_REFUSED", "That cannot be written here.");
+}
+
+/**
+ * A row of an order's tree refused: its list, its place, and why — as the
+ * public API says it to a diner, and as the data API says it to the kitchen
+ * (422, the column's code under `fields`; the list and place as the
+ * kitchen's door reads them back from the data API's relation and row).
+ */
+export function treeRefused(params: Record<string, unknown>, origin: Writer["origin"] = "public"): ApiError {
+  if (origin === "public") return new ApiError(400, "PUBLIC_WRITE_REFUSED", `refused: ${String(params["reason"])}`, params);
+  const column = typeof params["column"] === "string" ? params["column"] : "order_items";
+  return new ApiError(422, "VALIDATION_FAILED", "Some values were refused.", { fields: { [column]: { code: params["reason"] } }, ...params });
 }

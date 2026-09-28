@@ -109,7 +109,8 @@ export interface KitchenPort {
 
   /** An order taken by phone, with its lines and options: its figures first (nothing written), then the order. */
   phoneQuote(body: OrderBody): Promise<QuoteReply>;
-  phoneOrder(body: OrderBody): Promise<OrderReply>;
+  /** `clientKey` makes a retry land on the same order; `body.expect` holds the total the screen showed. */
+  phoneOrder(body: OrderBody, clientKey: string): Promise<OrderReply>;
 
   /** Ends this screen's staff session; `signIn` goes to Adminium's sign-in and back. */
   signOut(): Promise<void>;

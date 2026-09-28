@@ -41,14 +41,19 @@ export class DemoKitchen implements KitchenPort {
     const limit = limits?.[table];
     if (limit === undefined) return;
     for (const [column, value] of Object.entries(values)) {
-      if (!limit.writable.includes(column)) throw new ApiError(403, "FORBIDDEN", `The kitchen does not change ${column}.`, { column });
+      if (!limit.writable.includes(column)) {
+        throw new ApiError(403, "COLUMN_FORBIDDEN", `The kitchen does not change ${column}.`, { table, column, reason: "update-limit", writable: limit.writable });
+      }
       const allowed = limit.writableValues?.[column];
-      if (allowed !== undefined && !allowed.includes(value)) throw new ApiError(403, "FORBIDDEN", `The kitchen does not set ${column} to ${String(value)}.`, { column });
+      if (allowed !== undefined && !allowed.includes(value)) {
+        throw new ApiError(403, "COLUMN_FORBIDDEN", `The kitchen does not set ${column} to ${String(value)}.`, { table, column, value, reason: "update-limit", writableValues: allowed });
+      }
     }
   }
 
-  private manager(): void {
-    if (!this.person.roles.includes("manager")) throw new ApiError(403, "FORBIDDEN", "Managers change these.");
+  /** A manager's table: the kitchen holds no grant to change it. */
+  private manager(table: string, action: "create" | "update" = "update"): void {
+    if (!this.person.roles.includes("manager")) throw new ApiError(403, "TABLE_FORBIDDEN", "Managers change these.", { permission: `table:@${table}:${action}` });
   }
 
   private out = false;
@@ -173,8 +178,8 @@ export class DemoKitchen implements KitchenPort {
   private phoneTree(body: OrderBody, dry: boolean) {
     const values = { ...body.values, channel: "phone" };
     const lines = body.children.order_items.map((line) => ({ values: line.values, options: (line.children?.["order_item_modifiers"] ?? []).map((o) => o.values) }));
-    // The kitchen reads the whole menu: a dish switched off online is still one it may sell by phone.
-    return this.engine.orderTree(values, lines, this.writer, { dry, readableDish: (d) => d["available"] === true, readableOption: (o) => o["available"] === true });
+    // Staff may point at any dish or option: the phone screen offers only what is on.
+    return this.engine.orderTree(values, lines, this.writer, { dry, readableDish: () => true, readableOption: () => true });
   }
 
   async phoneQuote(body: OrderBody): Promise<QuoteReply> {
@@ -184,30 +189,40 @@ export class DemoKitchen implements KitchenPort {
     return { data: figures, children: { order_items: tree.lines.map((l) => ({ data: l.line, children: { order_item_modifiers: l.options.map((o) => ({ data: o })) } })) }, capacity: [{ pool: "orders", state: "available" }], exact: true };
   }
 
-  async phoneOrder(body: OrderBody): Promise<OrderReply> {
+  async phoneOrder(body: OrderBody, clientKey: string): Promise<OrderReply> {
     this.signedIn();
+    // A retry of an order already taken answers that order.
+    const known = this.keys.get(clientKey);
+    if (known !== undefined) return { data: { ...this.world.get("orders", known)! }, replayed: true };
     const tree = this.phoneTree(body, false);
+    if (body.expect !== undefined && Number(body.expect.total).toFixed(2) !== Number(tree.order["total"]).toFixed(2)) {
+      throw new ApiError(409, "PRICE_CHANGED", "The price changed.", { column: "total", total: Number(tree.order["total"]).toFixed(2) });
+    }
     const { order } = this.engine.writeOrder(tree, this.writer, { channel: "phone", customer_id: null, link_token: null });
+    this.keys.set(clientKey, order.id);
     return { data: { ...order } };
   }
 
+  /** The phone orders already taken, by their retry keys. */
+  private readonly keys = new Map<string, Id>();
+
   async setHours(id: Id, values: { open?: boolean; opens?: string; closes?: string }): Promise<Row> {
-    this.manager();
+    this.manager("hours");
     return { ...this.world.update("hours", id, values) };
   }
 
   async addClosure(values: { from_date: string; to_date: string; reason: string | null }): Promise<Row> {
-    this.manager();
+    this.manager("closures", "create");
     return { ...this.world.insert("closures", { ...values, active: true }) };
   }
 
   async setClosure(id: Id, active: boolean): Promise<Row> {
-    this.manager();
+    this.manager("closures");
     return { ...this.world.update("closures", id, { active }) };
   }
 
   async setOnline(on: boolean): Promise<Row> {
-    this.manager();
+    this.manager("settings");
     return { ...this.world.update("settings", this.world.settings().id, { online_on: on }) };
   }
 
