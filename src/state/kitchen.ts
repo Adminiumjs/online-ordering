@@ -65,6 +65,8 @@ interface KitchenState {
   signedOut: boolean;
   person: KitchenPerson | null;
   zone: string;
+  /** No time zone chosen for the kitchen: its times read on the server's, and the board says so. */
+  zoneUnset: boolean;
   currency: string;
   settings: Row | null;
   hours: Row[];
@@ -100,6 +102,7 @@ export const useKitchen = create<KitchenState>(() => ({
   signedOut: false,
   person: null,
   zone: "UTC",
+  zoneUnset: false,
   currency: "USD",
   settings: null,
   hours: [],
@@ -165,7 +168,7 @@ export async function loadKitchen(): Promise<void> {
   try {
     const p = port();
     const [person, config, settings, hours, closures, menu, holidays, receipts] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts()]);
-    set({ person, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, signedOut: false });
+    set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, signedOut: false });
     await Promise.all([readOrders(true), readSlots(), readCounts()]);
     set({ load: "ok" });
   } catch (error) {

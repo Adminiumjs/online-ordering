@@ -82,7 +82,8 @@ export interface KitchenPerson {
 
 export interface KitchenPort {
   me(): Promise<KitchenPerson>;
-  config(): Promise<{ timezone: string | null; currency: string | null }>;
+  /** `zoneSet`: the kitchen's time zone was chosen in Adminium (else the server's stands in, and the screen says so). */
+  config(): Promise<{ timezone: string | null; currency: string | null; zoneSet?: boolean }>;
   settings(): Promise<Row>;
   hours(): Promise<Row[]>;
   closures(): Promise<Row[]>;

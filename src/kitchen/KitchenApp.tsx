@@ -325,6 +325,12 @@ export default function KitchenApp() {
               {t("kitchen.outOfDate")}
             </div>
           )}
+          {k.zoneUnset && (
+            <div role="status" style={{ flex: "none", display: "flex", alignItems: "center", gap: 9, padding: "9px clamp(14px,2.2vw,24px)", background: "var(--warn-soft)", color: "var(--warn)", fontSize: 13, fontWeight: 700, borderBlockEnd: "1px solid var(--border)" }}>
+              <Icon name="clock" size={15} />
+              {t("kitchen.zoneUnset", { zone: k.zone })}
+            </div>
+          )}
           {sound.on && !sound.running && (
             <button onClick={armSound} style={{ flex: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, width: "100%", padding: "9px clamp(14px,2.2vw,24px)", border: "none", borderBlockEnd: "1px solid var(--border)", background: "var(--accent-soft)", color: "var(--accent-ink)", fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
               <Icon name="volume-2" size={15} />

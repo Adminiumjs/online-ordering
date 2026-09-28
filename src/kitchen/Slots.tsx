@@ -59,7 +59,9 @@ export function Slots() {
       .map((s) => s.time);
     const result = await pauseMany(today, need);
     if (result.failedAt !== null) {
-      useKitchen.setState({ stopFailed: { until: result.done[result.done.length - 1] ?? result.failedAt } });
+      // Nothing paused at all: there is no "stopped until" to finish.
+      const last = result.done[result.done.length - 1];
+      useKitchen.setState({ stopFailed: last === undefined ? null : { until: last } });
       toast(t("kitchen.slots.stopFailed"), "warn");
     } else {
       useKitchen.setState({ stopFailed: null });

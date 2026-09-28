@@ -199,10 +199,10 @@ export class AdminiumKitchen implements KitchenPort {
     return this.personOf(cfg);
   }
 
-  async config(): Promise<{ timezone: string | null; currency: string | null }> {
+  async config(): Promise<{ timezone: string | null; currency: string | null; zoneSet: boolean }> {
     // The transport takes the session's write token here: a move made before any read still goes.
     await this.t.port.config();
-    return { timezone: this.zone, currency: this.cfg.currency };
+    return { timezone: this.zone, currency: this.cfg.currency, zoneSet: this.cfg.timezone !== null && this.cfg.timezoneSource !== "host" && this.cfg.timezoneSource !== "fallback" };
   }
 
   settings(): Promise<Row> {
