@@ -129,7 +129,7 @@ function MenuCard({ dish, day, today }: { dish: Dish; day: Day; today: Day }) {
           <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "-.025em" }}>{dish.name}</span>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 14, fontWeight: 600, whiteSpace: "nowrap" }}>{price}</span>
         </div>
-        <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>
+        <p className="jk-own" style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>
         <DishTags dish={dish} left={sold ? null : portions.left} day={day} today={today} />
       </div>
     </button>

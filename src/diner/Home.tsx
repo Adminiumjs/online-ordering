@@ -80,8 +80,8 @@ function OpenHome({ day }: { day: DayFacts }) {
               <Icon name="flame" size={13} />
               {t("home.eyebrow")}
             </span>
-            <h1 className="jk-h1">{venue.headline ?? t("home.headline")}</h1>
-            <p className="jk-lead">{venue.intro ?? t("home.intro")}</p>
+            <h1 className={venue.headline === null ? "jk-h1" : "jk-h1 jk-own"}>{venue.headline ?? t("home.headline")}</h1>
+            <p className={venue.intro === null ? "jk-lead" : "jk-lead jk-own"}>{venue.intro ?? t("home.intro")}</p>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 11 }}>
               <button className="jn-btn jk-btn-primary" onClick={() => goDiner("menu")}>
                 <Icon name="utensils" size={17} />
@@ -145,7 +145,7 @@ function OpenHome({ day }: { day: DayFacts }) {
               <span style={{ fontSize: 14.5, fontWeight: 800, letterSpacing: "-.02em" }}>
                 <bdi>{venue.street}</bdi>
               </span>
-              {venue.area !== null && <span style={{ fontSize: 13, color: "var(--fg-muted)" }}>{venue.area}</span>}
+              {venue.area !== null && <span className="jk-own" style={{ fontSize: 13, color: "var(--fg-muted)" }}>{venue.area}</span>}
             </div>
           </div>
         </div>
@@ -269,7 +269,7 @@ function FeaturedCard({ dish, portions, price, today }: { dish: Dish; portions: 
           <span style={{ fontSize: 16.5, fontWeight: 800, letterSpacing: "-.025em" }}>{dish.name}</span>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 14.5, fontWeight: 600, whiteSpace: "nowrap" }}>{price}</span>
         </div>
-        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>
+        <p className="jk-own" style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>
         <DishTags dish={dish} left={portions.soldOut ? null : portions.left} day={today} today={today} />
       </div>
     </button>
@@ -500,7 +500,7 @@ function FindUs({ day }: { day: DayFacts }) {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", gap: "clamp(18px,3vw,40px)", alignItems: "center" }}>
           <div>
             <h2 className="jk-h2">{t("findUs.title")}</h2>
-            {venue.directions !== null && <p style={{ margin: "9px 0 0", maxWidth: "38ch", fontSize: 14.5, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{venue.directions}</p>}
+            {venue.directions !== null && <p className="jk-own" style={{ margin: "9px 0 0", maxWidth: "38ch", fontSize: 14.5, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{venue.directions}</p>}
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBlockStart: 18 }}>
               {venue.address !== "" && (
                 <span style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 14, color: "var(--fg-muted)" }}>

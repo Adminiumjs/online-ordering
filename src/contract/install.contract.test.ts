@@ -223,13 +223,15 @@ describe.skipIf(why !== null)(`the app installs on a built Adminium${why === nul
         ok(await staff.post(`/api/v1/data/${shared}/${encodeURIComponent(items.id)}`, { values: { name: "House soup", price: "6.50" } }), 201);
         // One install of an app per workspace: the northwind one goes first, its tables kept.
         expect(ok(await staff.send<{ uninstalled: boolean }>("DELETE", "/api/v1/apps/ordering", {})).uninstalled).toBe(true);
-        // Ordering joins the till's menu (the check's recommended answer), and offers its sample without the menu and its orders.
+        // Ordering joins the till's menu (the check's recommended answer), and offers its sample without the menu, its orders and diners.
         const { plan, installed } = await install({ connection: shared });
         expect((plan as unknown as { shareOffers?: { action: string }[] }).shareOffers?.[0]?.action).toBe("share");
         const skip = MANIFEST.sampleData.skipWhenShared.skip;
         const offered = ok(await staff.get<{ available: { tables: { ref: string }[] } }>("/api/v1/apps/ordering/sample-data")).available.tables.map((t) => t.ref);
         expect(offered.filter((ref) => skip.includes(ref))).toEqual([]);
-        expect(offered).toEqual(expect.arrayContaining(["settings", "hours", "customers", "enquiries"]));
+        // The kitchen's words, hours and enquiries go in; the sample's diners stay out with the orders they placed.
+        expect(offered).toEqual(expect.arrayContaining(["settings", "hours", "enquiries"]));
+        expect(offered).not.toContain("customers");
         await addSample();
         const names = Object.fromEntries(installed.schema.created.map((name) => [name.replace(/^ordering_/, ""), name]));
         expect((await rowsOf(shared, names["orders"]!)).length).toBe(0);

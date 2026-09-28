@@ -89,7 +89,7 @@ function SheetBody() {
           <h2 id={nameId} style={{ margin: 0, fontSize: "clamp(20px,2.6vw,26px)", fontWeight: 800, letterSpacing: "-.032em" }}>{dish.name}</h2>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 16, fontWeight: 600, whiteSpace: "nowrap" }}>{price}</span>
         </div>
-        {dish.description !== "" && <p style={{ margin: "9px 0 0", fontSize: 14, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>}
+        {dish.description !== "" && <p className="jk-own" style={{ margin: "9px 0 0", fontSize: 14, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{dish.description}</p>}
         {allergens.length > 0 && (
           <span style={{ display: "flex", alignItems: "center", gap: 7, marginBlockStart: 10, fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)" }}>
             <Icon name="info" size={13} />

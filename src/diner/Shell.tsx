@@ -290,7 +290,7 @@ function Footer({ day }: { day: DayFacts }) {
               <Mark name={venue.name} />
               <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.035em" }}>{venue.name}</span>
             </span>
-            {venue.about !== null && <p style={{ margin: 0, maxWidth: "34ch", fontSize: 13, lineHeight: 1.6, color: "var(--fg-muted)" }}>{venue.about}</p>}
+            {venue.about !== null && <p className="jk-own" style={{ margin: 0, maxWidth: "34ch", fontSize: 13, lineHeight: 1.6, color: "var(--fg-muted)" }}>{venue.about}</p>}
           </div>
           <div style={{ display: "flex", gap: "clamp(24px,5vw,60px)", flexWrap: "wrap" }}>
             {columns.map((c) => (

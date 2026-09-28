@@ -244,3 +244,5 @@ textarea.jk-input { resize: vertical; min-height: 84px; line-height: 1.5; }
 
 /* What people type (a name, a note) reads in its own direction, whatever the page's. */
 input:not([dir]):not([type="date"]), textarea:not([dir]) { unicode-bidi: plaintext; }
+/* Words the kitchen typed (its headline, its menu) keep their own direction on a page in another one. */
+.jk-own { unicode-bidi: plaintext; }

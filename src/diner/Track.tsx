@@ -429,7 +429,7 @@ function Tracking({ order }: { order: OrderWithLines }) {
               <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.02em" }}>
                 <bdi>{venue.street !== "" ? venue.street : venue.name}</bdi>
               </span>
-              {venue.area !== null && <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{venue.area}</span>}
+              {venue.area !== null && <span className="jk-own" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{venue.area}</span>}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderRadius: 16, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
               <Icon name="wallet" size={16} style={{ color: "var(--fg-muted)" }} />
