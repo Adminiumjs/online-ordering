@@ -115,7 +115,8 @@ async function boot(): Promise<void> {
   } else {
     const live = await liveSources();
     if (live instanceof Error) {
-      showStartupFailure(container as HTMLElement, live.message, codeOf(live));
+      // Not signed in: the page is already on its way to Adminium's sign-in.
+      if (codeOf(live) !== "SIGNING_IN") showStartupFailure(container as HTMLElement, live.message, codeOf(live));
       return;
     }
     setSources(live);

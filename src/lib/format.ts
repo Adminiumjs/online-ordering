@@ -102,3 +102,6 @@ export function maskEmail(email: string | null | undefined): string {
 
 /** The first word of a name: "Kwame B." → "Kwame". */
 export const firstName = (name: unknown): string => String(name ?? "").trim().split(/\s+/)[0] ?? "";
+
+/** An address shaped like one: something, an at sign, a domain with a dot. The server judges it again. */
+export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

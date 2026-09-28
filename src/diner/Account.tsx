@@ -12,11 +12,11 @@ import { useI18n } from "../i18n/index.tsx";
 import { Rich } from "../i18n/rich.tsx";
 import type { OrderWithLines } from "../data/ports.ts";
 import { asciiDigits } from "../lib/format.ts";
+import { EMAIL } from "../lib/format.ts";
 import { portionsOf, storedOptionsText } from "../lib/menu.ts";
 import { daysBetween, venueDay } from "../lib/venueTime.ts";
 import { sources, useNow } from "../data/sources.ts";
 import {
-  EMAIL,
   RESEND_SECONDS,
   SEND_LIMIT,
   askDelete,

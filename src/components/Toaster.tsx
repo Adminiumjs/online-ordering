@@ -6,15 +6,15 @@ import { useT } from "../i18n/index.tsx";
 import { dismissToast, holdToast, useUi } from "../state/ui.ts";
 import { Icon } from "./Icon.tsx";
 import { useNarrow } from "./Modal.tsx";
-import { useDiner } from "../state/diner.ts";
 
-export function Toaster() {
+/** `raised`: a bottom sheet is up (the order page's cart or dish), and on a phone the toast sits above its action bar. */
+export function Toaster({ raised = false }: { raised?: boolean }) {
   const t = useT();
   const toast = useUi((s) => s.toast);
   const undoable = toast?.undo !== undefined;
   const phone = useNarrow(620);
   // A bottom sheet's action bar sits where the toast would: on a phone, the toast rises above it.
-  const sheetUp = useDiner((s) => s.drawer || s.sheet !== null) && phone;
+  const sheetUp = raised && phone;
   return (
     <div role="status" aria-live="polite" style={{ position: "fixed", insetInline: 0, insetBlockEnd: sheetUp ? 196 : 26, zIndex: 900, display: "flex", justifyContent: "center", pointerEvents: "none" }}>
       {toast !== null && (

@@ -13,7 +13,7 @@ import { create } from "zustand";
 import type { OrderBody, QuoteReply, Row, SlotTime, DishState, Id } from "../data/wire.ts";
 import { ApiError, isApiError, refusedLine } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
-import { menuModel, type MenuModel } from "../lib/menu.ts";
+import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
 import { addDays, instantOf, venueDay, venueMinutes, type Day } from "../lib/venueTime.ts";
 import { hoursOn, offeredSlots, type Slot } from "../lib/day.ts";
 
@@ -242,7 +242,7 @@ function preselect(now: number): void {
 
 // ── the cart ────────────────────────────────────────────────────────────────
 
-export const lineKey = (dishId: Id, options: readonly Id[], note: string): string => `${String(dishId)}|${[...options].sort((a, b) => a - b).join(",")}|${note.trim()}`;
+export { lineKey } from "../lib/menu.ts";
 
 export const cartCount = (cart: readonly CartLine[]): number => cart.reduce((n, l) => n + l.qty, 0);
 

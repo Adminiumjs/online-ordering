@@ -195,3 +195,6 @@ export function portionsOf(states: readonly DishState[] | null, id: Id): { soldO
   if (state === undefined) return { soldOut: false, left: null };
   return { soldOut: state.state !== "on", left: state.left ?? null };
 }
+
+/** One cart or phone line per dish, options and note: the same three make the same line. */
+export const lineKey = (dishId: Id, options: readonly Id[], note: string): string => `${String(dishId)}|${[...options].sort((a, b) => a - b).join(",")}|${note.trim()}`;

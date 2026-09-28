@@ -42,6 +42,23 @@ export const SURFACE_NAV = [
   { id: "kitchen", path: "", view: "kitchen", side: "staff", icon: "chef-hat", labelKey: "shell.kitchen" },
 ] as const satisfies readonly Entry[];
 
+/**
+ * The kitchen's own modules, which the order page's build must not carry: its
+ * screens, its state and its door into Adminium (the staff session). The
+ * surface gate reads this list and looks for each in the customer bundle's
+ * source maps.
+ */
+export const SURFACE_STAFF_ONLY = [
+  "src/screens/Kitchen.tsx",
+  "src/kitchen/KitchenApp.tsx",
+  "src/kitchen/Board.tsx",
+  "src/kitchen/Phone.tsx",
+  "src/kitchen/Hours.tsx",
+  "src/state/kitchen.ts",
+  "src/data/adminiumKitchen.ts",
+  "src/data/sessionSource.ts",
+] as const;
+
 /** Screens a side renders without an address of their own. */
 export const SURFACE_EXTRAS = {
   staff: ["notfound"],

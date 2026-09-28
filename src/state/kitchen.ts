@@ -14,9 +14,8 @@ import type { KitchenPerson, Menu, OrderWithLines } from "../data/ports.ts";
 import type { ApiError, Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
-import { menuModel, type MenuModel } from "../lib/menu.ts";
+import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
 import { addDays, instantOf, minutesOf, venueDay, venueMinutes, type Day } from "../lib/venueTime.ts";
-import { lineKey } from "./diner.ts";
 
 export type KitchenTab = "queue" | "slots" | "shelf" | "menu" | "hours";
 export const BOARD = ["placed", "confirmed", "preparing", "ready"] as const;

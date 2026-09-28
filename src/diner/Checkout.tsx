@@ -10,7 +10,7 @@ import { Icon } from "../components/Icon.tsx";
 import { Modal, useNarrow } from "../components/Modal.tsx";
 import { useI18n } from "../i18n/index.tsx";
 import { Rich } from "../i18n/rich.tsx";
-import { EMAIL } from "../state/account.ts";
+import { EMAIL } from "../lib/format.ts";
 import { optionsText } from "../lib/menu.ts";
 import { asciiDigits, telHref } from "../lib/format.ts";
 import {

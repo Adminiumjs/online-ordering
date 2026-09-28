@@ -8,7 +8,7 @@ import { useId } from "react";
 import { Bdi } from "../components/Bdi.tsx";
 import { Icon } from "../components/Icon.tsx";
 import { useI18n } from "../i18n/index.tsx";
-import { EMAIL } from "../state/account.ts";
+import { EMAIL } from "../lib/format.ts";
 import { asciiDigits } from "../lib/format.ts";
 import { hoursOn } from "../lib/day.ts";
 import { addDays, type Day } from "../lib/venueTime.ts";

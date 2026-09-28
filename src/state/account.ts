@@ -12,6 +12,7 @@ import { create } from "zustand";
 import type { OrderWithLines } from "../data/ports.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
+import { EMAIL } from "../lib/format.ts";
 
 export interface FindState {
   step: "email" | "sent" | "signing";
@@ -61,7 +62,6 @@ const set = useAccount.setState;
 const port = () => sources().diner;
 const setFind = (patch: Partial<FindState>) => set({ find: { ...get().find, ...patch } });
 
-export const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const SEND_LIMIT = 3;
 export const RESEND_SECONDS = 60;
 

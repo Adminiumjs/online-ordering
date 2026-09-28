@@ -35,18 +35,22 @@ export function sources(): Sources {
   return current;
 }
 
-/** A clock that is the device's, ticking every 15 seconds for the screens that show it. */
-export function deviceClock(): Clock {
+/**
+ * A clock that is the device's, moved by `skew` (the server's clock less the
+ * device's, as the server's config said it), ticking every 15 seconds for the
+ * screens that show it.
+ */
+export function deviceClock(skew = 0): Clock {
   const listeners = new Set<() => void>();
   let timer: ReturnType<typeof setInterval> | null = null;
-  let last = Date.now();
+  let last = Date.now() + skew;
   return {
     now: () => last,
     subscribe(listener) {
       listeners.add(listener);
       if (timer === null) {
         timer = setInterval(() => {
-          last = Date.now();
+          last = Date.now() + skew;
           for (const l of listeners) l();
         }, 15_000);
       }

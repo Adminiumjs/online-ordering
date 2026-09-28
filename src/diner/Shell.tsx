@@ -319,6 +319,7 @@ function Footer({ day }: { day: DayFacts }) {
 
 export function DinerShell({ children }: { children: ReactNode }) {
   const day = useDay();
+  const sheetUp = useDiner((s) => s.drawer || s.sheet !== null);
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: "var(--bg)", color: "var(--fg)" }}>
       <Header day={day} />
@@ -326,7 +327,7 @@ export function DinerShell({ children }: { children: ReactNode }) {
       <main id="main" style={{ flex: 1 }}>{children}</main>
       <Footer day={day} />
       <MobileMenu day={day} />
-      <Toaster />
+      <Toaster raised={sheetUp} />
     </div>
   );
 }

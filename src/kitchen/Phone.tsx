@@ -16,7 +16,7 @@ import { asciiDigits } from "../lib/format.ts";
 import { groupSlots } from "../lib/day.ts";
 import { fromPrice, missingGroup, optionsText, unitPrice, type Dish, type Group } from "../lib/menu.ts";
 import { minutesOf, venueMinutes } from "../lib/venueTime.ts";
-import { EMAIL } from "../state/account.ts";
+import { EMAIL } from "../lib/format.ts";
 import { addPhoneLine, freshPhoneQuote, kToday, num, phoneDay, placePhone, setPhone, useKitchen, type PhoneDraft } from "../state/kitchen.ts";
 import { toast } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
