@@ -485,9 +485,18 @@ function quoted(order: Record<string, unknown>): Record<string, unknown> {
 }
 
 /** `kwame.b@mail.example` → `k…@mail.example`: enough to recognise, no more. */
+/** The big mail providers, whose name tells nobody where a person works: shown whole. */
+const PROVIDERS = new Set(
+  "gmail.com googlemail.com outlook.com hotmail.com hotmail.co.uk live.com msn.com yahoo.com yahoo.co.uk yahoo.fr icloud.com me.com mac.com aol.com proton.me protonmail.com gmx.de gmx.net web.de t-online.de orange.fr free.fr laposte.net seznam.cz qq.com 163.com 126.com yandex.ru".split(" "),
+);
+
+/** The address as the page may show it, as Adminium masks it: its first letter, and the domain's. */
 function maskAddress(address: string): string {
-  const [local = "", domain = ""] = address.split("@");
-  return `${local.slice(0, 1)}…@${domain}`;
+  const [local = "", domain = ""] = address.trim().toLowerCase().split("@");
+  const head = `${local.slice(0, 1)}•••`;
+  if (PROVIDERS.has(domain)) return `${head}@${domain}`;
+  const dot = domain.lastIndexOf(".");
+  return `${head}@${domain.slice(0, 1)}•••${dot === -1 ? "" : domain.slice(dot)}`;
 }
 
 /** An unguessable code for an order's own link (16 characters, Crockford base 32). */

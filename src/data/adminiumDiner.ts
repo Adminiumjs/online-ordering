@@ -371,6 +371,12 @@ export class AdminiumDiner implements DinerPort {
         this.keep("customer", null);
         return null;
       }
+      // An Adminium that cannot yet unmask a person's own row answers it unavailable: the session
+      // stands (their orders say so), and the address they typed stands in for the row's.
+      const typed = this.typed();
+      if (refused instanceof ApiError && refused.status === 503 && typed !== null) {
+        return { email: typed, name: null, at: new Date(this.kept("customer")?.at ?? this.clock()).toISOString() };
+      }
       throw refused;
     }
   }

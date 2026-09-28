@@ -195,6 +195,8 @@ export class AdminiumKitchen implements KitchenPort {
   }
 
   async config(): Promise<{ timezone: string | null; currency: string | null }> {
+    // The transport takes the session's write token here: a move made before any read still goes.
+    await this.t.port.config();
     return { timezone: this.zone, currency: this.cfg.currency };
   }
 

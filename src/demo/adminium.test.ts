@@ -394,7 +394,7 @@ describe("stopping online orders for today", () => {
 
 describe("signing in", () => {
   it("counts the wrong codes down, then signs in with the right one and lists Kwame's orders", async () => {
-    expect(await demo.diner.requestSignIn("kwame.b@mail.example")).toEqual({ sentTo: "k…@mail.example" });
+    expect(await demo.diner.requestSignIn("kwame.b@mail.example")).toEqual({ sentTo: "k•••@m•••.example" });
     const wrong = await refusal(demo.diner.verifyCode("kwame.b@mail.example", "284761"));
     expect([wrong.code, wrong.params]).toEqual(["PUBLIC_CODE_WRONG", { triesLeft: 4 }]);
     const opened = await demo.diner.verifyCode("kwame.b@mail.example", DEMO_SIGN_IN.code);
