@@ -16,6 +16,7 @@ const FORMS: Record<LocaleTag, number> = { "en-US": 2, "de-DE": 2, "fr-FR": 2, "
 const SAME_AS_ENGLISH: Partial<Record<LocaleTag, string[]>> = {
   "de-DE": ["shell.nav.dialog", "sheet.optional", "co.optional", "co.name", "kitchen.live", "kitchen.chip.start"],
   "fr-FR": ["shell.nav.dialog", "totals.total", "co.phone", "kitchen.slots.pause", "kitchen.ticket.lines", "kitchen.phoneOrder.note"],
+  "cs-CZ": ["shell.nav.menu"],
   "da-DK": ["shell.nav.dialog", "totals.subtotal", "large.sent.ref", "kitchen.live", "kitchen.btn.start", "kitchen.chip.start", "kitchen.slots.pause", "kitchen.phoneOrder.note"],
   "zh-CN": ["co.email.placeholder"],
   "zh-TW": ["co.email.placeholder"],
