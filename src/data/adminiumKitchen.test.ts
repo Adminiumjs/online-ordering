@@ -122,7 +122,8 @@ describe("the kitchen's writes", () => {
     await k.move(7, "picked_up", "ready");
     expect(t.calls.map((c) => c.body)).toEqual([
       { values: { status: "ready" }, from: "preparing" },
-      { values: { status: "ready", paid_method: null }, from: "picked_up" },
+      // The move itself empties how it was paid.
+      { values: { status: "ready" }, from: "picked_up" },
     ]);
   });
 

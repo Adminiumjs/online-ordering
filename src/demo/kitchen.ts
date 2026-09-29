@@ -125,8 +125,8 @@ export class DemoKitchen implements KitchenPort {
   }
 
   async move(id: Id, from: string, to: string): Promise<Row> {
-    // A hand-over taken back is unpaid again.
-    const values = from === "picked_up" ? { status: to, paid_method: null } : { status: to };
+    // A hand-over taken back is unpaid again: the move empties how it was paid.
+    const values = { status: to };
     this.held("orders", values);
     return { ...this.engine.updateOrder(id, values, this.writer, { from }) };
   }

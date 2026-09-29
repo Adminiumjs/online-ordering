@@ -161,7 +161,7 @@ export const COLUMNS: Record<string, Record<string, Fill>> = {
   order_items: { order_id: REQUIRED, position: null, menu_item_id: REQUIRED, qty: 1, note: null, name: null, unit_price: null, options_total: null, unit_total: null, line_total: null },
   order_item_modifiers: { order_item_id: REQUIRED, modifier_id: REQUIRED, name: null, price_delta: null },
   enquiries: { ref_seq: null, ref: null, status: "new", heads: REQUIRED, wanted_on: REQUIRED, notes: null, name: REQUIRED, phone: REQUIRED, email: REQUIRED, language: null, staff_note: null, handled_by: null, created_at: null, client_key: null },
-  messages: { kind: REQUIRED, status: "queued", to_address: null, language: null, order_id: null, enquiry_id: null, customer_id: null, due: null, created_at: null, sent_at: null, error: null, skip_reason: null },
+  messages: { kind: REQUIRED, status: "queued", to_address: null, language: null, order_id: null, enquiry_id: null, customer_id: null, due: null, created_at: null, sent_at: null, error: null, repeat_key: null, skip_reason: null },
 };
 
 export const RULES: Rules = {

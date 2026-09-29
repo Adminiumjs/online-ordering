@@ -341,10 +341,10 @@ export const TABLES: Table[] = [
           undo("preparing", "ready_at"),
         ],
         // A hand-over made by mistake: a manager takes it back, whenever it is noticed.
-        picked_up: [{ to: "ready", roles: ["manager"], undo: true }],
+        picked_up: [{ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method"] }],
       },
-      // A finished order is never re-priced: its lines are locked with it. How it
-      // was paid stays open, so a hand-over taken back is unpaid again.
+      // A finished order is never re-priced: its lines are locked with it. A
+      // hand-over taken back empties how it was paid (`clears`), and nothing else opens it.
       lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] },
       children: { order_items: { via: "order_id", lock: true } },
       timed: [
@@ -510,6 +510,8 @@ export const TABLES: Table[] = [
       at("created_at", "Created", { ...opt, rules: stamp("now", onCreate) }),
       at("sent_at", "Sent", opt),
       text("error", 500, "What went wrong", opt),
+      // Which hand-over a receipt was sent for, as Adminium's digest of it.
+      text("repeat_key", 64, "Resend key", opt),
       choice("skip_reason", "Why it was skipped", {
         overtaken: "A later email took its place",
         paid: "Paid",

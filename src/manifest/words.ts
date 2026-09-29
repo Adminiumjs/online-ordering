@@ -177,6 +177,7 @@ export const WORDS: Record<string, Translation> = {
   "Receipts": { "de-DE": "Belege", "fr-FR": "Reçus", "da-DK": "Kvitteringer", "cs-CZ": "Účtenky", "ar-EG": "الإيصالات", "zh-CN": "收据", "zh-TW": "收據" },
   "Reference": { "de-DE": "Referenz", "fr-FR": "Référence", "da-DK": "Reference", "cs-CZ": "Číslo poptávky", "ar-EG": "المرجع", "zh-CN": "编号", "zh-TW": "編號" },
   "Reference (running)": { "de-DE": "Referenz (fortlaufend)", "fr-FR": "Référence (séquence)", "da-DK": "Reference (løbende)", "cs-CZ": "Číslo poptávky (pořadové)", "ar-EG": "المرجع (تسلسلي)", "zh-CN": "编号（流水）", "zh-TW": "編號（流水）" },
+  "Resend key": { "de-DE": "Schlüssel für erneutes Senden", "fr-FR": "Clé de renvoi", "da-DK": "Gensendelsesnøgle", "cs-CZ": "Klíč opětovného odeslání", "ar-EG": "مفتاح إعادة الإرسال", "zh-CN": "重发密钥", "zh-TW": "重發金鑰" },
   "Retry key": { "de-DE": "Wiederholungsschlüssel", "fr-FR": "Clé de nouvel essai", "da-DK": "Genforsøgsnøgle", "cs-CZ": "Klíč opakování", "ar-EG": "مفتاح إعادة المحاولة", "zh-CN": "重试密钥", "zh-TW": "重試金鑰" },
   "Saturday": { "de-DE": "Samstag", "fr-FR": "Samedi", "da-DK": "Lørdag", "cs-CZ": "Sobota", "ar-EG": "السبت", "zh-CN": "星期六", "zh-TW": "星期六" },
   "Sent": { "de-DE": "Gesendet", "fr-FR": "Envoyé", "da-DK": "Sendt", "cs-CZ": "Odesláno", "ar-EG": "أُرسل", "zh-CN": "已发送", "zh-TW": "已寄送" },

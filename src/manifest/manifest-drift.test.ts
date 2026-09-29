@@ -170,8 +170,10 @@ describe("the order's life is Adminium's", () => {
     for (const [from, to, stamp] of [["confirmed", "placed", "confirmed_at"], ["preparing", "confirmed", "preparing_at"], ["ready", "preparing", "ready_at"]] as const) {
       expect(back(from, to), `${from} → ${to}`).toEqual({ to, roles: ["kitchen", "manager"], undo: true, requires: { time: { before: { column: stamp, plus: { minutes: 1 } } } } });
     }
-    // A hand-over taken back: a manager's, at any time.
-    expect(back("picked_up", "ready")).toEqual({ to: "ready", roles: ["manager"], undo: true });
+    // A hand-over taken back: a manager's, at any time, and unpaid again.
+    expect(back("picked_up", "ready")).toEqual({ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method"] });
+    // Nothing else of a finished order opens: how it was paid only by that move.
+    expect(states().lock).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] });
     for (const column of ["confirmed_at", "confirmed_by", "preparing_at", "ready_at", "ready_by", "picked_up_at", "picked_up_by"]) {
       expect((rules("orders", column)["stamp"] as Json)["clearOnBack"], column).toBe(true);
     }
@@ -212,8 +214,10 @@ describe("the emails say what stood, in the diner's language", () => {
     expect(producer("order-receipt")).toMatchObject({ holdSeconds: 20, dropWhen: [{ column: "status", in: ["ready"], reason: "no-longer-needed" }] });
   });
 
-  it("queues a receipt only while Invoices & Receipts draws one", () => {
-    expect(producer("order-receipt")["gate"]).toEqual({ feature: "receipts" });
+  it("queues a receipt only while Invoices & Receipts draws one and its switch is on — once per hand-over", () => {
+    expect(producer("order-receipt")["gate"]).toEqual({ feature: "receipts", setting: { table: "settings", column: "receipt_email_on" } });
+    expect(producer("order-receipt")["repeatBy"]).toBe("picked_up_at");
+    expect((outbox()["columns"] as Json)["repeatKey"]).toBe("repeat_key");
   });
 
   it("writes in the language the order was placed in, whoever is signed in", () => {

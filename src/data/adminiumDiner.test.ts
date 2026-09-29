@@ -109,12 +109,14 @@ describe("signing in", () => {
       return answers(s);
     });
 
-  it("reads who is signed in, with the address they typed while their own row masks it", async () => {
-    const api = signIn((s) => (s.path === "/records/ordering_customers_claimed" ? { body: { data: [{ name: "Kwame B.", email: null, _masked: ["email"] }] } } : undefined));
-    const diner = new AdminiumDiner(served, { fetch: api.fetch, storage: tab() });
+  it("reads who is signed in from their own row, and keeps no address of theirs in the browser", async () => {
+    const api = signIn((s) => (s.path === "/records/ordering_customers_claimed" ? { body: { data: [{ name: "Kwame B.", email: "kwame.b@mail.example" }] } } : undefined));
+    const storage = tab();
+    const diner = new AdminiumDiner(served, { fetch: api.fetch, storage });
     await diner.requestSignIn("kwame.b@mail.example");
     await diner.verifyCode("kwame.b@mail.example", "284716");
     expect(await diner.signedIn()).toMatchObject({ email: "kwame.b@mail.example", name: "Kwame B." });
+    for (let i = 0; i < storage.length; i += 1) expect(storage.getItem(storage.key(i)!)).not.toContain("kwame.b@");
   });
 
   it("says a wrong code with the tries left", async () => {

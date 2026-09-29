@@ -590,7 +590,10 @@ export const MANIFEST_RULES = {
             "roles": [
               "manager"
             ],
-            "undo": true
+            "undo": true,
+            "clears": [
+              "paid_method"
+            ]
           }
         ]
       },
@@ -1566,8 +1569,13 @@ export const MANIFEST_RULES = {
       "kind": "order-receipt",
       "link": "order_id",
       "gate": {
-        "feature": "receipts"
+        "feature": "receipts",
+        "setting": {
+          "table": "settings",
+          "column": "receipt_email_on"
+        }
       },
+      "repeatBy": "picked_up_at",
       "onChange": {
         "table": "orders",
         "column": "status",

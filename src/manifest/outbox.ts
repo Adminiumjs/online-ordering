@@ -17,7 +17,10 @@
  *   order-cancelled-by-you     the diner cancelled it themselves, online — so a
  *                              forwarded link used by someone else shows up;
  *   order-receipt              handed over: the receipt attached (only
- *                              with Invoices & Receipts attached);
+ *                              with Invoices & Receipts attached, and while
+ *                              its switch in Settings is on) — once per
+ *                              hand-over, so one taken back and made again
+ *                              (paid another way) sends the corrected one;
  *   enquiry-received           a large-order enquiry, with its reference.
  *
  * The ready and receipt emails wait twenty seconds first, so the kitchen's
@@ -77,6 +80,7 @@ export const OUTBOX = {
     sentAt: "sent_at",
     error: "error",
     skipReason: "skip_reason",
+    repeatKey: "repeat_key",
   },
   links: { order: "order_id", enquiry: "enquiry_id", customer: "customer_id" },
   recipient: {
@@ -104,8 +108,16 @@ export const OUTBOX = {
       ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
     },
     ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }) })),
-    // Drawn by Invoices & Receipts: without it attached, no receipt is queued at all.
-    { kind: "order-receipt", link: "order_id", gate: { feature: "receipts" }, ...onOrder("status", "picked_up"), ...heldWhileUndone(["ready"]) },
+    // Drawn by Invoices & Receipts: without it attached, or with the switch off, no receipt is queued at all.
+    // One per hand-over (its stamp), not one per order: a hand-over taken back and made again is receipted again.
+    {
+      kind: "order-receipt",
+      link: "order_id",
+      gate: { feature: "receipts", setting: { table: "settings", column: "receipt_email_on" } },
+      repeatBy: "picked_up_at",
+      ...onOrder("status", "picked_up"),
+      ...heldWhileUndone(["ready"]),
+    },
     { kind: "enquiry-received", link: "enquiry_id", onCreate: { table: "enquiries" }, recipient: { column: "email", name: "name", language: "language" } },
   ],
 };

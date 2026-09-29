@@ -2184,7 +2184,10 @@
                 "roles": [
                   "manager"
                 ],
-                "undo": true
+                "undo": true,
+                "clears": [
+                  "paid_method"
+                ]
               }
             ]
           },
@@ -4510,6 +4513,22 @@
               "ar-EG": "ما الخطأ",
               "zh-CN": "出错原因",
               "zh-TW": "出錯原因"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "repeat_key",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Resend key",
+              "de-DE": "Schlüssel für erneutes Senden",
+              "fr-FR": "Clé de renvoi",
+              "da-DK": "Gensendelsesnøgle",
+              "cs-CZ": "Klíč opětovného odeslání",
+              "ar-EG": "مفتاح إعادة الإرسال",
+              "zh-CN": "重发密钥",
+              "zh-TW": "重發金鑰"
             },
             "nullable": true
           },
@@ -7908,7 +7927,8 @@
       "due": "due",
       "sentAt": "sent_at",
       "error": "error",
-      "skipReason": "skip_reason"
+      "skipReason": "skip_reason",
+      "repeatKey": "repeat_key"
     },
     "links": {
       "order": "order_id",
@@ -8087,8 +8107,13 @@
         "kind": "order-receipt",
         "link": "order_id",
         "gate": {
-          "feature": "receipts"
+          "feature": "receipts",
+          "setting": {
+            "table": "settings",
+            "column": "receipt_email_on"
+          }
         },
+        "repeatBy": "picked_up_at",
         "onChange": {
           "table": "orders",
           "column": "status",

@@ -41,7 +41,7 @@ const WORDS: Record<string, EmailWords> = { "en-US": EMAIL_EN, ...(EMAIL_TRANSLA
 /** An email's words as they reach a reader: every run of spaces (a no-break one too) as one. */
 const flat = (text: string) => text.replace(/[\s  ]+/g, " ").trim();
 /** A template sentence with the values it names filled in. */
-const fill = (sentence: string, values: Record<string, string>) => sentence.replace(/\{\{([a-z_.]+)\}\}/g, (whole, name: string) => values[name] ?? whole);
+const fill = (sentence: string, values: Record<string, string>) => sentence.replace(/\{\{([A-Za-z_.]+)\}\}/g, (whole, name: string) => values[name] ?? whole);
 const money = (amount: unknown, tag: string) => new Intl.NumberFormat(tag, { style: "currency", currency: "USD" }).format(Number(amount));
 
 describe.skipIf(why !== null)(`the kitchen's emails on a built Adminium${why === null ? "" : ` — skipped: ${why}`}`, () => {
@@ -126,6 +126,45 @@ describe.skipIf(why !== null)(`the kitchen's emails on a built Adminium${why ===
         // "Bezahlt mit: Karte" — the way the diner paid, in their words.
         expect(flat(receipt.text)).toContain(fill(WORDS["de-DE"]!["order-receipt"].paras[1]!, { "order.paid_method.label": "Karte" }));
       }, 300_000);
+
+      it("takes back a hand-over after its receipt went, and sends the corrected one when it is handed over again", async () => {
+        const id = ada.id as number;
+        const back = await stand.kitchen.move(id, "picked_up", "ready");
+        expect([back["status"], back["paid_method"]]).toEqual(["ready", null]);
+        const before = await stand.mailCount();
+        await stand.kitchen.handOff(id, "cash");
+        // "Bezahlt mit: Bar" — one receipt a hand-over; the ready email is not sent twice.
+        const corrected = await stand.mailTo(address("ada"), before);
+        const venue = String((await stand.rows("settings"))[0]!["venue_name"]);
+        expect(corrected.subject).toBe(fill(WORDS["de-DE"]!["order-receipt"].subject, { appName: venue }));
+        expect(flat(corrected.text)).toContain(fill(WORDS["de-DE"]!["order-receipt"].paras[1]!, { "order.paid_method.label": "Bar" }));
+        const mail = await stand.messagesOf(id);
+        const receipts = mail.filter((m) => m["kind"] === "order-receipt");
+        expect(receipts.map((m) => m["status"])).toEqual(["sent", "sent"]);
+        expect(new Set(receipts.map((m) => m["repeat_key"])).size).toBe(2);
+        expect(mail.filter((m) => m["kind"] === "order-ready")).toHaveLength(1);
+      }, 300_000);
+
+      it("queues no receipt while the kitchen's receipt switch is off, with Invoices & Receipts attached", async () => {
+        const settings = (await stand.rows("settings"))[0]!;
+        const path = `${stand.data("settings")}/${String(settings.id)}`;
+        ok(await stand.staff.patch(path, { values: { receipt_email_on: false } }));
+        try {
+          const menu = await stand.kitchen.menu();
+          const made = await stand.kitchen.phoneOrder(
+            { values: { name: "Dee", phone: "(555) 014-5566", email: address("dee"), pickup_at: at("13:45") }, children: { order_items: [{ values: { menu_item_id: menu.items.find((d) => d["name"] === "Lemonade")!.id, qty: 1 } }] } },
+            `dee-${engine}-0123456789abcdefghij`,
+          );
+          const id = made.data.id as number;
+          for (const [from, to] of [["placed", "confirmed"], ["confirmed", "preparing"], ["preparing", "ready"]] as const) await stand.kitchen.move(id, from, to);
+          await stand.kitchen.handOff(id, "card");
+          // Judged when it would be queued: none is, and none comes later.
+          await until(async () => ((await stand.messagesOf(id)).some((m) => m["kind"] === "order-ready") ? true : undefined), "the ready email queued");
+          expect((await stand.messagesOf(id)).filter((m) => m["kind"] === "order-receipt")).toEqual([]);
+        } finally {
+          ok(await stand.staff.patch(path, { values: { receipt_email_on: true } }));
+        }
+      }, 240_000);
 
       it("prints a receipt with each dish's options under it", async () => {
         const drawn = ok(await stand.staff.post<{ printUrl: string }>("/api/v1/apps/ordering/documents/render", { ref: "orders", kind: "receipt", pk: { id: ada.id } }), 201);

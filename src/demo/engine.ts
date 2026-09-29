@@ -362,6 +362,7 @@ export class Engine {
             to: string;
             roles?: readonly string[];
             undo?: true;
+            clears?: readonly string[];
             requires?: { where?: readonly { column: string; isNull?: boolean }[]; time?: { before?: { column: string; plus?: { minutes?: number } } } };
           }
         | undefined;
@@ -373,6 +374,15 @@ export class Engine {
       }
       // An undo only from the state the screen showed.
       if (move.undo === true && opts.from === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", "Name the state it was in.", { column: "status", from: was, to, undo: true });
+      // What an undo empties is emptied: a value sent for one is refused, never written.
+      const valued = (move.undo === true ? (move.clears ?? []) : []).find((c) => c in values && !empty(values[c]));
+      if (valued !== undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", `Back to ${to} with ${valued} emptied.`, { column: "status", from: was, to, clears: valued });
+      // Out of a finished state only the move itself opens the lock: its state, and what it empties.
+      if (lock.includes(was)) {
+        const opened = ["status", ...((states.lock.except ?? []) as readonly string[]), ...(move.undo === true ? (move.clears ?? []) : [])];
+        const locked = Object.keys(values).find((c) => !opened.includes(c));
+        if (locked !== undefined) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { column: locked, state: was });
+      }
       // What it waits for, judged on the row as it stands.
       const until = move.requires?.time?.before;
       if (until !== undefined) {
@@ -394,7 +404,7 @@ export class Engine {
       if (locked.length > 0) throw new ApiError(409, "RECORD_LOCKED", "A finished order does not change.", { column: locked[0], state: was });
     }
     let change: Record<string, unknown> = { ...values };
-    const listedTo = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => typeof m === "object" && (m as { to: string }).to === to) as { undo?: true } | undefined;
+    const listedTo = ((states.moves as Record<string, readonly unknown[]>)[was] ?? []).find((m) => typeof m === "object" && (m as { to: string }).to === to) as { undo?: true; clears?: readonly string[] } | undefined;
     const backward = to !== was && listedTo?.undo === true;
     if (backward) {
       // The stamps of the state it leaves are emptied; those of the state it returns to keep what they had.
@@ -404,6 +414,7 @@ export class Engine {
         const watches = (state: string) => on.some((t) => typeof t === "object" && "values" in t && t.column === "status" && t.values.includes(state));
         if (rule.clearOnBack === true && watches(was) && !watches(to)) change[column] = null;
       }
+      for (const column of listedTo?.clears ?? []) change[column] = null;
     }
     // A backward move never stamps the state it returns to again.
     if (!backward) change = { ...change, ...this.stampsFor("orders", stored, { ...stored, ...change }, writer) };
@@ -478,12 +489,17 @@ export class Engine {
       if (producer["onCreate"] !== undefined && before !== null) continue;
       if (producer["onChange"] !== undefined && (before === null || before[source.column!] === after[source.column!] || after[source.column!] !== source.to)) continue;
       if (source.where !== undefined && after[source.where.column] !== source.where.eq) continue;
-      const gate = producer["gate"] as { setting: { column: string } } | { feature: string } | undefined;
-      if (gate !== undefined && "setting" in gate && this.setting(gate.setting.column) !== true) continue;
-      if (gate !== undefined && "feature" in gate && !this.featureOn(gate.feature)) continue;
+      // A gate names a setting, a feature or both; each it names must hold.
+      const gate = producer["gate"] as { setting?: { column: string }; feature?: string } | undefined;
+      if (gate?.setting !== undefined && this.setting(gate.setting.column) !== true) continue;
+      if (gate?.feature !== undefined && !this.featureOn(gate.feature)) continue;
       const kind = String(producer["kind"]);
       const link = String(producer["link"]);
-      if (this.world.where("messages", (m) => m["kind"] === kind && m[link] === after.id && m["status"] !== "skipped").length > 0) continue;
+      // One per row — or, with `repeatBy`, one per value of that column (a receipt per hand-over).
+      const repeatBy = producer["repeatBy"] as string | undefined;
+      const repeatKey = repeatBy === undefined || empty(after[repeatBy]) ? null : String(after[repeatBy]);
+      const sent = (m: Row) => m["kind"] === kind && m[link] === after.id && m["status"] !== "skipped" && (repeatBy === undefined || m["repeat_key"] === repeatKey);
+      if (this.world.where("messages", sent).length > 0) continue;
       const recipient = producer["recipient"] as { column: string } | undefined;
       const customer = table === "orders" && !empty(after["customer_id"]) ? this.world.get("customers", Number(after["customer_id"])) : undefined;
       const to = recipient !== undefined ? after[recipient.column] : (customer?.["email"] ?? after["email"]);
@@ -501,6 +517,7 @@ export class Engine {
         sent_at: null,
         error: null,
         skip_reason: empty(to) ? "no-longer-needed" : null,
+        repeat_key: repeatKey,
       });
     }
     this.sendDue();

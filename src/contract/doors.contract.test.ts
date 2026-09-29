@@ -31,13 +31,6 @@ if (why !== null && process.env["ADMINIUM_REQUIRE_CONTRACT"] === "1") throw new 
 /** After `install.contract.test.ts`'s three servers. */
 const PORT_BASE = Number(process.env["CONTRACT_PORT_BASE"] ?? 4870) + 3 * PORTS_PER_ENGINE;
 
-/**
- * Whether Adminium lets a move marked undo empty its stamps on a row its lock
- * holds (a hand-over taken back): not yet — the lock refuses the stamps the
- * undo empties. The check below runs once it does.
- */
-const UNDO_OUT_OF_A_LOCK = process.env["CONTRACT_UNDO_OUT_OF_A_LOCK"] === "1";
-
 const TODAY = venueDay(DEMO_START, DEMO_ZONE);
 const TOMORROW = addDays(TODAY, 1);
 const at = (time: string, day = TODAY) => new Date(instantOf(day, time, DEMO_ZONE)).toISOString();
@@ -289,9 +282,20 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         expect(kinds).not.toContain("order-receipt");
       }, 60_000);
 
-      it.skipIf(!UNDO_OUT_OF_A_LOCK)("takes back a hand-over unpaid", async () => {
+      it("takes back a hand-over unpaid, and nothing else of a finished order opens", async () => {
         const shelf = await order("S2113");
         await kitchen.handOff(shelf.id as number, "cash");
+        const path = `${data("orders")}/${String(shelf.id)}`;
+        // The take-back empties how it was paid: a way sent with it is refused, never written.
+        const paid = await staff.patch(path, { values: { status: "ready", paid_method: "card" }, from: "picked_up" });
+        expect([paid.status, paid.code, paid.details["clears"]]).toEqual([409, "STATE_MOVE_REFUSED", "paid_method"]);
+        // Nothing else of it opens: a note is locked, and a stamp written by hand is not taken (the move's alone empties it).
+        const note = await staff.patch(path, { values: { note: "changed" } });
+        expect([note.status, note.code, note.details["column"]]).toEqual([409, "RECORD_LOCKED", "note"]);
+        const handed = (await rows("orders")).find((r) => r.id === shelf.id)!;
+        await staff.patch(path, { values: { picked_up_at: null, picked_up_by: "Someone else" } });
+        const kept = (await rows("orders")).find((r) => r.id === shelf.id)!;
+        expect([kept["picked_up_at"], kept["picked_up_by"]]).toEqual([handed["picked_up_at"], handed["picked_up_by"]]);
         const back = await kitchen.move(shelf.id as number, "picked_up", "ready");
         expect([back["status"], back["paid_method"], back["picked_up_at"], back["picked_up_by"]]).toEqual(["ready", null, null, null]);
         expect((await messagesOf(shelf.id)).filter((m) => m["kind"] === "order-receipt")).toEqual([]);

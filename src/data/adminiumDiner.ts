@@ -34,11 +34,6 @@ export interface DinerDoorOptions {
   fetch?: typeof fetch;
   /** The tab's storage, or none (a private window, a test). */
   storage?: Storage | null;
-  /**
-   * The browser's storage every tab shares (a sign-in link opens in a new tab): it holds only the
-   * address the diner typed, while their own row cannot be read back, until they sign out.
-   */
-  shared?: Storage | null;
   clock?: () => number;
 }
 
@@ -50,17 +45,6 @@ const PAGE = 200;
 /** A session as the tab keeps it: the client's, and when it was opened (the wire never says). */
 interface Kept extends HeldSession {
   at: number;
-}
-
-const TYPED = "ordering.signin.email";
-
-/** The storage every tab shares, or none. */
-function sharedStorage(): Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
 }
 
 /** The tab's storage, or none. */
@@ -93,7 +77,6 @@ export class AdminiumDiner implements DinerPort {
   private readonly served: DinerServed;
   private readonly refs: Refs;
   private readonly storage: Storage | null;
-  private readonly shared: Storage | null;
   private readonly clock: () => number;
   private readonly customer: PublicClient;
   private readonly link: PublicClient | null;
@@ -103,7 +86,6 @@ export class AdminiumDiner implements DinerPort {
     this.served = served;
     this.refs = publicRefs(served.tables);
     this.storage = options.storage === undefined ? tabStorage() : options.storage;
-    this.shared = options.shared === undefined ? sharedStorage() ?? this.storage : options.shared;
     this.clock = options.clock ?? Date.now;
     const client = (name: string, publishableKey: string, humanCheck: PublicClientHumanCheck) =>
       createPublicClient({
@@ -333,26 +315,8 @@ export class AdminiumDiner implements DinerPort {
 
   // ── signing in ──────────────────────────────────────────────────────────────
 
-  /** The address the diner typed, kept until they sign out: their own row does not read it back yet. */
-  private typed(email?: string): string | null {
-    try {
-      if (email !== undefined) this.shared?.setItem(TYPED, email);
-      return this.shared?.getItem(TYPED) ?? null;
-    } catch {
-      return email ?? null;
-    }
-  }
-  private forgetTyped(): void {
-    try {
-      this.shared?.removeItem(TYPED);
-    } catch {
-      // storage refused: nothing was kept
-    }
-  }
-
   requestSignIn(email: string, lang?: string): Promise<{ sentTo: string }> {
     return answer(async () => {
-      this.typed(email.trim());
       return { sentTo: (await this.customer.requestLink({ email: email.trim(), ...(lang === undefined ? {} : { lang }) })).sentTo };
     });
   }
@@ -370,7 +334,6 @@ export class AdminiumDiner implements DinerPort {
     return answer(async () => {
       const result = await this.customer.verifyLinkCode({ email: email.trim(), code });
       if (!result.ok) throw new ApiError(403, "PUBLIC_CODE_WRONG", "That code isn't right.", { triesLeft: result.triesLeft });
-      this.typed(result.email ?? email.trim());
       const session = this.customer.session();
       return { session: session?.token ?? "", expiresAt: session?.expiresAt ?? result.expiresAt };
     });
@@ -385,8 +348,7 @@ export class AdminiumDiner implements DinerPort {
         return null;
       }
       this.slide();
-      // Masked on the diner's own row for now: the address they typed stands in.
-      const email = (row["email"] as string | null) ?? this.typed();
+      const email = row["email"] as string | null;
       if (email === null) return null;
       const at = this.kept("customer")?.at ?? this.clock();
       return { email, name: (row["name"] as string | null) ?? null, at: new Date(at).toISOString() };
@@ -395,12 +357,6 @@ export class AdminiumDiner implements DinerPort {
       if (refused instanceof ApiError && refused.status === 404) {
         this.keep("customer", null);
         return null;
-      }
-      // An Adminium that cannot yet unmask a person's own row answers it unavailable: the session
-      // stands (their orders say so), and the address they typed stands in for the row's.
-      const typed = this.typed();
-      if (refused instanceof ApiError && refused.status === 503 && typed !== null) {
-        return { email: typed, name: null, at: new Date(this.kept("customer")?.at ?? this.clock()).toISOString() };
       }
       throw refused;
     }
@@ -425,7 +381,6 @@ export class AdminiumDiner implements DinerPort {
         await this.customer.signOut();
       } finally {
         this.keep("customer", null);
-        this.forgetTyped();
       }
     });
   }
@@ -436,7 +391,6 @@ export class AdminiumDiner implements DinerPort {
         await this.customer.signOutEverywhere();
       } finally {
         this.keep("customer", null);
-        this.forgetTyped();
       }
     });
   }
@@ -446,7 +400,6 @@ export class AdminiumDiner implements DinerPort {
       await this.customer.forgetMe();
       // Their orders' own links were made afresh: the one this tab followed opens nothing now.
       this.dropAll();
-      this.forgetTyped();
     });
   }
 

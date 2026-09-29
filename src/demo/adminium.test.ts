@@ -340,6 +340,41 @@ describe("the kitchen's moves", () => {
     expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt").map((m) => [m["status"], m["skip_reason"]])).toEqual([["skipped", "no-longer-needed"]]);
   });
 
+  it("refuses a way of paying sent with a take-back, and opens nothing else of a finished order", async () => {
+    const id = order("2113").id;
+    await demo.kitchen.handOff(id, "cash");
+    const writer = { origin: "staff" as const, name: "Sam", roles: ["manager"] };
+    const paid = await refusal(Promise.resolve().then(() => demo.engine.updateOrder(id, { status: "ready", paid_method: "card" }, writer, { from: "picked_up" })));
+    expect([paid.code, paid.params["clears"]]).toEqual(["STATE_MOVE_REFUSED", "paid_method"]);
+    const note = await refusal(Promise.resolve().then(() => demo.engine.updateOrder(id, { status: "ready", note: "x" }, writer, { from: "picked_up" })));
+    expect([note.code, note.params["column"]]).toEqual(["RECORD_LOCKED", "note"]);
+    expect(demo.world.get("orders", id)!["paid_method"]).toBe("cash");
+  });
+
+  it("sends the corrected receipt when a hand-over taken back after its receipt went is made again", async () => {
+    const id = await real("ready");
+    // The ready email has gone; back on the shelf, it is not sent again.
+    demo.advance(1);
+    await demo.kitchen.handOff(id, "card");
+    demo.advance(1);
+    await demo.kitchen.move(id, "picked_up", "ready");
+    demo.advance(1);
+    await demo.kitchen.handOff(id, "cash");
+    demo.advance(1);
+    const receipts = demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt");
+    expect(receipts.map((m) => m["status"])).toEqual(["sent", "sent"]);
+    expect(receipts[0]!["repeat_key"]).not.toBe(receipts[1]!["repeat_key"]);
+    expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-ready")).toHaveLength(1);
+  });
+
+  it("queues no receipt while the kitchen's receipt switch is off", async () => {
+    demo.world.update("settings", demo.world.settings().id, { receipt_email_on: false });
+    const id = await real("ready");
+    await demo.kitchen.handOff(id, "card");
+    demo.advance(1);
+    expect(demo.world.where("messages", (m) => m["order_id"] === id && m["kind"] === "order-receipt")).toEqual([]);
+  });
+
   it("takes a hand-over back only for a manager", async () => {
     const id = order("2113").id;
     await demo.kitchen.handOff(id, "card");

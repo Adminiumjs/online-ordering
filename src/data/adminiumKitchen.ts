@@ -263,8 +263,8 @@ export class AdminiumKitchen implements KitchenPort {
   }
 
   move(id: Id, from: string, to: string): Promise<Row> {
-    // A hand-over taken back is unpaid again.
-    return this.run(() => this.change("orders", id, from === "picked_up" ? { status: to, paid_method: null } : { status: to }, from));
+    // A hand-over taken back is unpaid again: the move empties how it was paid.
+    return this.run(() => this.change("orders", id, { status: to }, from));
   }
 
   cancel(id: Id, from: string, code: string, dish: string | null, note: string | null): Promise<Row> {
