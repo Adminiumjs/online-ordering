@@ -138,7 +138,7 @@
           "cs-CZ": "Státní svátky jako zavírací dny",
           "ar-EG": "العطلات الرسمية كأيام إغلاق",
           "zh-CN": "节假日作为休息日",
-          "zh-TW": "國定假日作為休息日"
+          "zh-TW": "國定假日作為停業日"
         },
         "requires": [
           "holiday-calendars"
@@ -494,7 +494,7 @@
               "en-US": "Closed photo",
               "de-DE": "Foto bei Geschlossen",
               "fr-FR": "Photo « fermé »",
-              "da-DK": "Foto ved lukket",
+              "da-DK": "Foto, når der er lukket",
               "cs-CZ": "Fotka při zavření",
               "ar-EG": "صورة الإغلاق",
               "zh-CN": "休息时的照片",
@@ -730,7 +730,7 @@
               "cs-CZ": "Číslo první objednávky",
               "ar-EG": "رقم أول طلب",
               "zh-CN": "首个订单号",
-              "zh-TW": "首個訂單號"
+              "zh-TW": "起始訂單編號"
             },
             "default": 1001,
             "rules": {
@@ -1666,7 +1666,7 @@
           "cs-CZ": "Zavírací den",
           "ar-EG": "إغلاق",
           "zh-CN": "休息日",
-          "zh-TW": "休息日"
+          "zh-TW": "停業日"
         },
         "labelPlural": {
           "en-US": "Closures",
@@ -1676,7 +1676,7 @@
           "cs-CZ": "Zavírací dny",
           "ar-EG": "أيام الإغلاق",
           "zh-CN": "休息日",
-          "zh-TW": "休息日"
+          "zh-TW": "停業日"
         },
         "keyField": "reason",
         "columns": [
@@ -2408,7 +2408,7 @@
                     "cs-CZ": "Hotovo",
                     "ar-EG": "جاهز",
                     "zh-CN": "已做好",
-                    "zh-TW": "已做好"
+                    "zh-TW": "已備好"
                   },
                   "picked_up": {
                     "en-US": "Picked up",
@@ -2734,7 +2734,7 @@
             "label": {
               "en-US": "Paid by",
               "de-DE": "Bezahlt mit",
-              "fr-FR": "Payé par",
+              "fr-FR": "Mode de paiement",
               "da-DK": "Betalt med",
               "cs-CZ": "Zaplaceno",
               "ar-EG": "دُفع بـ",
@@ -2801,12 +2801,12 @@
                     "da-DK": "Noget slap op",
                     "cs-CZ": "Něco došlo",
                     "ar-EG": "نفد شيء",
-                    "zh-CN": "有食材用完了",
-                    "zh-TW": "有食材用完了"
+                    "zh-CN": "有菜品售罄",
+                    "zh-TW": "有餐點售罄"
                   },
                   "too_busy": {
                     "en-US": "The kitchen was too busy",
-                    "de-DE": "Die Küche war zu voll",
+                    "de-DE": "Die Küche war überlastet",
                     "fr-FR": "La cuisine était trop chargée",
                     "da-DK": "Køkkenet havde for travlt",
                     "cs-CZ": "Kuchyně byla přetížená",
@@ -2869,8 +2869,8 @@
               "da-DK": "Hvad der slap op",
               "cs-CZ": "Co došlo",
               "ar-EG": "ما الذي نفد",
-              "zh-CN": "用完的食材",
-              "zh-TW": "用完的食材"
+              "zh-CN": "售罄的菜品",
+              "zh-TW": "售罄的餐點"
             },
             "nullable": true
           },
@@ -2899,7 +2899,7 @@
               "fr-FR": "Passée",
               "da-DK": "Afgivet",
               "cs-CZ": "Odesláno",
-              "ar-EG": "مقدَّم",
+              "ar-EG": "أُرسل",
               "zh-CN": "下单时间",
               "zh-TW": "下單時間"
             },
@@ -3003,7 +3003,7 @@
               "cs-CZ": "Hotovo",
               "ar-EG": "جاهز",
               "zh-CN": "已做好",
-              "zh-TW": "已做好"
+              "zh-TW": "已備好"
             },
             "nullable": true,
             "rules": {
@@ -3025,10 +3025,10 @@
             "maxLength": 80,
             "label": {
               "en-US": "Ready by",
-              "de-DE": "Fertig von",
-              "fr-FR": "Prête par",
+              "de-DE": "Fertig gemeldet von",
+              "fr-FR": "Marquée prête par",
               "da-DK": "Klar af",
-              "cs-CZ": "Hotovo –",
+              "cs-CZ": "Připravil(a)",
               "ar-EG": "جهّزه",
               "zh-CN": "完成人",
               "zh-TW": "完成人"
@@ -3726,7 +3726,7 @@
           "cs-CZ": "Velká objednávka",
           "ar-EG": "طلب كبير",
           "zh-CN": "团体订餐",
-          "zh-TW": "團體訂餐"
+          "zh-TW": "大量訂單"
         },
         "labelPlural": {
           "en-US": "Large orders",
@@ -3736,7 +3736,7 @@
           "cs-CZ": "Velké objednávky",
           "ar-EG": "الطلبات الكبيرة",
           "zh-CN": "团体订餐",
-          "zh-TW": "團體訂餐"
+          "zh-TW": "大量訂單"
         },
         "keyField": "ref",
         "states": {
@@ -3906,7 +3906,7 @@
               "fr-FR": "Pour",
               "da-DK": "Til",
               "cs-CZ": "Na",
-              "ar-EG": "لـ",
+              "ar-EG": "اليوم المطلوب",
               "zh-CN": "需要日期",
               "zh-TW": "需要日期"
             }
@@ -3922,8 +3922,8 @@
               "da-DK": "Hvad de spurgte om",
               "cs-CZ": "Co poptali",
               "ar-EG": "ما طلبوه",
-              "zh-CN": "询价内容",
-              "zh-TW": "詢價內容"
+              "zh-CN": "咨询内容",
+              "zh-TW": "詢問內容"
             },
             "nullable": true
           },
@@ -4208,8 +4208,8 @@
                     "da-DK": "Bestilling klar",
                     "cs-CZ": "Objednávka hotová",
                     "ar-EG": "الطلب جاهز",
-                    "zh-CN": "订单已完成",
-                    "zh-TW": "訂單已完成"
+                    "zh-CN": "订单已做好",
+                    "zh-TW": "訂單已備好"
                   },
                   "order-cancelled-ran-out": {
                     "en-US": "Cancelled: something ran out",
@@ -4218,12 +4218,12 @@
                     "da-DK": "Annulleret: noget slap op",
                     "cs-CZ": "Zrušeno: něco došlo",
                     "ar-EG": "أُلغي: نفد شيء",
-                    "zh-CN": "已取消：有食材用完了",
-                    "zh-TW": "已取消：有食材用完了"
+                    "zh-CN": "已取消：有菜品售罄",
+                    "zh-TW": "已取消：有餐點售罄"
                   },
                   "order-cancelled-too-busy": {
                     "en-US": "Cancelled: the kitchen was too busy",
-                    "de-DE": "Storniert: die Küche war zu voll",
+                    "de-DE": "Storniert: die Küche war überlastet",
                     "fr-FR": "Annulée : cuisine trop chargée",
                     "da-DK": "Annulleret: køkkenet havde for travlt",
                     "cs-CZ": "Zrušeno: kuchyně byla přetížená",
@@ -4288,8 +4288,8 @@
                     "da-DK": "Forespørgsel om stor bestilling modtaget",
                     "cs-CZ": "Poptávka velké objednávky přijata",
                     "ar-EG": "استُلم استفسار طلب كبير",
-                    "zh-CN": "已收到大额订单询价",
-                    "zh-TW": "已收到大量訂購詢價"
+                    "zh-CN": "已收到团体订餐咨询",
+                    "zh-TW": "已收到大量訂單詢問"
                   }
                 }
               }
@@ -4429,7 +4429,7 @@
               "cs-CZ": "Velká objednávka",
               "ar-EG": "طلب كبير",
               "zh-CN": "团体订餐",
-              "zh-TW": "團體訂餐"
+              "zh-TW": "大量訂單"
             },
             "nullable": true
           },
@@ -4456,9 +4456,9 @@
               "en-US": "Due",
               "de-DE": "Fällig",
               "fr-FR": "Prévu",
-              "da-DK": "Forfalden",
+              "da-DK": "Planlagt",
               "cs-CZ": "Termín",
-              "ar-EG": "المستحق",
+              "ar-EG": "موعد الإرسال",
               "zh-CN": "待发送",
               "zh-TW": "待寄送"
             },
@@ -4649,7 +4649,7 @@
                 "cs-CZ": "Otevřít kuchyni",
                 "ar-EG": "افتح المطبخ",
                 "zh-CN": "打开厨房",
-                "zh-TW": "打開廚房"
+                "zh-TW": "開啟廚房畫面"
               },
               "href": "@staff",
               "icon": "external-link"
@@ -5317,12 +5317,12 @@
                 },
                 "subtitle": "Large orders waiting for a call back",
                 "subtitles": {
-                  "de-DE": "Große Bestellungen, die auf einen Rückruf warten",
+                  "de-DE": "Großbestellungen, die auf einen Rückruf warten",
                   "fr-FR": "Grandes commandes en attente d’un rappel",
                   "da-DK": "Store bestillinger, der venter på et opkald",
                   "cs-CZ": "Velké objednávky čekající na zavolání",
                   "ar-EG": "طلبات كبيرة بانتظار معاودة الاتصال",
-                  "zh-CN": "等待回电的大额订单",
+                  "zh-CN": "等待回电的团体订餐",
                   "zh-TW": "等待回電的大量訂單"
                 },
                 "emptyState": {
@@ -5490,7 +5490,7 @@
                 "titles": {
                   "en-US": "Not collected, last 7 days",
                   "de-DE": "Nicht abgeholt, letzte 7 Tage",
-                  "fr-FR": "Non récupérées, 7 derniers jours",
+                  "fr-FR": "Non retirées, 7 derniers jours",
                   "da-DK": "Ikke hentet, sidste 7 dage",
                   "cs-CZ": "Nevyzvednuto, posledních 7 dní",
                   "ar-EG": "لم تُستلم، آخر ٧ أيام",
@@ -6269,8 +6269,8 @@
         "da-DK": "Forespørgsler",
         "cs-CZ": "Poptávky",
         "ar-EG": "الاستفسارات",
-        "zh-CN": "询价",
-        "zh-TW": "詢價"
+        "zh-CN": "咨询",
+        "zh-TW": "詢問"
       },
       "nav": {
         "group": "orders",
@@ -6703,7 +6703,7 @@
         "cs-CZ": "Zavírací dny",
         "ar-EG": "أيام الإغلاق",
         "zh-CN": "休息日",
-        "zh-TW": "休息日"
+        "zh-TW": "停業日"
       },
       "nav": {
         "group": "kitchen",
@@ -8278,7 +8278,7 @@
         },
         "de-DE": {
           "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
-          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} zahlbar bei Abholung",
           "blocks": [
             {
               "block": "email.heading",
@@ -8584,7 +8584,7 @@
         },
         "cs-CZ": {
           "subject": "Vaše objednávka #{{order.number}} je přijata",
-          "preheader": "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} při vyzvednutí",
+          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} k úhradě při vyzvednutí",
           "blocks": [
             {
               "block": "email.heading",
@@ -8598,7 +8598,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Vaši objednávku #{{order.number}} na {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}} máme."
+                  "Vaši objednávku #{{order.number}} máme. Vyzvednutí: {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}."
                 ]
               }
             },
@@ -8700,7 +8700,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "وصلنا طلبك #{{order.number}} ليوم {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}."
+                  "وصلنا طلبك #{{order.number}} للاستلام {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}."
                 ]
               }
             },
@@ -9116,7 +9116,7 @@
         },
         "de-DE": {
           "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
-          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} bei der Abholung",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} zahlbar bei Abholung",
           "blocks": [
             {
               "block": "email.heading",
@@ -9401,7 +9401,7 @@
         },
         "cs-CZ": {
           "subject": "Vaše objednávka #{{order.number}} je přijata",
-          "preheader": "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} při vyzvednutí",
+          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} k úhradě při vyzvednutí",
           "blocks": [
             {
               "block": "email.heading",
@@ -9415,7 +9415,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Tady je vaše telefonická objednávka: #{{order.number}} na {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}.",
+                  "Tady je vaše telefonická objednávka #{{order.number}}. Vyzvednutí: {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}.",
                   "Pokud se něco změní, zavolejte nám na {{practice.phone}}."
                 ]
               }
@@ -9510,7 +9510,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "هذا هو الطلب الذي قدّمته هاتفيًا: #{{order.number}} ليوم {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}.",
+                  "هذا هو الطلب الذي قدّمته هاتفيًا: #{{order.number}} للاستلام {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}.",
                   "اتصل بنا على {{practice.phone}} إن تغيّر أي شيء."
                 ]
               }
@@ -9790,8 +9790,8 @@
         "da-DK": "Bestilling klar",
         "cs-CZ": "Objednávka hotová",
         "ar-EG": "الطلب جاهز",
-        "zh-CN": "订单已完成",
-        "zh-TW": "訂單已完成"
+        "zh-CN": "订单已做好",
+        "zh-TW": "訂單已備好"
       },
       "vars": [
         "order.number",
@@ -10012,8 +10012,8 @@
         "da-DK": "Annulleret: noget slap op",
         "cs-CZ": "Zrušeno: něco došlo",
         "ar-EG": "أُلغي: نفد شيء",
-        "zh-CN": "已取消：有食材用完了",
-        "zh-TW": "已取消：有食材用完了"
+        "zh-CN": "已取消：有菜品售罄",
+        "zh-TW": "已取消：有餐點售罄"
       },
       "vars": [
         "order.cancel_dish",
@@ -10189,7 +10189,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "有食材用完了：{{order.cancel_dish}}。",
+                  "有菜品售罄：{{order.cancel_dish}}。",
                   "没有任何扣费——取餐时才付款，而订单并未取走。",
                   "如想重新下单，请致电 {{practice.phone}}。"
                 ]
@@ -10214,7 +10214,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "有食材用完了：{{order.cancel_dish}}。",
+                  "有餐點售罄：{{order.cancel_dish}}。",
                   "沒有任何扣款——取餐時才付款，而訂單並未取走。",
                   "如想重新下單，請致電 {{practice.phone}}。"
                 ]
@@ -10229,7 +10229,7 @@
       "key": "ordering-order-cancelled-too-busy",
       "name": {
         "en-US": "Cancelled: the kitchen was too busy",
-        "de-DE": "Storniert: die Küche war zu voll",
+        "de-DE": "Storniert: die Küche war überlastet",
         "fr-FR": "Annulée : cuisine trop chargée",
         "da-DK": "Annulleret: køkkenet havde for travlt",
         "cs-CZ": "Zrušeno: kuchyně byla přetížená",
@@ -10285,7 +10285,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Die Küche ist zu voll, um es rechtzeitig zu schaffen.",
+                  "Die Küche ist überlastet und schafft deine Bestellung nicht rechtzeitig.",
                   "Es wurde nichts berechnet — du zahlst bei der Abholung, und es wurde nichts abgeholt.",
                   "Ruf uns unter {{practice.phone}} an, wenn du noch einmal bestellen möchtest."
                 ]
@@ -11299,7 +11299,7 @@
               "data": {
                 "paras": [
                   "Votre reçu est en pièce jointe : {{order.total}}.",
-                  "Payé par : {{order.paid_method.label}}"
+                  "Mode de paiement : {{order.paid_method.label}}"
                 ]
               }
             }
@@ -11437,8 +11437,8 @@
         "da-DK": "Forespørgsel om stor bestilling modtaget",
         "cs-CZ": "Poptávka velké objednávky přijata",
         "ar-EG": "استُلم استفسار طلب كبير",
-        "zh-CN": "已收到大额订单询价",
-        "zh-TW": "已收到大量訂購詢價"
+        "zh-CN": "已收到团体订餐咨询",
+        "zh-TW": "已收到大量訂單詢問"
       },
       "vars": [
         "enquiry.heads.number",
@@ -11473,7 +11473,7 @@
           "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you sent us a large-order enquiry."
         },
         "de-DE": {
-          "subject": "Wir haben deine Anfrage, {{enquiry.ref}}",
+          "subject": "Deine Anfrage {{enquiry.ref}} ist eingegangen",
           "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} Personen",
           "blocks": [
             {
@@ -11570,13 +11570,13 @@
         },
         "ar-EG": {
           "subject": "وصلنا استفسارك، {{enquiry.ref}}",
-          "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} أشخاص",
+          "preheader": "{{enquiry.ref}} · عدد الأشخاص: {{enquiry.heads.number}}",
           "blocks": [
             {
               "block": "email.heading",
               "id": "heading",
               "data": {
-                "text": "{{enquiry.heads.number}} أشخاص يوم {{enquiry.wanted_on}}."
+                "text": "عدد الأشخاص {{enquiry.heads.number}}، يوم {{enquiry.wanted_on}}."
               }
             },
             {
@@ -11593,7 +11593,7 @@
           "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك أرسلت إلينا استفسارًا عن طلب كبير."
         },
         "zh-CN": {
-          "subject": "已收到你的询价 {{enquiry.ref}}",
+          "subject": "已收到你的咨询 {{enquiry.ref}}",
           "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
           "blocks": [
             {
@@ -11608,16 +11608,16 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "你的询价编号是 {{enquiry.ref}}。",
-                  "厨房会有人致电与你详谈——营业日当天，否则开门后尽快。"
+                  "你的咨询编号是 {{enquiry.ref}}。",
+                  "厨房会有人致电与你详谈——正在营业则当天联系，否则开门后尽快联系。"
                 ]
               }
             }
           ],
-          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你向我们发送了大额订单询价。"
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你向我们发送了团体订餐咨询。"
         },
         "zh-TW": {
-          "subject": "已收到你的詢價 {{enquiry.ref}}",
+          "subject": "已收到你的詢問 {{enquiry.ref}}",
           "preheader": "{{enquiry.ref}} · {{enquiry.heads.number}} 人",
           "blocks": [
             {
@@ -11632,13 +11632,13 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "你的詢價編號是 {{enquiry.ref}}。",
+                  "你的詢問編號是 {{enquiry.ref}}。",
                   "廚房會有人致電與你詳談——營業日當天，否則開門後盡快。"
                 ]
               }
             }
           ],
-          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你向我們送出了大量訂購詢價。"
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你向我們送出了大量訂單詢問。"
         }
       }
     }
