@@ -120,7 +120,7 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         for (const note of ["2 straws", "少放辣，切六块", "¡Sin cebolla!"]) {
           const real = await diner.quote(cart(menu, [["Lemonade", 1, note]], "12:30"));
           const played = await demo.diner.quote(cart(shown, [["Lemonade", 1, note]], "12:30"));
-          expect([note, played.data["total"]]).toEqual([note, real.data["total"]]);
+          expect([note, Number(played.data["total"])]).toEqual([note, Number(real.data["total"])]);
         }
       }, 60_000);
 
