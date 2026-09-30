@@ -357,7 +357,7 @@ export function HandOffSheet() {
   const go = async () => {
     const result = await handOff();
     if (result.ok) {
-      toast(t("kitchen.handoff.done", { number: String(o["number"]), name: firstName(o["name"]), total: fmt.money(o["total"]), paid: t(h.paid === "card" ? "kitchen.handoff.card" : "kitchen.handoff.cash").toLocaleLowerCase() }));
+      toast(t(h.paid === "card" ? "kitchen.handoff.doneCard" : "kitchen.handoff.doneCash", { number: String(o["number"]), name: firstName(o["name"]), total: fmt.money(o["total"]) }));
     } else sayRefused(t, fmt, result.result, String(o["number"]), String(o["name"] ?? ""));
   };
   return (
