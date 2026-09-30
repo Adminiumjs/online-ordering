@@ -1091,7 +1091,11 @@ export const MANIFEST_RULES = {
         "perKeyHour": 300,
         "plainText": [
           "name",
-          "note"
+          {
+            "column": "note",
+            "digits": 4,
+            "max": 140
+          }
         ]
       },
       "maxOpen": {
@@ -1129,7 +1133,11 @@ export const MANIFEST_RULES = {
           "min": 1,
           "max": 20,
           "plainText": [
-            "note"
+            {
+              "column": "note",
+              "digits": 4,
+              "max": 80
+            }
           ],
           "sumMax": {
             "column": "qty",
@@ -1228,7 +1236,11 @@ export const MANIFEST_RULES = {
         "perKeyHour": 60,
         "plainText": [
           "name",
-          "notes"
+          {
+            "column": "notes",
+            "digits": 4,
+            "max": 200
+          }
         ]
       },
       "clientKey": "client_key"

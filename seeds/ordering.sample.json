@@ -33,6 +33,7 @@
     },
     {
       "ref": "hours",
+      "onlyIfEmpty": true,
       "rows": [
         {
           "weekday": "mon",

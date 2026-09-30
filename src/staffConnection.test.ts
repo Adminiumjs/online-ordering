@@ -105,6 +105,7 @@ describe("loadStaffConfig", () => {
       publicKeys: { kiosk: "adm_pub_k", broken: 3 },
       access: { tables: { tickets: ["read", "update", "fly"], odd: "all" }, roles: [{ slug: "pos-cashier", name: "POS cashier" }, { name: "no slug" }] },
       addOns: { invoices: { version: "1.0.3", settings: { business_name: "Harbour Café" } }, odd: 3 },
+      sharedTables: { menu_items: ["ordering"], tickets: [], odd: "all" },
     });
     expect(await loadStaffConfig({ hostedStaff: true, base: "/apps/pos/staff/", fetchImpl })).toEqual({
       connectionId: "con_42",
@@ -121,6 +122,7 @@ describe("loadStaffConfig", () => {
       publicKeys: { kiosk: "adm_pub_k" },
       access: { tables: { tickets: ["read", "update"] }, roles: [{ slug: "pos-cashier", name: "POS cashier" }] },
       addOns: { invoices: { version: "1.0.3", settings: { business_name: "Harbour Café" } } },
+      sharedTables: { menu_items: ["ordering"] },
     });
   });
 
@@ -131,6 +133,8 @@ describe("loadStaffConfig", () => {
     expect(config?.publicKeys).toEqual({});
     // No add-on said attached: a feature that needs one stays off.
     expect(config?.addOns).toEqual({});
+    // Nor any table another app shares (a server up to 0.3.7 does not say).
+    expect(config?.sharedTables).toEqual({});
   });
 
   it("is null outside a hosted staff build", async () => {

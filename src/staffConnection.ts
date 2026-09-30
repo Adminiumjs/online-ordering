@@ -122,6 +122,12 @@ export interface StaffConfig {
    * needs one stays off.
    */
   addOns: Record<string, StaffAddOn>;
+  /**
+   * The app's tables (by short name) another installed app uses too, with
+   * those apps' keys: a menu shared with the till. Empty when none is, or from
+   * a server up to 0.3.7, which does not say.
+   */
+  sharedTables: Record<string, string[]>;
 }
 
 export interface StaffAddOn {
@@ -214,6 +220,11 @@ export async function loadStaffConfig(opts: StaffConfigOptions = {}): Promise<St
       ),
       access: accessOf(d.access),
       addOns: addOnsOf(d.addOns),
+      sharedTables: Object.fromEntries(
+        Object.entries(record(d.sharedTables))
+          .map(([ref, keys]) => [ref, Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : []] as const)
+          .filter(([, keys]) => keys.length > 0),
+      ),
     };
   } catch {
     // An older server answers this path with the SPA index (HTML).

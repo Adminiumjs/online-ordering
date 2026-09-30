@@ -230,6 +230,11 @@ export class DemoKitchen implements KitchenPort {
     return this.addOns.invoices;
   }
 
+  /** The sample kitchen's menu is its own. */
+  async menuShared(): Promise<boolean> {
+    return false;
+  }
+
   async holidays() {
     return this.addOns.holidays ? DEMO_HOLIDAYS : null;
   }

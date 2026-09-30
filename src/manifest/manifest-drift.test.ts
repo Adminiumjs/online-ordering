@@ -127,9 +127,9 @@ describe("the diner's writes are the few the page needs", () => {
   });
 
   it("caps what nobody signed in for may send, and keeps what a stranger types plain text", () => {
-    expect(post()["anonymous"]).toEqual({ perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", "note"] });
+    expect(post()["anonymous"]).toEqual({ perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] });
     const enquiry = manifest.publicAccess.find((e) => e.table === "enquiries")!;
-    expect((enquiry["anonymous"] as Json)["plainText"]).toEqual(["name", "notes"]);
+    expect((enquiry["anonymous"] as Json)["plainText"]).toEqual(["name", { column: "notes", digits: 4, max: 200 }]);
   });
 
   it("lets a diner cancel their own order only to cancelled, only while it is new, and marks the reason as theirs", () => {

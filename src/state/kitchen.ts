@@ -78,6 +78,8 @@ interface KitchenState {
   dishCounts: Record<Day, Record<string, number> | undefined>;
   holidays: { date: string; name: string }[] | null;
   receipts: boolean;
+  /** The menu is another app's too (the till's). */
+  menuShared: boolean;
   conn: "live" | "reconnecting";
   tab: KitchenTab;
   slotDay: "today" | "tomorrow";
@@ -114,6 +116,7 @@ export const useKitchen = create<KitchenState>(() => ({
   dishCounts: {},
   holidays: null,
   receipts: false,
+  menuShared: false,
   conn: "live",
   tab: "queue",
   slotDay: "today",
@@ -167,8 +170,8 @@ export async function loadKitchen(): Promise<void> {
   set({ load: "busy" });
   try {
     const p = port();
-    const [person, config, settings, hours, closures, menu, holidays, receipts] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts()]);
-    set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, signedOut: false });
+    const [person, config, settings, hours, closures, menu, holidays, receipts, menuShared] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts(), p.menuShared()]);
+    set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, menuShared, signedOut: false });
     await Promise.all([readOrders(true), readSlots(), readCounts()]);
     set({ load: "ok" });
   } catch (error) {

@@ -108,13 +108,19 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
           ["too soon", [["Lemonade", 1]], "11:45"],
           ["too many of a dish", [["Lemonade", 21]], "12:30"],
           ["more than an order holds", [["Lemonade", 20], ["Margherita", 20]], "12:30"],
-          ["a note with a number", [["Lemonade", 1, "2 straws"]], "12:30"],
+          ["a note with more digits than a note holds", [["Lemonade", 1, "2 straws, 12345"]], "12:30"],
           ["a note with an address", [["Lemonade", 1, "see evil.com"]], "12:30"],
         ];
         for (const [what, lines, time] of cases) {
           const real = await refusal(diner.quote(cart(menu, lines, time)));
           const played = await refusal(demo.diner.quote(cart(shown, lines, time)));
           expect([played.status, played.code, played.params], what).toEqual([real.status, real.code, real.params]);
+        }
+        // A note's few digits and the diner's own punctuation pass on both (Adminium 0.3.8).
+        for (const note of ["2 straws", "少放辣，切六块", "¡Sin cebolla!"]) {
+          const real = await diner.quote(cart(menu, [["Lemonade", 1, note]], "12:30"));
+          const played = await demo.diner.quote(cart(shown, [["Lemonade", 1, note]], "12:30"));
+          expect([note, played.data["total"]]).toEqual([note, real.data["total"]]);
         }
       }, 60_000);
 

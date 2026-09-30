@@ -126,6 +126,9 @@ export interface KitchenPort {
   /** Whether a hand-over sends a receipt: Invoices & receipts installed with its receipts on. */
   receipts(): Promise<boolean>;
 
+  /** Whether the menu is another app's too (the till's): switching a dish off hides it there as well. */
+  menuShared(): Promise<boolean>;
+
   /** The public holidays Holiday calendars offers, when it is installed. */
   holidays(): Promise<{ date: string; name: string }[] | null>;
 

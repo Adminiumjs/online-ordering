@@ -209,7 +209,10 @@ const SPECS: PageSpec[] = [
     icon: "message-square",
     order: 1,
     table: "messages",
-    config: form([
+    // Every phone order without an email writes a skipped row: the page opens on the ones that went, or will (Adminium 0.3.8).
+    config: {
+      defaultFilters: [{ column: "status", op: "in", value: ["queued", "sent", "failed"] }],
+      ...form([
       f("kind"),
       f("status", { control: "select" }),
       f("to_address", { control: "email" }),
@@ -221,7 +224,8 @@ const SPECS: PageSpec[] = [
       f("sent_at", { control: "datetime" }),
       f("skip_reason", { control: "select" }),
       wide("error", "text"),
-    ]),
+      ]),
+    },
   },
   {
     ref: "ordering-settings",

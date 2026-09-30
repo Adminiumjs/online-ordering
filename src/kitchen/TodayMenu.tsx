@@ -122,11 +122,19 @@ function DishRow({ dish, last }: { dish: Dish; last: boolean }) {
 export function TodayMenu() {
   const { t } = useI18n();
   const menu = useKitchen((s) => s.menu);
+  const shared = useKitchen((s) => s.menuShared);
   if (menu === null) return null;
   return (
     <div style={{ maxWidth: 960 }}>
       <h2 style={{ margin: 0, fontSize: "clamp(19px,2.4vw,24px)", fontWeight: 800, letterSpacing: "-.03em" }}>{t("kitchen.menu.title")}</h2>
       <p style={{ margin: "9px 0 0", maxWidth: "60ch", fontSize: 13.5, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{t("kitchen.menu.intro")}</p>
+      {/* Only when the till's menu is this one: the design always showed it. */}
+      {shared && (
+        <p role="note" style={{ margin: "12px 0 0", display: "flex", alignItems: "flex-start", gap: 8, maxWidth: "60ch", fontSize: 13, lineHeight: 1.55, color: "var(--fg-muted)" }}>
+          <Icon name="info" size={15} />
+          <span>{t("kitchen.menu.shared")}</span>
+        </p>
+      )}
       {menu.categories.map((c) => {
         const dishes = menu.dishes.filter((d) => d.categoryId === c.id);
         if (dishes.length === 0) return null;

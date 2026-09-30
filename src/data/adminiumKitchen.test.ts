@@ -27,6 +27,7 @@ const config = (over: Partial<StaffConfig> = {}): StaffConfig => ({
   publicKeys: {},
   access: { tables: { orders: ["read", "create", "update"], hours: ["read"] }, roles: [{ slug: "ordering-kitchen", name: "Kitchen" }] },
   addOns: {},
+  sharedTables: {},
   ...over,
 });
 
@@ -111,6 +112,12 @@ describe("the kitchen's reads", () => {
       config({ addOns: { invoices: { version: "1.0.6", settings: {} }, "holiday-calendars": { version: "1.0.6", settings: { days: [{ date: "2026-12-25", name: "Christmas Day", from: "US" }] } } } }),
     );
     expect([await both.receipts(), await both.holidays()]).toEqual([true, [{ date: "2026-12-25", name: "Christmas Day" }]]);
+  });
+
+  it("hears that the menu is the till's too, only when Adminium says so", async () => {
+    expect(await new AdminiumKitchen(fakeTransport(() => null), config()).menuShared()).toBe(false);
+    expect(await new AdminiumKitchen(fakeTransport(() => null), config({ sharedTables: { menu_items: ["pos"], menu_categories: ["pos"] } })).menuShared()).toBe(true);
+    expect(await new AdminiumKitchen(fakeTransport(() => null), config({ sharedTables: { customers: ["clinic"] } })).menuShared()).toBe(false);
   });
 });
 

@@ -436,6 +436,11 @@ export class AdminiumKitchen implements KitchenPort {
     return this.cfg.addOns["invoices"] !== undefined;
   }
 
+  /** The menu shared with another app on the same database (Point of Sale's): Adminium says so (0.3.8). */
+  async menuShared(): Promise<boolean> {
+    return (this.cfg.sharedTables["menu_items"]?.length ?? 0) > 0;
+  }
+
   /** The public holidays Holiday Calendars hands this app's screens, when it is attached. */
   async holidays(): Promise<{ date: string; name: string }[] | null> {
     const attached = this.cfg.addOns["holiday-calendars"];

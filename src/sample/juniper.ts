@@ -434,7 +434,7 @@ export interface SampleBundle {
   format: "adminium.sample/1";
   app: string;
   assets: Record<string, never>;
-  tables: { ref: string; rows: Row[] }[];
+  tables: { ref: string; onlyIfEmpty?: true; rows: Row[] }[];
 }
 
 /** The sample bundle, as `seeds/ordering.sample.json` holds it. */
@@ -552,7 +552,8 @@ export function sampleBundle(): SampleBundle {
     assets: {},
     tables: [
       { ref: "settings", rows: [{ "@label": "settings", "@onlyIfEmpty": true, ...SETTINGS }] },
-      { ref: "hours", rows: HOURS.map(([weekday, open, opens, closes]) => ({ weekday, open, opens, closes })) },
+      // A kitchen that set its own hours keeps them: the week's seven go in only when there are none (Adminium 0.3.8).
+      { ref: "hours", onlyIfEmpty: true, rows: HOURS.map(([weekday, open, opens, closes]) => ({ weekday, open, opens, closes })) },
       { ref: "closures", rows: [{ from_date: { "@day": 14 }, to_date: { "@day": 14 }, reason: "Private event", active: true }] },
       { ref: "slot_pauses", rows: [{ slot_at: wall(0, "13:00"), active: true, paused_by: BY, paused_at: ago("11:05") }] },
       { ref: "menu_categories", rows: CATEGORIES.map(([slug, name, icon], i) => ({ "@label": `category:${slug}`, slug, name, icon, position: i + 1 })) },

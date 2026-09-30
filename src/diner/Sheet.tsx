@@ -14,7 +14,7 @@ import { toast } from "../state/ui.ts";
 import { useFmt } from "../app/venue.ts";
 import { DishTags, Tile, usePortions, usePriceLabel } from "./dish.tsx";
 import { useDay } from "./useDay.ts";
-import { linkFreeText } from "../lib/plainText.ts";
+import { LINE_NOTE_RULE, linkFreeText } from "../lib/plainText.ts";
 
 export const MAX_PER_LINE = 20;
 export const NOTE_MAX = 80;
@@ -65,7 +65,7 @@ function SheetBody() {
           : missing !== null
             ? t("sheet.choose", { group: locale.startsWith("en") ? missing.name.toLocaleLowerCase(locale) : missing.name })
             : // A line's note reaches the kitchen and the diner's email: Adminium takes plain words only.
-              !linkFreeText(sheet.note.trim() === "" ? null : sheet.note.trim())
+              !linkFreeText(sheet.note.trim() === "" ? null : sheet.note.trim(), LINE_NOTE_RULE)
               ? t("co.name.plain")
               : null;
   const total = unitPrice(dish, sheet.options) * Math.min(sheet.qty, cap);

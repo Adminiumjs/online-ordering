@@ -175,7 +175,8 @@ export const PUBLIC_ACCESS = [
     claimedBy: { table: "customers", column: "customer_id", optional: true },
     identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name" } },
     shareLink: "link_token",
-    anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", "note"] },
+    // A note may hold a few digits ("2 without onions", "table 12") and runs the length its column holds.
+    anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] },
     // A signed-in diner holds at most three orders still to pick up: the caps above are for strangers.
     maxOpen: { column: "status", values: ["placed", "confirmed", "preparing", "ready"], n: 3, upcoming: "pickup_at" },
     children: {
@@ -186,7 +187,7 @@ export const PUBLIC_ACCESS = [
         position: "position",
         min: 1,
         max: 20,
-        plainText: ["note"],
+        plainText: [{ column: "note", digits: 4, max: 80 }],
         sumMax: { column: "qty", max: { table: "settings", column: "max_items" } },
         children: {
           order_item_modifiers: {
@@ -213,7 +214,7 @@ export const PUBLIC_ACCESS = [
     select: ["id", "ref", "heads", "wanted_on", "status"],
     writable: ["heads", "wanted_on", "notes", "name", "phone", "email", "language", "client_key"],
     requires: ["heads", "wanted_on", "name", "phone", "email"],
-    anonymous: { perValue: { columns: ["email"], n: 5 }, perIpHour: 3, perKeyHour: 60, plainText: ["name", "notes"] },
+    anonymous: { perValue: { columns: ["email"], n: 5 }, perIpHour: 3, perKeyHour: 60, plainText: ["name", { column: "notes", digits: 4, max: 200 }] },
     clientKey: "client_key",
   },
 
