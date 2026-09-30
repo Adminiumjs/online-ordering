@@ -17,7 +17,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.6** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.8** or later, on SQLite, Postgres or MySQL.
 - Nothing else. **Invoices & Receipts** is offered at install: with it, a diner
   is emailed a receipt when they pick up and the dashboard prints one.
   **Holiday calendars** is offered too: with it, the kitchen's Hours tab lists

@@ -2,10 +2,6 @@
   "files": {
     "src/i18n/ambient.ts": 1,
     "src/i18n/index.tsx": 2,
-    "src/testing/manifest/add-on-block.ts": 4,
-    "src/testing/manifest/schema.ts": 3,
-    "src/testing/manifest/slots.ts": 2,
-    "src/testing/manifest/validate.ts": 1,
     "vite.config.ts": 2
   }
 }
