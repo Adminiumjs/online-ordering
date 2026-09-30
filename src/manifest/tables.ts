@@ -219,7 +219,7 @@ export const TABLES: Table[] = [
     keyField: "venue_name",
     columns: [
       id,
-      text("venue_name", 80, "Name"),
+      text("venue_name", 80, "Kitchen name"),
       // The owner's own words for the order page; empty, the page says it generically.
       text("headline", 120, "Headline", opt),
       text("intro", 280, "Introduction", opt),
@@ -472,7 +472,7 @@ export const TABLES: Table[] = [
       id,
       int("ref_seq", "Reference (running)", { ...opt, rules: { sequence: { gapless: true } } }),
       text("ref", 16, "Reference", { ...opt, unique: true, rules: { format: { from: "ref_seq", prefix: "LG-", pad: 4 } } }),
-      choice("status", "Status", { new: "New", called: "Called", booked: "Booked", declined: "Declined" }, {
+      choice("status", "Status", { new: "New enquiry", called: "Called", booked: "Booked", declined: "Declined" }, {
         default: "new",
         tones: { new: "info", called: "warn", booked: "pos", declined: "neutral" },
       }),
