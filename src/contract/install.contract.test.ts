@@ -26,6 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { COLUMNS, resolveSample, type ResolvedRow } from "../data/sampleRows.ts";
 import { DEMO_BUNDLE, DEMO_CURRENCY, DEMO_START, DEMO_ZONE } from "../demo/world.ts";
+import { VERSION } from "../manifest/build.ts";
 import { ADMINIUM_REPO, appBundle, boot, Caller, ENGINES, missing, ok, PORTS_PER_ENGINE, until, type Engine, type Server } from "./harness.ts";
 
 type Row = Record<string, unknown>;
@@ -108,7 +109,7 @@ describe.skipIf(why !== null)(`the app installs on a built Adminium${why === nul
         return { plan, installed };
       }
 
-      it.skipIf(engine !== "sqlite")("refuses 0.2.0 as an update of an install of 0.1.3 — it is uninstalled first, its tables kept", async () => {
+      it.skipIf(engine !== "sqlite")("refuses 0.2.x as an update of an install of 0.1.3 — it is uninstalled first, its tables kept", async () => {
         const released = readFileSync(join(ADMINIUM_REPO, "packages", "manifest", "test", "fixtures", "released", "online-ordering-0.1.3.manifest.json"), "utf8");
         expect((JSON.parse(released) as { version: string }).version).toBe("0.1.3");
         // 0.1.3's tables had no prefix: it goes on an empty database of its own.
@@ -119,12 +120,12 @@ describe.skipIf(why !== null)(`the app installs on a built Adminium${why === nul
         await install({ manifest: released, connection: empty.id });
         const next = appBundle();
         const refused = await staff.post(`/api/v1/apps/upload?expectedSha512=${encodeURIComponent(next.integrity)}`, next.buffer);
-        expect([refused.status, refused.code, refused.details]).toEqual([422, "VALIDATION_FAILED", { reason: "UPDATE_NOT_SUPPORTED", from: "0.1.3", to: "0.2.0", updatesFrom: ">=0.2.0" }]);
+        expect([refused.status, refused.code, refused.details]).toEqual([422, "VALIDATION_FAILED", { reason: "UPDATE_NOT_SUPPORTED", from: "0.1.3", to: VERSION, updatesFrom: ">=0.2.0" }]);
         const gone = ok(await staff.send<{ uninstalled: boolean }>("DELETE", "/api/v1/apps/ordering", {}));
         expect(gone.uninstalled).toBe(true);
       }, 240_000);
 
-      it("plans and installs 0.2.0: every table, every rule kept, both browser keys, the outbox", async () => {
+      it("plans and installs 0.2.x: every table, every rule kept, both browser keys, the outbox", async () => {
         const { plan, installed } = await install();
         // Both add-ons are offered for a feature each; Invoices & Receipts ticked. Neither is here, and nothing waits on them.
         expect((plan.addOns ?? []).map((a) => [a.key, a.need, a.checked])).toEqual([
