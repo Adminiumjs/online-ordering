@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.8",
+    "minAdminiumVersion": "0.3.9",
     "engines": [
       "sqlite",
       "postgres",

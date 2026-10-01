@@ -27,7 +27,7 @@ export const VERSION = "0.2.3";
  * lines and options, strict moves, moves made by the clock, an order's own
  * link. Written from the version actually released, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.8";
+export const MIN_ADMINIUM = "0.3.9";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
