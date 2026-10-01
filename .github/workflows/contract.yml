@@ -61,13 +61,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Pinned to the releases the manifest names (floor 0.3.8; the add-ons it
+      # Pinned to the releases the manifest names (floor 0.3.9; the add-ons it
       # suggests at 1.0.6), so the contract proves what an operator installs.
       - name: Check out Adminium
         uses: actions/checkout@v4
         with:
           repository: MoSofi/Adminium
-          ref: v0.3.8
+          ref: v0.3.9
           path: .adminium-product
 
       - name: Check out the add-ons
