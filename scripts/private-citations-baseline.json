@@ -1,7 +1,3 @@
 {
-  "files": {
-    "src/i18n/ambient.ts": 1,
-    "src/i18n/index.tsx": 2,
-    "vite.config.ts": 2
-  }
+  "files": {}
 }
