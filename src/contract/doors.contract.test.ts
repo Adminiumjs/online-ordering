@@ -321,7 +321,7 @@ describe.skipIf(why !== null)(`the doors on a built Adminium${why === null ? "" 
         const time = "15:30";
         const pause = await kitchen.pause(at(time, TOMORROW));
         expect((await diner.slots(TOMORROW)).find((s) => s.time === time)!.state).toBe("paused");
-        expect((await kitchen.slotCounts(TOMORROW)).find((s) => s.time === time)!.pause).toEqual({ id: pause.id, by: cfg.user!.name });
+        expect((await kitchen.slotCounts(TOMORROW)).find((s) => s.time === time)!.pause).toEqual({ id: pause.id, by: cfg.user!.name, at: expect.any(String) });
         await kitchen.reopen(pause.id);
         expect((await diner.slots(TOMORROW)).find((s) => s.time === time)!.state).toBe("free");
       }, 60_000);
