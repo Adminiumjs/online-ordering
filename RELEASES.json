@@ -42,6 +42,12 @@
       "version": "0.2.2",
       "integrity": "sha512-/IIpX4Boq0Pt5yUx1axPbXhuZ1O0iSrBvZ9sAuiGGdGRMcBakZqv3MsQZGFzhlWVvgjUzsYuqMOAePUKSnQNCA==",
       "publishedAt": "2026-09-30T16:41:02.000Z"
+    },
+    {
+      "name": "@adminiumjs/app-ordering",
+      "version": "0.2.3",
+      "integrity": "sha512-ATbnvkUYSt1Rsz9f/N+OF/VdjHzVfGbO47cSNHtJjlcp/hnDfjZYbI3uED9f3WfrnrUvgwahWYF9iVVYmifl1w==",
+      "publishedAt": "2026-10-01T18:18:02.000Z"
     }
   ]
 }
