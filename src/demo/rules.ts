@@ -1377,6 +1377,19 @@ export const MANIFEST_RULES = {
               "customer_asked",
               "other"
             ]
+          },
+          "creatable": [
+            "name",
+            "phone",
+            "email",
+            "note",
+            "pickup_at",
+            "channel"
+          ],
+          "creatableValues": {
+            "channel": [
+              "phone"
+            ]
           }
         },
         "menu_items": {

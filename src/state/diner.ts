@@ -589,6 +589,8 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         replayed: reply.replayed === true,
       };
       set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {} });
+      // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
+      void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);
       return placed;
     } catch (error) {

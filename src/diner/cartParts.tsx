@@ -274,11 +274,11 @@ export function PickupPicker({ compact }: { compact: boolean }) {
                     aria-checked={on}
                     tabIndex={s.time === focusTime ? 0 : -1}
                     data-time={s.time}
-                    aria-label={s.off ? t("pick.fullAria", { day: word(s.day), time: label }) : `${word(s.day)} ${label}`}
+                    aria-label={s.off ? t(s.paused ? "pick.unavailableAria" : "pick.fullAria", { day: word(s.day), time: label }) : `${word(s.day)} ${label}`}
                     style={{ display: "inline-flex", alignItems: "center", gap: 6, flex: "none", height: size.h, paddingInline: size.p, borderRadius: 10, cursor: s.off ? "not-allowed" : "pointer", fontSize: size.f, fontWeight: 600, border: `1px solid ${on ? "transparent" : s.off ? "var(--border)" : "var(--border-strong)"}`, background: on ? "var(--accent)" : s.off ? "var(--surface-3)" : "var(--surface)", color: on ? "var(--accent-fg)" : s.off ? "var(--fg-subtle)" : "var(--fg-muted)", opacity: s.off ? 0.7 : 1 }}
                   >
                     {label}
-                    {s.off && <span style={{ fontFamily: "var(--sans)", fontSize: 10, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase" }}>{t("pick.full")}</span>}
+                    {s.off && <span style={{ fontFamily: "var(--sans)", fontSize: 10, fontWeight: 800, letterSpacing: ".05em", textTransform: "uppercase" }}>{/* A paused time is not a busy one: "Full" told diners the kitchen was busier than it is. */ t(s.paused ? "pick.unavailable" : "pick.full")}</span>}
                   </button>
                 );
               })}

@@ -56,7 +56,9 @@ const SPECS: PageSpec[] = [
   // ── orders ─────────────────────────────────────────────────────────────────
   {
     ref: "ordering-orders",
-    template: "page-queue-inbox",
+    // A list whose rows OPEN: the queue template draws four fields and no form, so an order's
+    // lines and an enquiry's phone, head count and note could be read nowhere in the dashboard.
+    template: "page-crud",
     title: "Orders",
     group: "orders",
     icon: "receipt",
@@ -94,7 +96,7 @@ const SPECS: PageSpec[] = [
   },
   {
     ref: "ordering-enquiries",
-    template: "page-queue-inbox",
+    template: "page-crud",
     title: "Enquiries",
     group: "orders",
     icon: "inbox",

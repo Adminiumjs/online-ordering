@@ -53,6 +53,10 @@ export const ROLES = [
           status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"],
           cancel_code: KITCHEN_CANCEL_CODES,
         },
+        // A phone order is what the kitchen makes, and all it makes: who it is for, when, a note,
+        // as a phone order — never a customer, a link's code, how it was paid or another channel.
+        creatable: ["name", "phone", "email", "note", "pickup_at", "channel"],
+        creatableValues: { channel: ["phone"] },
       },
       menu_items: { writable: ["available", "stock_today", "stock_on"] },
       modifiers: { writable: ["available"] },

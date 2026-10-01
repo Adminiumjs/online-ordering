@@ -26,7 +26,7 @@ interface LargeState {
   touched: Partial<Record<"name" | "phone" | "email", boolean>>;
   sending: boolean;
   /** The last send failed: refused as too many from here, or anything else. */
-  failed: false | "limit" | "other";
+  failed: false | "limit" | "notes" | "other";
   sent: Row | null;
   clientKey: string | null;
 }
@@ -97,7 +97,9 @@ export async function sendEnquiry(language: string): Promise<boolean> {
     const limit = isApiError(error) && (error.code === "PUBLIC_RATE_LIMITED" || error.code === "PUBLIC_LIMIT_REACHED");
     // No answer, or a proxy's or the server's error: the enquiry may be in, and the key is kept.
     const mayBeIn = !isApiError(error) || error.status === 0 || error.status >= 500 || error.code === "PUBLIC_UPSTREAM_UNAVAILABLE";
-    set({ sending: false, failed: limit ? "limit" : "other", ...(mayBeIn ? {} : { clientKey: null }) });
+    // The door named the note: said as what it is, not as "try again" (the same text would be refused again).
+    const notes = isApiError(error) && error.code === "PUBLIC_WRITE_REFUSED" && error.params["column"] === "notes";
+    set({ sending: false, failed: limit ? "limit" : notes ? "notes" : "other", ...(mayBeIn ? {} : { clientKey: null }) });
     return false;
   }
 }

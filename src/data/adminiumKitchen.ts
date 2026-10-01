@@ -22,7 +22,7 @@
 import type { KitchenPerson, KitchenPort, Menu, OrderWithLines } from "./ports.ts";
 import { SessionPortError, type SessionTransport } from "./sessionSource.ts";
 import type { StaffConfig } from "../staffConnection.ts";
-import { MOMENTS, YES_NO } from "./columnKinds.ts";
+import { MOMENTS, YES_NO, yesNo } from "./columnKinds.ts";
 import { addDays, instantOf, zoneOffsetMs, type Day } from "../lib/venueTime.ts";
 import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotCount, type TreeRow } from "./wire.ts";
 
@@ -66,7 +66,6 @@ export function momentOf(value: unknown, serverZone: string): unknown {
 }
 
 /** A yes/no as MySQL or SQLite hands it back (0, 1, "1"), as a boolean. */
-const yesNo = (value: unknown): unknown => (value === null || value === undefined || typeof value === "boolean" ? value : value === 1 || value === "1" || value === "true");
 
 export interface KitchenDoorOptions {
   /** The live stream's connection: `EventSource` in a browser, a stand-in in a test. */
@@ -297,7 +296,7 @@ export class AdminiumKitchen implements KitchenPort {
         .map((row) => {
           const at = instantOf(date, row.time, this.zone);
           const pause = pauses.get(at);
-          return { time: row.time, at: new Date(at).toISOString(), taken: row.taken, size: row.size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null } };
+          return { time: row.time, at: new Date(at).toISOString(), taken: row.taken, size: row.size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null, at: (pause["paused_at"] as string | null) ?? null } };
         });
     });
   }

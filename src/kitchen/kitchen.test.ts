@@ -26,7 +26,7 @@ import {
   useKitchen,
 } from "../state/kitchen.ts";
 import { chipFor } from "./Board.tsx";
-import { bookable, stoppedToday } from "./Slots.tsx";
+import { bookable, stopPauses, stoppedToday } from "./Slots.tsx";
 
 const t: TFunction = (key, params, count) => {
   const raw = MESSAGES["en-US"][key as MessageKey] ?? key;
@@ -122,5 +122,26 @@ describe("sold out today", () => {
     expect(result).toMatchObject({ ok: true, soldOut: "Wild mushroom", soldFailed: false });
     const states = await demo.diner.dishes(today());
     expect(states.find((s) => s.id === String(mushroom.id))?.state).toBe("soldout");
+  });
+});
+
+describe("taking orders again after a stop", () => {
+  const slot = (time: string, at: string | null | undefined, id: number) => ({ time, at: `2026-07-28T${time}:00.000Z`, taken: 0, size: 6, pause: at === undefined ? null : { id, by: "Sam", at } });
+
+  it("reopens what the stop paused, and leaves a time paused by hand before it", () => {
+    // 13:00 was paused at 10:02 for another reason; the stop at 11:30 paused the rest, one write after another.
+    const slots = [
+      slot("12:45", "2026-07-28T11:30:01.000Z", 1),
+      slot("13:00", "2026-07-28T10:02:00.000Z", 2),
+      slot("13:15", "2026-07-28T11:30:02.500Z", 3),
+      slot("13:30", "2026-07-28T11:30:04.000Z", 4),
+      slot("13:45", undefined, 5),
+    ];
+    expect(stopPauses(slots).map((s) => s.time).sort()).toEqual(["12:45", "13:15", "13:30"]);
+  });
+
+  it("takes every pause as the stop's when a pause carries no moment", () => {
+    const slots = [slot("12:45", null, 1), slot("13:00", "2026-07-28T10:02:00.000Z", 2)];
+    expect(stopPauses(slots).map((s) => s.time)).toEqual(["12:45", "13:00"]);
   });
 });

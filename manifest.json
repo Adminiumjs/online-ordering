@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "key": "ordering",
   "name": "Online Ordering",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": {
     "id": "adminium",
     "name": "Adminium",
@@ -3273,7 +3273,8 @@
             "nullable": true,
             "rules": {
               "code": {
-                "length": 16
+                "length": 16,
+                "hiddenFromStaff": true
               }
             }
           },
@@ -6041,7 +6042,7 @@
     },
     {
       "ref": "ordering-orders",
-      "template": "page-queue-inbox",
+      "template": "page-crud",
       "title": {
         "key": "mft.ordering.orders",
         "fallback": "Orders"
@@ -6258,7 +6259,7 @@
     },
     {
       "ref": "ordering-enquiries",
-      "template": "page-queue-inbox",
+      "template": "page-crud",
       "title": {
         "key": "mft.ordering.enquiries",
         "fallback": "Enquiries"
@@ -7142,6 +7143,19 @@
               "too_busy",
               "customer_asked",
               "other"
+            ]
+          },
+          "creatable": [
+            "name",
+            "phone",
+            "email",
+            "note",
+            "pickup_at",
+            "channel"
+          ],
+          "creatableValues": {
+            "channel": [
+              "phone"
             ]
           }
         },

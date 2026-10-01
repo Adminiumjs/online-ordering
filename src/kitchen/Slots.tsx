@@ -25,6 +25,35 @@ export function stoppedToday(slots: readonly SlotCount[], nowMinutes: number, no
   return left.length > 0 && left.every((s) => s.pause !== null);
 }
 
+/** How close together two pauses of one stop are made: the stop writes them one after another. */
+export const STOP_GAP_MS = 90_000;
+
+/**
+ * The pauses "Stop online orders for today" made, of the paused times given.
+ *
+ * A stop pauses every open time in one go, one write after another, so its
+ * pauses are the LAST run of pauses made close together. A time somebody had
+ * paused by hand earlier in the day is not in that run — and "Take orders
+ * again" used to reopen it too, quietly undoing a decision the kitchen had
+ * made for another reason. A pause with no moment (an older port) is taken
+ * as the stop's, as before.
+ */
+export function stopPauses(slots: readonly SlotCount[]): SlotCount[] {
+  const paused = slots.filter((s) => s.pause !== null);
+  const timed = paused.flatMap((s) => {
+    const at = s.pause?.at === null || s.pause?.at === undefined ? Number.NaN : Date.parse(s.pause.at);
+    return Number.isNaN(at) ? [] : [{ slot: s, at }];
+  });
+  if (timed.length !== paused.length) return paused;
+  timed.sort((a, b) => b.at - a.at);
+  const run: SlotCount[] = [];
+  for (let i = 0; i < timed.length; i += 1) {
+    if (i > 0 && timed[i - 1]!.at - timed[i]!.at > STOP_GAP_MS) break;
+    run.push(timed[i]!.slot);
+  }
+  return run;
+}
+
 export function Slots() {
   const { t } = useI18n();
   const fmt = useKFmt();
@@ -70,7 +99,8 @@ export function Slots() {
   };
 
   const resume = async () => {
-    const ids = bookable(useKitchen.getState().slots[today] ?? [], nowMin, notice).flatMap((s) => (s.pause === null ? [] : [s.pause.id]));
+    // Only what the stop paused: a time paused by hand before it stays paused.
+    const ids = stopPauses(bookable(useKitchen.getState().slots[today] ?? [], nowMin, notice)).flatMap((s) => (s.pause === null ? [] : [s.pause.id]));
     if (await reopenMany(ids)) toast(t("kitchen.slots.resumed"));
     else toast(t("kitchen.slots.resumeFailed"), "warn");
   };

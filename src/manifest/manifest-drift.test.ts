@@ -235,7 +235,12 @@ describe("the kitchen writes only what running the day needs", () => {
     expect(role("kitchen").limits!["orders"]).toEqual({
       writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method"],
       writableValues: { status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"], cancel_code: KITCHEN_CANCEL_CODES },
+      // A phone order, and only one: never a customer, a link's code, how it was paid or another channel.
+      creatable: ["name", "phone", "email", "note", "pickup_at", "channel"],
+      creatableValues: { channel: ["phone"] },
     });
+    // The key to a diner's own order page is nobody's at the kitchen to read or copy.
+    expect((rules("orders", "link_token")["code"] as Json)["hiddenFromStaff"]).toBe(true);
     expect(KITCHEN_CANCEL_CODES).not.toContain("self");
     expect(KITCHEN_CANCEL_CODES).not.toContain("closed");
   });

@@ -147,6 +147,11 @@ export async function signedIn(): Promise<void> {
   if (person !== null) await readOrders();
 }
 
+/** After an order is placed: the signed-in diner's orders, read again (nothing for a guest). */
+export async function ordersAfterPlacing(): Promise<void> {
+  if (get().person !== null) await readOrders();
+}
+
 export async function readOrders(): Promise<void> {
   try {
     set({ orders: await port().myOrders() });

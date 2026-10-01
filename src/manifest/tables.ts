@@ -408,7 +408,8 @@ export const TABLES: Table[] = [
       language("language"),
       fk("customer_id", "customers", "Customer", opt),
       // The order's own link: emailed to the diner, never shown in a list.
-      text("link_token", 16, "Link code", { ...opt, rules: { code: { length: 16 } } }),
+      // The key to the diner's own order page: no staff screen reads or copies it (the emails that carry it still do).
+      text("link_token", 16, "Link code", { ...opt, rules: { code: { length: 16, hiddenFromStaff: true } } }),
       // The link works until 30 days after pickup.
       at("link_expires", "Link works until", { ...opt, rules: stamp({ moment: { column: "pickup_at", plus: { days: 30 } } }, { columns: ["pickup_at"] }) }),
       bool("link_stopped", "Link stopped", false),

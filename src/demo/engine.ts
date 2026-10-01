@@ -148,7 +148,7 @@ export class Engine {
     const size = this.num(SLOT.perSlot.column);
     return this.grid(day).map(({ time, at }) => {
       const pause = this.pauseAt(at);
-      return { time, at: iso(at), taken: this.taken(at), size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null } };
+      return { time, at: iso(at), taken: this.taken(at), size, pause: pause === undefined ? null : { id: pause.id, by: (pause["paused_by"] as string | null) ?? null, at: (pause["paused_at"] as string | null) ?? null } };
     });
   }
 

@@ -17,6 +17,7 @@
  */
 import { createPublicClient, pictureUrl, PublicApiError, type HeldSession, type PublicClient, type PublicConfig as ClientConfig } from "@adminiumjs/public-client";
 
+import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
 import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime } from "./wire.ts";
@@ -165,7 +166,13 @@ export class AdminiumDiner implements DinerPort {
     const rows: Row[] = [];
     for (let offset = 0; offset < 50 * PAGE; offset += PAGE) {
       const page = await client.list<Row>(ref, { limit: PAGE, offset });
-      rows.push(...page.data);
+      /*
+       * Yes/no columns as booleans. On SQLite and MySQL the public API
+       * answered 0 and 1 (before Adminium 0.3.9, and after it for an install
+       * not yet updated), and the page tests `!== false`: "Taking online
+       * orders" off and a closed weekday never reached the diner.
+       */
+      rows.push(...page.data.map(withYesNo));
       if (page.data.length < PAGE) break;
     }
     return rows;

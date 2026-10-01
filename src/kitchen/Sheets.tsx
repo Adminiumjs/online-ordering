@@ -16,6 +16,7 @@ import { firstName, maskEmail, telHref, type Formatter } from "../lib/format.ts"
 import { storedOptionsText, type MenuModel } from "../lib/menu.ts";
 import { addDays, venueDay } from "../lib/venueTime.ts";
 import { BOARD, NEXT, cancelOrder, dayOf, handOff, kToday, markSoldOut, num, useKitchen, type BoardState, type CancelDraft } from "../state/kitchen.ts";
+import { mailable } from "../lib/plainText.ts";
 import { toast, useUi } from "../state/ui.ts";
 import { LineList, PhoneTag } from "./Board.tsx";
 import { useKFmt } from "./fmt.ts";
@@ -263,7 +264,8 @@ export function CancelSheet() {
       sayRefused(t, fmt, result.result, number, String(o["name"] ?? ""));
       return;
     }
-    const base = o["email"] ? t("kitchen.cancel.doneEmailed", { number, name }) : t("kitchen.cancel.done", { number });
+    // "We've emailed them" only for an address that is mailed: a sample order's (a reserved domain) never is.
+    const base = mailable(o["email"]) ? t("kitchen.cancel.doneEmailed", { number, name }) : t("kitchen.cancel.done", { number });
     if (result.soldFailed && c.dishId !== null && c.dish !== null) {
       const dishId = c.dishId;
       const dish = c.dish;

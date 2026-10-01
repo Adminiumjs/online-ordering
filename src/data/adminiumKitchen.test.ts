@@ -90,7 +90,7 @@ describe("the kitchen's reads", () => {
     const counts = await new AdminiumKitchen(t, config()).slotCounts("2026-07-28");
     expect(counts).toEqual([
       { time: "12:00", at: "2026-07-28T19:00:00.000Z", taken: 2, size: 6, pause: null },
-      { time: "13:00", at: "2026-07-28T20:00:00.000Z", taken: 0, size: 6, pause: { id: 3, by: "Sam" } },
+      { time: "13:00", at: "2026-07-28T20:00:00.000Z", taken: 0, size: 6, pause: { id: 3, by: "Sam", at: null } },
     ]);
     const closed = fakeTransport((call) => (call.path.includes("capacity-counts") ? { data: { rows: [{ time: "12:00", size: 6, taken: 0, closed: true }] } } : { data: [] }));
     expect(await new AdminiumKitchen(closed, config()).slotCounts("2026-12-25")).toEqual([]);

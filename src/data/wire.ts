@@ -94,7 +94,7 @@ export interface SlotCount {
   taken: number;
   size: number;
   /** The paused-slot row, when the slot is paused. */
-  pause: { id: Id; by: string | null } | null;
+  pause: { id: Id; by: string | null; /** When it was paused, ISO (absent from an older port). */ at?: string | null } | null;
 }
 
 /** A change the live stream announces: which row of which table, and how. */

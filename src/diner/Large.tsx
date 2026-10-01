@@ -19,7 +19,15 @@ import { useFmt, useVenue } from "../app/venue.ts";
 import { phoneBad } from "./Checkout.tsx";
 import { useDay } from "./useDay.ts";
 
-const NOTES_MAX = 240;
+/**
+ * What the enquiry's door takes in a note: 200 characters and four digits in
+ * all (its `plainText` rule). The form used to offer 240 and any digits, so a
+ * note with a time or a head count in it was refused with "Try again".
+ */
+export const NOTES_MAX = 200;
+export const NOTES_DIGITS = 4;
+/** Whether a note holds more digits than the door takes. */
+export const tooManyDigits = (notes: string): boolean => (notes.match(/\p{Nd}/gu) ?? []).length > NOTES_DIGITS;
 
 const fieldStyle = (bad: boolean): React.CSSProperties => ({ width: "100%", padding: "13px 15px", borderRadius: 12, border: `1px solid ${bad ? "var(--danger)" : "var(--border-strong)"}`, background: "var(--surface-2)", color: "var(--fg)", fontSize: 14.5, fontWeight: 600 });
 
@@ -46,7 +54,8 @@ function LargeForm() {
   const phoneWrong = f.phone.replace(/[^0-9]/g, "").length < 6 || phoneBad(f.phone);
   const emailBad = !EMAIL.test(f.email.trim());
   const noDay = f.date === "" || (f.date === "other" && f.other === "");
-  const reason = noDay ? t("large.block.day") : otherClosed ? t("large.closedDay") : nameBad ? t("large.name.error") : phoneWrong ? t("large.phone.error") : emailBad ? t("large.email.error") : null;
+  const notesBad = tooManyDigits(f.notes);
+  const reason = noDay ? t("large.block.day") : otherClosed ? t("large.closedDay") : notesBad ? t("large.notes.digits") : nameBad ? t("large.name.error") : phoneWrong ? t("large.phone.error") : emailBad ? t("large.email.error") : null;
   const blocked = reason !== null || sending;
   const err = { name: touched.name === true && nameBad, phone: touched.phone === true && phoneWrong, email: touched.email === true && emailBad };
   const send = () => {
@@ -144,7 +153,7 @@ function LargeForm() {
         {failed !== false && (
           <div role="alert" className="jk-notice" style={{ marginBlockStart: 16, background: "var(--danger-soft)", color: "var(--danger)", fontSize: 13.5, borderRadius: 12 }}>
             <Icon name="wifi-off" size={15} style={{ marginBlockStart: 2 }} />
-            <span>{failed === "limit" ? (venue.phone === null ? t("large.limitNoPhone") : t("large.limit", { phone: `\u2066${venue.phone}\u2069` })) : t("large.failed")}</span>
+            <span>{failed === "limit" ? (venue.phone === null ? t("large.limitNoPhone") : t("large.limit", { phone: `\u2066${venue.phone}\u2069` })) : failed === "notes" ? t("large.notes.digits") : t("large.failed")}</span>
           </div>
         )}
         <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBlockStart: 18 }}>

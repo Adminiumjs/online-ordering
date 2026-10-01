@@ -98,3 +98,21 @@ export function linkFreeText(value: unknown, rule: PlainTextRule = NAME_RULE): b
   }
   return true;
 }
+
+/**
+ * Whether Adminium would send to an address at all. It never mails a domain
+ * reserved for examples and tests (`example.com`, `mail.example`, `.test`,
+ * `.invalid`, `.localhost`) — which is what every sample order carries — so a
+ * screen must not say "we've emailed them" about one.
+ */
+export function mailable(address: unknown): boolean {
+  if (typeof address !== "string") return false;
+  const at = address.trim().lastIndexOf("@");
+  if (at <= 0) return false;
+  const domain = address.trim().slice(at + 1).toLowerCase().replace(/\.$/, "");
+  if (domain === "") return false;
+  // The same rule as Adminium's sender: `example.<anything>`, or a `.test`, `.invalid`, `.localhost` or `.example` name.
+  const labels = domain.split(".");
+  const top = labels[labels.length - 1] ?? "";
+  return !(labels[0] === "example" || ["test", "invalid", "localhost", "example"].includes(top));
+}
