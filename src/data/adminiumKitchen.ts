@@ -19,12 +19,12 @@
  * wall time with no zone, and 0 or 1); every row is read back here as the
  * screens expect it, an ISO instant and a boolean.
  */
-import type { KitchenPerson, KitchenPort, Menu, OrderWithLines } from "./ports.ts";
+import type { KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "./ports.ts";
 import { SessionPortError, type SessionTransport } from "./sessionSource.ts";
 import type { StaffConfig } from "../staffConnection.ts";
 import { MOMENTS, YES_NO, yesNo } from "./columnKinds.ts";
 import { addDays, instantOf, zoneOffsetMs, type Day } from "../lib/venueTime.ts";
-import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotCount, type TreeRow } from "./wire.ts";
+import { ApiError, type CardPayment, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotCount, type TreeRow } from "./wire.ts";
 
 /** The app's key: its roles are named `ordering-<role>`, its tables `ordering_<table>` when the server does not say. */
 const APP_KEY = "ordering";
@@ -32,7 +32,7 @@ const PAGE = 200;
 
 type Table =
   | "settings" | "menu_categories" | "menu_items" | "modifier_groups" | "modifiers" | "hours" | "closures" | "slot_pauses"
-  | "orders" | "order_items" | "order_item_modifiers";
+  | "orders" | "order_items" | "order_item_modifiers" | "payments";
 
 /** The tables whose changes the kitchen hears: every one it reads (a channel it may not read refuses the whole stream). */
 const LIVE: readonly Table[] = ["orders", "order_items", "order_item_modifiers", "slot_pauses", "menu_items", "modifiers", "modifier_groups", "menu_categories", "settings", "hours", "closures"];
@@ -236,8 +236,12 @@ export class AdminiumKitchen implements KitchenPort {
   private async withLines(orders: Row[]): Promise<OrderWithLines[]> {
     const lines = await this.listIn("order_items", "order_id", orders.map((o) => o.id), "position.asc");
     const options = await this.listIn("order_item_modifiers", "order_item_id", lines.map((l) => l.id));
+    // What gift cards paid: read only for the orders that say a card paid something.
+    const carded = orders.filter((o) => Number(o["paid"] ?? 0) > 0).map((o) => o.id);
+    const payments = carded.length === 0 ? [] : await this.listIn("payments", "order_id", carded, "made_at.asc");
     return orders.map((order) => ({
       order,
+      payments: payments.filter((p) => p["order_id"] === order.id),
       lines: lines
         .filter((l) => l["order_id"] === order.id)
         .sort(byPosition)
@@ -270,8 +274,31 @@ export class AdminiumKitchen implements KitchenPort {
     return this.run(() => this.change("orders", id, { status: "cancelled", cancel_code: code, cancel_dish: dish, cancel_note: note }, from));
   }
 
-  handOff(id: Id, paid: "cash" | "card"): Promise<Row> {
-    return this.run(() => this.change("orders", id, { status: "picked_up", paid_method: paid }, "ready"));
+  handOff(id: Id, paid: PaidBy, rest?: "cash" | "card"): Promise<Row> {
+    // How it was paid is said; whether that agrees with what gift cards paid is Adminium's to judge.
+    return this.run(() => this.change("orders", id, { status: "picked_up", paid_method: paid, ...(paid === "mixed" && rest !== undefined ? { rest_paid_by: rest } : {}) }, "ready"));
+  }
+
+  async giftCards(): Promise<boolean> {
+    return this.cfg.addOns?.["offers"] !== undefined;
+  }
+
+  /** A gift card's payment of an order, asked or made: what it takes and what is left, never what the card holds. */
+  private async cardPayment(orderId: Id, code: string, more: { dryRun: boolean; clientKey?: string }): Promise<CardPayment> {
+    const reply = await this.t.mutate<{ data: Row; payment?: { amount: string | number; due: string | number } | null }>(await this.path("payments", more.dryRun ? "/dry-run" : ""), "POST", {
+      values: { order_id: orderId, card_code: code, ...(more.clientKey === undefined ? {} : { client_key: more.clientKey }) },
+    });
+    const amount = reply.payment?.amount ?? reply.data["amount"];
+    const due = reply.payment?.due ?? null;
+    return { amount: String(amount ?? "0"), due: String(due ?? "0") };
+  }
+
+  cardCheck(orderId: Id, code: string): Promise<CardPayment> {
+    return this.run(() => this.cardPayment(orderId, code, { dryRun: true }));
+  }
+
+  cardUse(orderId: Id, code: string, clientKey: string): Promise<CardPayment> {
+    return this.run(() => this.cardPayment(orderId, code, { dryRun: false, clientKey }));
   }
 
   // ── slots, portions, pauses ───────────────────────────────────────────────

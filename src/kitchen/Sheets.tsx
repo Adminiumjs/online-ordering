@@ -15,7 +15,7 @@ import { useI18n, type TFunction } from "../i18n/index.tsx";
 import { firstName, maskEmail, telHref, type Formatter } from "../lib/format.ts";
 import { storedOptionsText, type MenuModel } from "../lib/menu.ts";
 import { addDays, venueDay } from "../lib/venueTime.ts";
-import { BOARD, NEXT, cancelOrder, dayOf, handOff, kToday, markSoldOut, num, useKitchen, type BoardState, type CancelDraft } from "../state/kitchen.ts";
+import { BOARD, NEXT, cancelOrder, dayOf, handOff, kToday, markSoldOut, num, useKitchen, type BoardState, type CancelDraft, NO_CARD, checkHandoffCard, owed, setHandoffCard, takeHandoffCard } from "../state/kitchen.ts";
 import { mailable } from "../lib/plainText.ts";
 import { toast, useUi } from "../state/ui.ts";
 import { LineList, PhoneTag } from "./Board.tsx";
@@ -98,7 +98,7 @@ export function Ticket() {
     { key: "not_collected", at: o["not_collected_at"], by: null },
   ].filter((s) => s.at !== null && s.at !== undefined && s.at !== "");
   const next = () => {
-    if (status === "ready") useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false } });
+    if (status === "ready") useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false, card: NO_CARD } });
     else {
       close();
       void advance(t, fmt, o.id, status, NEXT[status as BoardState]);
@@ -338,10 +338,23 @@ export function CancelSheet() {
   );
 }
 
-const PAYS: { id: "cash" | "card"; key: string; icon: IconName }[] = [
+const PAYS: { id: "cash" | "card" | "gift"; key: string; icon: IconName }[] = [
   { id: "cash", key: "kitchen.handoff.cash", icon: "banknote" },
   { id: "card", key: "kitchen.handoff.card", icon: "credit-card" },
+  // Shown only where gift cards are taken: "Another gift card" once one has paid.
+  { id: "gift", key: "kitchen.handoff.gift", icon: "gift" },
 ];
+
+/** Why a gift card was not taken at the counter, in the words Adminium's reason has here. */
+const CARD_ERRORS: Record<string, string> = {
+  "not-valid": "kitchen.handoff.cardErr.notValid",
+  inactive: "kitchen.handoff.cardErr.inactive",
+  void: "kitchen.handoff.cardErr.void",
+  expired: "kitchen.handoff.cardErr.expired",
+  empty: "kitchen.handoff.cardErr.empty",
+  "not-allowed": "kitchen.handoff.cardErr.notAllowed",
+  "add-on-unavailable": "kitchen.handoff.cardErr.off",
+};
 
 export function HandOffSheet() {
   const { t } = useI18n();
@@ -351,17 +364,28 @@ export function HandOffSheet() {
   const receipts = useKitchen((s) => s.receipts && s.settings?.["receipt_email_on"] !== false);
   const menu = useKitchen((s) => s.menu);
   const dark = useUi((s) => s.theme) === "dark";
+  const giftCards = useKitchen((s) => s.giftCards);
   const titleId = useId();
   const paidId = useId();
+  const cardId = useId();
   if (h === null || order === undefined) return null;
   const o = order.order;
+  // What gift cards paid, and what is left for the counter: Adminium's figures, read with the order.
+  const cardsPaid = num(o["paid"], 0);
+  const left = owed(o);
   const close = () => useKitchen.setState({ handoff: null });
   const go = async () => {
     const result = await handOff();
     if (result.ok) {
-      toast(t(h.paid === "card" ? "kitchen.handoff.doneCard" : "kitchen.handoff.doneCash", { number: String(o["number"]), name: firstName(o["name"]), total: fmt.money(o["total"]) }));
-    } else sayRefused(t, fmt, result.result, String(o["number"]), String(o["name"] ?? ""));
+      const said = { number: String(o["number"]), name: firstName(o["name"]), total: fmt.money(result.collected) };
+      toast(result.paid === "gift_card" ? t("kitchen.handoff.doneGift", said) : t((result.paid === "mixed" ? h.paid : result.paid) === "card" ? "kitchen.handoff.doneCard" : "kitchen.handoff.doneCash", said));
+    } else if (result.result.ok === false && result.result.kind === "disagrees") toast(t("kitchen.handoff.changed"));
+    else sayRefused(t, fmt, result.result, String(o["number"]), String(o["name"] ?? ""));
   };
+  const pays = PAYS.filter((p) => p.id !== "gift" || giftCards);
+  const card = h.card;
+  const cardBusy = card.state !== "idle";
+  const ready = left <= 0 || h.paid === "cash" || h.paid === "card";
   return (
     <Modal labelledBy={titleId} width={440} z={560} onClose={close}>
       <div style={{ padding: "24px 24px 0", overflowY: "auto" }}>
@@ -398,22 +422,77 @@ export function HandOffSheet() {
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBlockStart: 16 }}>
           <span style={{ fontSize: 15, fontWeight: 800 }}>{t("kitchen.collect")}</span>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 30, fontWeight: 600, letterSpacing: "-.02em" }}>
-            {fmt.money(o["total"])}
+            {fmt.money(left)}
           </span>
         </div>
+        {cardsPaid > 0 && (
+          <div role="status" className="jk-notice" style={{ marginBlockStart: 12, background: "var(--pos-soft)", color: "var(--pos)", fontSize: 12.5, fontWeight: 700 }}>
+            <Icon name="gift" size={14} style={{ marginBlockStart: 1 }} />
+            <span>{left > 0 ? t("kitchen.handoff.paidSoFar", { amount: fmt.money(cardsPaid), due: fmt.money(left) }) : t("kitchen.handoff.paidAll")}</span>
+          </div>
+        )}
+        {left > 0 && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBlockStart: 14 }}>
           <span id={paidId} style={{ fontSize: 13, fontWeight: 800 }}>
             {t("kitchen.handoff.paidBy")}
           </span>
           <div role="radiogroup" aria-labelledby={paidId} aria-required="true" className="jk-seg" style={{ borderRadius: 11 }}>
-            {PAYS.map((p) => (
-              <button key={p.id} className="jn-chip jk-segbtn" role="radio" aria-checked={h.paid === p.id} aria-pressed={undefined} onClick={() => useKitchen.setState({ handoff: { ...h, paid: p.id } })} style={{ height: 36, paddingInline: 15, fontSize: 13.5, ...(h.paid === p.id ? { background: "var(--accent)", color: "var(--accent-fg)" } : {}) }}>
+            {pays.map((p) => (
+              <button key={p.id} className="jn-chip jk-segbtn" role="radio" aria-checked={h.paid === p.id} aria-pressed={undefined} onClick={() => useKitchen.setState({ handoff: { ...h, paid: p.id } })} disabled={cardBusy} style={{ height: 36, paddingInline: 15, fontSize: 13.5, ...(h.paid === p.id ? { background: "var(--accent)", color: "var(--accent-fg)" } : {}) }}>
                 <Icon name={p.icon} size={15} />
-                {t(p.key as "kitchen.handoff.cash")}
+                {p.id === "gift" && cardsPaid > 0 ? t("kitchen.handoff.giftAnother") : t(p.key as "kitchen.handoff.cash")}
               </button>
             ))}
           </div>
         </div>
+        )}
+        {left > 0 && h.paid === "gift" && (
+          // A card at the counter is asked first ("Check"), then taken ("Use it") in a save of its own: the hand-over follows.
+          <div style={{ marginBlockStart: 12 }}>
+            <label htmlFor={cardId} style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBlockEnd: 7 }}>
+              {t("kitchen.handoff.cardLabel")}
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                id={cardId}
+                className="jn-fld jk-mono"
+                dir="ltr"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
+                maxLength={64}
+                value={card.draft}
+                placeholder="GC-0000-0000-0000"
+                aria-invalid={card.error !== null}
+                aria-describedby={card.error !== null || card.would !== null ? `${cardId}-msg` : undefined}
+                onChange={(e) => setHandoffCard(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void checkHandoffCard();
+                }}
+                style={{ flex: 1, minWidth: 0, height: 44, paddingInline: 13, borderRadius: 11, border: `1px solid ${card.error !== null ? "var(--danger)" : "var(--border-strong)"}`, background: "var(--surface-2)", color: "var(--fg)", fontSize: 14, letterSpacing: ".04em", textTransform: "uppercase" }}
+              />
+              {card.would === null ? (
+                <button className="jn-btn" onClick={() => void checkHandoffCard()} disabled={cardBusy || card.draft.trim() === ""} aria-busy={card.state === "checking"} style={{ flex: "none", minWidth: 84, height: 44, paddingInline: 16, borderRadius: 11, border: "none", background: "var(--accent)", color: "var(--accent-fg)", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                  {card.state === "checking" ? t("kitchen.handoff.checking") : t("kitchen.handoff.check")}
+                </button>
+              ) : (
+                <button className="jn-btn" onClick={() => void takeHandoffCard()} disabled={cardBusy} aria-busy={card.state === "using"} style={{ flex: "none", minWidth: 84, height: 44, paddingInline: 16, borderRadius: 11, border: "none", background: "var(--pos)", color: "#fff", fontSize: 14, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                  {t("kitchen.handoff.use")}
+                </button>
+              )}
+            </div>
+            {card.error !== null ? (
+              <span id={`${cardId}-msg`} role="alert" style={{ display: "flex", alignItems: "center", gap: 6, marginBlockStart: 7, fontSize: 12, fontWeight: 600, color: "var(--danger)" }}>
+                <Icon name="alert-circle" size={13} />
+                {t((CARD_ERRORS[card.error] ?? "kitchen.handoff.cardErr.other") as "kitchen.handoff.cardErr.other")}
+              </span>
+            ) : card.would !== null ? (
+              <span id={`${cardId}-msg`} role="status" style={{ display: "block", marginBlockStart: 7, fontSize: 12.5, fontWeight: 700, color: "var(--pos)" }}>
+                {t("kitchen.handoff.cardWould", { amount: fmt.money(card.would.amount), due: fmt.money(card.would.due) })}
+              </span>
+            ) : null}
+          </div>
+        )}
         <div className="jk-notice" style={{ marginBlockStart: 14, background: "var(--warn-soft)", color: "var(--warn)", fontSize: 12.5 }}>
           <Icon name="alert-circle" size={14} style={{ marginBlockStart: 1 }} />
           <span>{t("kitchen.handoff.checkName")}</span>
@@ -435,9 +514,9 @@ export function HandOffSheet() {
         <button className="jn-gi jk-btn-ghost" onClick={close} style={{ height: 48, padding: "0 20px", borderRadius: 12, fontSize: 14 }}>
           {t("kitchen.handoff.notYet")}
         </button>
-        <button className="jn-btn" onClick={() => void go()} disabled={h.paid === null || h.busy} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 48, borderRadius: 12, border: "none", background: h.paid !== null ? "var(--pos)" : "var(--surface-3)", color: h.paid !== null ? (dark ? "#0f0f14" : "#ffffff") : "var(--fg-subtle)", fontSize: 14.5, fontWeight: 800, cursor: h.paid !== null ? "pointer" : "not-allowed" }}>
+        <button className="jn-btn" onClick={() => void go()} disabled={!ready || h.busy || cardBusy} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 48, borderRadius: 12, border: "none", background: h.paid !== null ? "var(--pos)" : "var(--surface-3)", color: h.paid !== null ? (dark ? "#0f0f14" : "#ffffff") : "var(--fg-subtle)", fontSize: 14.5, fontWeight: 800, cursor: h.paid !== null ? "pointer" : "not-allowed" }}>
           <Icon name="check" size={17} />
-          {t("kitchen.handoff.go", { total: fmt.money(o["total"]) })}
+          {left > 0 ? t("kitchen.handoff.go", { total: fmt.money(left) }) : t("kitchen.handoff.goPaid")}
         </button>
       </div>
     </Modal>

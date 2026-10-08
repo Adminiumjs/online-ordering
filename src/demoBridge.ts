@@ -17,7 +17,7 @@ import { addDays, venueDay, venueMinutes, hhmm } from "./lib/venueTime.ts";
 import { openSignInLink, useAccount } from "./state/account.ts";
 import { reloadAll, refreshAvailability, setField, useDiner } from "./state/diner.ts";
 import { setLarge, useLarge } from "./state/large.ts";
-import { freshPhone, useKitchen, type KitchenTab } from "./state/kitchen.ts";
+import { freshPhone, NO_CARD, useKitchen, type KitchenTab } from "./state/kitchen.ts";
 import { readTrack, useTrack } from "./state/track.ts";
 import { goDiner, setTheme, toast, useUi, type DinerView } from "./state/ui.ts";
 import { useReorderAsk } from "./state/reorder.ts";
@@ -106,7 +106,7 @@ export function goScreen(screen: string): void {
   if (screen === "ticket") useKitchen.setState({ ticket: byNumber("2114") ?? useKitchen.getState().orders[0]?.order.id ?? null });
   if (screen === "handoff") {
     const ready = useKitchen.getState().orders.find((o) => o.order["status"] === "ready");
-    if (ready !== undefined) useKitchen.setState({ handoff: { id: ready.order.id, paid: null, busy: false } });
+    if (ready !== undefined) useKitchen.setState({ handoff: { id: ready.order.id, paid: null, busy: false, card: NO_CARD } });
   }
   if (screen === "phone") useKitchen.setState({ phone: freshPhone() });
 }

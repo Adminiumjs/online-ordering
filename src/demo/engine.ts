@@ -363,7 +363,7 @@ export class Engine {
             roles?: readonly string[];
             undo?: true;
             clears?: readonly string[];
-            requires?: { where?: readonly { column: string; isNull?: boolean }[]; time?: { before?: { column: string; plus?: { minutes?: number } } } };
+            requires?: { where?: readonly { column: string; isNull?: boolean; eq?: unknown }[]; time?: { before?: { column: string; plus?: { minutes?: number } } } };
           }
         | undefined;
       if (listed === undefined) throw new ApiError(409, "STATE_MOVE_REFUSED", `No move from ${was} to ${to}.`, { column: "status", from: was, to });
@@ -392,9 +392,11 @@ export class Engine {
           throw new ApiError(409, "STATE_MOVE_REFUSED", "Too late to take it back.", { column: "status", from: was, to, requires: "time", bound: "before", ...(by === null ? {} : { at: iso(by) }) });
         }
       }
-      const after = { ...stored, ...values };
+      const after: Record<string, unknown> = { ...stored, ...values };
+      // What Adminium works out is judged as the save would leave it (whether "Paid by" agrees with what a gift card paid).
+      settleFormulas("orders", after);
       for (const condition of move.requires?.where ?? []) {
-        if (condition.isNull === false && empty(after[condition.column])) {
+        if ((condition.isNull === false && empty(after[condition.column])) || (condition.eq !== undefined && Number(after[condition.column]) !== Number(condition.eq))) {
           throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { column: "status", from: was, to, requires: condition.column });
         }
       }

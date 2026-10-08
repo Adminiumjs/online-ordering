@@ -21,7 +21,7 @@ export class DemoAdminium {
     this.world = new World(opts.now ?? DEMO_START);
     this.engine = new Engine(this.world);
     this.diner = new DemoDiner(this.engine, opts.latency ?? NO_LATENCY);
-    this.kitchen = new DemoKitchen(this.engine);
+    this.kitchen = new DemoKitchen(this.engine, this.diner.cards);
     // A receipt is Invoices & Receipts' to draw: the card switches the add-on, and the feature with it.
     // A feature is on while every add-on it needs is attached (the manifest names them).
     const attached = (addOn: string) => (addOn === "invoices" ? this.kitchen.addOns.invoices : addOn === "holiday-calendars" ? this.kitchen.addOns.holidays : false);

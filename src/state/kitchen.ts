@@ -10,8 +10,8 @@
  */
 import { create } from "zustand";
 
-import type { KitchenPerson, Menu, OrderWithLines } from "../data/ports.ts";
-import type { ApiError, Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
+import type { KitchenPerson, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
+import type { ApiError, CardPayment, Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
 import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
@@ -87,7 +87,14 @@ interface KitchenState {
   pulse: Id[];
   ticket: Id | null;
   cancel: CancelDraft | null;
-  handoff: { id: Id; paid: "cash" | "card" | null; busy: boolean } | null;
+  /**
+   * The hand-over sheet: how what is left is paid (`gift` opens the card field),
+   * and the gift card being asked about — its code as typed, what Adminium
+   * said it would pay, and why it was refused.
+   */
+  handoff: { id: Id; paid: "cash" | "card" | "gift" | null; busy: boolean; card: HandoffCard } | null;
+  /** Whether gift cards are taken here (Offers & gift cards is in use for the app). */
+  giftCards: boolean;
   tomorrow: boolean;
   phone: PhoneDraft | null;
   askStop: boolean;
@@ -124,6 +131,7 @@ export const useKitchen = create<KitchenState>(() => ({
   ticket: null,
   cancel: null,
   handoff: null,
+  giftCards: false,
   tomorrow: false,
   phone: null,
   askStop: false,
@@ -171,6 +179,8 @@ export async function loadKitchen(): Promise<void> {
   try {
     const p = port();
     const [person, config, settings, hours, closures, menu, holidays, receipts, menuShared] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts(), p.menuShared()]);
+    // Whether gift cards are taken here; a door that cannot say takes none.
+    set({ giftCards: await p.giftCards().catch(() => false) });
     set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, menuShared, signedOut: false });
     await Promise.all([readOrders(true), readSlots(), readCounts()]);
     set({ load: "ok" });
@@ -313,8 +323,19 @@ export async function signIn(): Promise<void> {
 
 // ── moves ───────────────────────────────────────────────────────────────────
 
+/** A gift card on the hand-over sheet. `error` is the reason Adminium gave, in its own word. */
+export interface HandoffCard {
+  draft: string;
+  state: "idle" | "checking" | "using";
+  would: CardPayment | null;
+  error: string | null;
+}
+export const NO_CARD: HandoffCard = { draft: "", state: "idle", would: null, error: null };
+
 export type MoveResult =
   | { ok: true; order: Row }
+  /** "Paid by" does not agree with what a gift card paid (it paid more meanwhile, on another screen). */
+  | { ok: false; kind: "disagrees" }
   | { ok: false; kind: "unchanged"; state: string; at: string | null; by: string | null }
   | { ok: false; kind: "cancelled"; at: string | null }
   /** Another screen moved it on: this is where it stands. */
@@ -333,6 +354,7 @@ function refused(error: unknown, id: Id): MoveResult {
     return { ok: false, kind: "cancelled", at: (order?.order["cancelled_at"] as string | null) ?? null };
   }
   if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && error.params["requires"] === "time") return { ok: false, kind: "late" };
+  if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && (error.params["requires"] === "method_ok" || error.params["column"] === "method_ok")) return { ok: false, kind: "disagrees" };
   if (isApiError(error) && error.code === "STATE_MOVE_REFUSED" && typeof error.params["from"] === "string" && error.params["named"] !== undefined && error.params["named"] !== error.params["from"]) {
     return { ok: false, kind: "moved", state: error.params["from"] };
   }
@@ -358,19 +380,70 @@ async function refreshNow(tables: readonly string[]): Promise<void> {
   await flush();
 }
 
-export async function handOff(): Promise<{ ok: true; order: OrderWithLines } | { ok: false; result: MoveResult }> {
+export async function handOff(): Promise<{ ok: true; order: OrderWithLines; paid: PaidBy; collected: number } | { ok: false; result: MoveResult }> {
   const h = get().handoff;
   const order = get().orders.find((o) => o.order.id === h?.id);
-  if (h === null || h.paid === null || order === undefined) return { ok: false, result: { ok: false, kind: "failed" } };
+  if (h === null || order === undefined) return { ok: false, result: { ok: false, kind: "failed" } };
+  // What gift cards paid decides the word, never the sheet: all of it, part of it (the rest as chosen), or none.
+  const cards = Number(order.order["paid"] ?? 0);
+  const left = owed(order.order);
+  const rest = h.paid === "cash" || h.paid === "card" ? h.paid : null;
+  if (left > 0 && rest === null) return { ok: false, result: { ok: false, kind: "failed" } };
+  const paid: PaidBy = cards > 0 ? (left > 0 ? "mixed" : "gift_card") : (rest as "cash" | "card");
   set({ handoff: { ...h, busy: true } });
   try {
-    await port().handOff(h.id, h.paid);
+    await port().handOff(h.id, paid, paid === "mixed" ? (rest ?? undefined) : undefined);
     set({ handoff: null, ticket: null });
-    return { ok: true, order };
+    return { ok: true, order, paid, collected: left };
   } catch (error) {
     set({ handoff: { ...h, busy: false } });
     return { ok: false, result: refused(error, h.id) };
   } finally {
+    await refreshNow(["orders"]);
+  }
+}
+
+/** What is still to collect of an order: its total, less what gift cards paid. An order from before gift cards owes its total. */
+export function owed(order: Row): number {
+  const left = order["to_pay"] ?? order["due"];
+  return left === null || left === undefined ? Number(order["total"] ?? 0) : Number(left);
+}
+
+const cardReason = (error: unknown): string => (isApiError(error) && error.code === "POSTING_REFUSED" && typeof error.params["reason"] === "string" ? error.params["reason"] : isApiError(error) && error.code === "FEATURE_OFF" ? "add-on-unavailable" : "other");
+
+export function setHandoffCard(draft: string): void {
+  const h = get().handoff;
+  if (h !== null) set({ handoff: { ...h, card: { ...NO_CARD, draft } } });
+}
+
+/** Asks what the typed card would pay of what is left: nothing is written. */
+export async function checkHandoffCard(): Promise<void> {
+  const h = get().handoff;
+  if (h === null || h.card.draft.trim() === "" || h.card.state !== "idle") return;
+  set({ handoff: { ...h, card: { ...h.card, state: "checking", error: null, would: null } } });
+  try {
+    const would = await port().cardCheck(h.id, h.card.draft.trim());
+    const now = get().handoff;
+    if (now?.id === h.id) set({ handoff: { ...now, card: { ...now.card, state: "idle", would } } });
+  } catch (error) {
+    const now = get().handoff;
+    if (now?.id === h.id) set({ handoff: { ...now, card: { ...now.card, state: "idle", error: signedOutBy(error) ? "other" : cardReason(error) } } });
+  }
+}
+
+/** The card pays: its own save. What is left is then paid another way — or nothing is. */
+export async function takeHandoffCard(): Promise<void> {
+  const h = get().handoff;
+  if (h === null || h.card.would === null || h.card.state !== "idle") return;
+  set({ handoff: { ...h, card: { ...h.card, state: "using", error: null } } });
+  try {
+    await port().cardUse(h.id, h.card.draft.trim(), crypto.randomUUID());
+    await refreshNow(["orders"]);
+    const now = get().handoff;
+    if (now?.id === h.id) set({ handoff: { ...now, paid: null, card: NO_CARD } });
+  } catch (error) {
+    const now = get().handoff;
+    if (now?.id === h.id) set({ handoff: { ...now, card: { ...now.card, state: "idle", would: null, error: cardReason(error) } } });
     await refreshNow(["orders"]);
   }
 }

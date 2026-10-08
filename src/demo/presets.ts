@@ -11,7 +11,7 @@ import { afterClosing, fillSlot, moveOn, sellOut } from "./shortcuts.ts";
 import { DEMO_SIGN_IN } from "./diner.ts";
 import { openSignInLink, useAccount } from "../state/account.ts";
 import { applyCard, applyCode, type CartLine, lineKey, openSheet, placeOrder, replaceCart, runQuote, setField, toggleOption, useDiner } from "../state/diner.ts";
-import { freshPhone, addPhoneLine, setPhone, useKitchen } from "../state/kitchen.ts";
+import { freshPhone, addPhoneLine, setPhone, useKitchen, NO_CARD, loadKitchen } from "../state/kitchen.ts";
 import { setLarge, useLarge } from "../state/large.ts";
 import { useReorderAsk } from "../state/reorder.ts";
 import { openTrack, useTrack } from "../state/track.ts";
@@ -234,7 +234,10 @@ const PRESETS: Record<string, Preset> = {
   "k-reconnecting": { kitchen: true, ui: () => demo().kitchen.setLive("reconnecting") },
   "k-ticket": { kitchen: true, ui: () => useKitchen.setState({ ticket: numbered("2114").id }) },
   "k-cancel": { kitchen: true, ui: () => useKitchen.setState({ ticket: numbered("2116").id, cancel: { id: numbered("2116").id, reason: "ran_out", dish: "Wild mushroom", dishId: dish("Wild mushroom"), note: "", markSold: true, busy: false } }) },
-  "k-handoff": { kitchen: true, ui: () => useKitchen.setState({ handoff: { id: numbered("2113").id, paid: "card", busy: false } }) },
+  "k-handoff": { kitchen: true, ui: () => useKitchen.setState({ handoff: { id: numbered("2113").id, paid: "card", busy: false, card: NO_CARD } }) },
+  // Offers — the hand-over of an order a gift card paid part of, and another card at the counter
+  "k-handoff-gift": { kitchen: true, ui: async () => { await demo().kitchen.cardUse(numbered("2113").id, DEMO_CARD.code, "preset-card"); await loadKitchen(); useKitchen.setState({ handoff: { id: numbered("2113").id, paid: null, busy: false, card: NO_CARD } }); } },
+  "k-handoff-gift-another": { kitchen: true, ui: async () => { useKitchen.setState({ handoff: { id: numbered("2113").id, paid: "gift", busy: false, card: { ...NO_CARD, draft: DEMO_CARD.code } } }); } },
   "k-tomorrow": { kitchen: true, ui: () => useKitchen.setState({ tomorrow: true }) },
   "k-arrival": { kitchen: true, ui: async () => { const { arrive } = await import("./shortcuts.ts"); arrive(demo()); } },
   // States 7 — kitchen setup

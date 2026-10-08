@@ -5,7 +5,7 @@
 import { Icon } from "../components/Icon.tsx";
 import { useNow } from "../data/sources.ts";
 import { useI18n } from "../i18n/index.tsx";
-import { num, useKitchen } from "../state/kitchen.ts";
+import { num, useKitchen, NO_CARD, owed } from "../state/kitchen.ts";
 import { useUi } from "../state/ui.ts";
 import { useBoard } from "./Board.tsx";
 import { useKFmt } from "./fmt.ts";
@@ -50,11 +50,11 @@ export function Shelf() {
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, padding: "10px 12px", borderRadius: 11, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--fg-muted)" }}>{t("kitchen.collect")}</span>
                 <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 17, fontWeight: 600 }}>
-                  {fmt.money(o["total"])}
+                  {fmt.money(owed(o))}
                 </span>
               </div>
               <div style={{ display: "flex", gap: 9 }}>
-                <button className="jn-btn" onClick={() => useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false } })} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: 12, border: "none", background: "var(--pos)", color: dark ? "#0f0f14" : "#ffffff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
+                <button className="jn-btn" onClick={() => useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false, card: NO_CARD } })} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: 12, border: "none", background: "var(--pos)", color: dark ? "#0f0f14" : "#ffffff", fontSize: 14, fontWeight: 800, cursor: "pointer" }}>
                   <Icon name="scan-line" size={16} />
                   {t("kitchen.btn.handOff")}
                 </button>

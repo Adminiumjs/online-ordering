@@ -7,8 +7,9 @@
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
 import { DEMO_HOLIDAYS } from "../data/demo.ts";
-import type { KitchenPerson, KitchenPort, Menu, OrderWithLines } from "../data/ports.ts";
-import { ApiError, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
+import type { KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
+import { DemoCards } from "./offers.ts";
+import { ApiError, type CardPayment, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
 import { venueDay } from "../lib/venueTime.ts";
 import { Engine, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
@@ -23,8 +24,11 @@ export class DemoKitchen implements KitchenPort {
   private stateListeners = new Set<(state: "live" | "reconnecting") => void>();
 
   readonly engine: Engine;
-  constructor(engine: Engine) {
+  /** The demo's gift cards, shared with the order page's door: a card spent there is spent here. */
+  private readonly cards: DemoCards;
+  constructor(engine: Engine, cards: DemoCards = new DemoCards()) {
     this.engine = engine;
+    this.cards = cards;
   }
 
   private get world() {
@@ -101,6 +105,7 @@ export class DemoKitchen implements KitchenPort {
   private withLines(order: Row): OrderWithLines {
     return {
       order: { ...order },
+      payments: this.world.where("payments", (p) => p["order_id"] === order.id).map((p) => ({ ...p })),
       lines: this.world
         .where("order_items", (l) => l["order_id"] === order.id)
         .sort((a, b) => Number(a["position"] ?? 0) - Number(b["position"] ?? 0))
@@ -137,10 +142,47 @@ export class DemoKitchen implements KitchenPort {
     return { ...this.engine.updateOrder(id, values, this.writer, { from }) };
   }
 
-  async handOff(id: Id, paid: "cash" | "card"): Promise<Row> {
-    const values = { status: "picked_up", paid_method: paid };
+  async handOff(id: Id, paid: PaidBy, rest?: "cash" | "card"): Promise<Row> {
+    const values = { status: "picked_up", paid_method: paid, ...(paid === "mixed" && rest !== undefined ? { rest_paid_by: rest } : {}) };
     this.held("orders", values);
     return { ...this.engine.updateOrder(id, values, this.writer, { from: "ready" }) };
+  }
+
+  async giftCards(): Promise<boolean> {
+    return true;
+  }
+
+  /** What a card would pay of what the order still owes; the one refusal a card gets, with its plain reason for staff. */
+  private cardFor(orderId: Id, code: string): { amount: number; due: number } {
+    const order = this.world.get("orders", orderId);
+    if (order === undefined) throw new ApiError(404, "NOT_FOUND", "No such order.");
+    const owed = Math.max(0, Math.round((Number(order["total"] ?? 0) - Number(order["paid"] ?? 0)) * 100) / 100);
+    const balance = this.cards.balance(code);
+    if (balance === null) throw new ApiError(409, "POSTING_REFUSED", "This gift card is not valid.", { ledger: "value", reason: "not-valid" });
+    if (balance <= 0) throw new ApiError(409, "POSTING_REFUSED", "This gift card is empty.", { ledger: "value", reason: "empty" });
+    if (owed <= 0) throw new ApiError(409, "POSTING_REFUSED", "Nothing is left to pay.", { ledger: "value", reason: "not-allowed" });
+    const amount = Math.min(balance, owed);
+    return { amount, due: Math.round((owed - amount) * 100) / 100 };
+  }
+
+  async cardCheck(orderId: Id, code: string): Promise<CardPayment> {
+    this.signedIn();
+    const { amount, due } = this.cardFor(orderId, code);
+    return { amount: amount.toFixed(2), due: due.toFixed(2) };
+  }
+
+  async cardUse(orderId: Id, code: string, clientKey: string): Promise<CardPayment> {
+    this.signedIn();
+    const again = this.world.where("payments", (p) => p["client_key"] === clientKey)[0];
+    const order = this.world.get("orders", orderId)!;
+    if (again !== undefined) return { amount: Number(again["amount"]).toFixed(2), due: Number(order["due"] ?? 0).toFixed(2) };
+    const { amount, due } = this.cardFor(orderId, code);
+    this.cards.spend(code, amount);
+    this.world.insert("payments", { order_id: orderId, card_code: code, card_id: null, card_last4: code.replace(/[^0-9A-Za-z]/g, "").slice(-4).toUpperCase(), amount, card_balance_after: this.cards.balance(code), returned: null, kept: amount, made_at: new Date(this.engine.now).toISOString(), made_by: this.person.name, client_key: clientKey });
+    const paid = Math.round((Number(order["paid"] ?? 0) + amount) * 100) / 100;
+    const total = Number(order["total"] ?? 0);
+    this.world.update("orders", orderId, { paid, due, to_pay: due, card_used: 1, prepaid: paid >= total ? 1 : 0 });
+    return { amount: amount.toFixed(2), due: due.toFixed(2) };
   }
 
   async slotCounts(date: string) {

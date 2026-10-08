@@ -11,7 +11,7 @@ import { useNow } from "../data/sources.ts";
 import { useI18n, type TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { storedOptionsText } from "../lib/menu.ts";
-import { BOARD, NEXT, dayOf, kToday, num, useKitchen, type BoardState } from "../state/kitchen.ts";
+import { BOARD, NEXT, dayOf, kToday, num, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
 import { useUi } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 import { advance, undo, useRecentMove } from "./moves.ts";
@@ -117,7 +117,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
   const tone = chip.tone === "neutral" ? ["var(--surface-3)", "var(--fg-muted)"] : [`var(--${chip.tone}-soft)`, `var(--${chip.tone})`];
   const undoable = recent.id === o.id && Date.now() < recent.until && recent.to === column;
   const go = () => {
-    if (column === "ready") useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false } });
+    if (column === "ready") useKitchen.setState({ handoff: { id: o.id, paid: null, busy: false, card: NO_CARD } });
     else void advance(t, fmt, o.id, column, NEXT[column]);
   };
   return (

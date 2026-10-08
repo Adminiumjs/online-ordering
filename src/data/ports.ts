@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { ClaimReply, DishState, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
+import type { CardPayment, ClaimReply, DishState, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -27,7 +27,12 @@ export interface Menu {
 export interface OrderWithLines {
   order: Row;
   lines: (Row & { options: Row[] })[];
+  /** What gift cards paid of it, oldest first; none for an order no card paid (and from a door that reads none). */
+  payments?: Row[];
 }
+
+/** How an order was paid at the hand-over: one way, or a gift card and the rest another way. */
+export type PaidBy = "cash" | "card" | "gift_card" | "mixed";
 
 export interface DinerPort {
   config(): Promise<PublicConfig>;
@@ -96,7 +101,14 @@ export interface KitchenPort {
   /** A move of an order's state; `from` is the state the screen showed. */
   move(id: Id, from: string, to: string): Promise<Row>;
   cancel(id: Id, from: string, code: string, dish: string | null, note: string | null): Promise<Row>;
-  handOff(id: Id, paid: "cash" | "card"): Promise<Row>;
+  /** `rest`: with a gift card paying part (`mixed`), how the rest was paid. */
+  handOff(id: Id, paid: PaidBy, rest?: "cash" | "card"): Promise<Row>;
+  /** Whether gift cards are taken here: Offers & gift cards is in use for the app. */
+  giftCards(): Promise<boolean>;
+  /** What a gift card would pay of an order, and what would be left: asked, nothing written. */
+  cardCheck(orderId: Id, code: string): Promise<CardPayment>;
+  /** The card pays: its own save, never part of the hand-over. `clientKey` makes a retry the same payment. */
+  cardUse(orderId: Id, code: string, clientKey: string): Promise<CardPayment>;
 
   /** Each slot of a day and what it holds. */
   slotCounts(date: string): Promise<SlotCount[]>;
