@@ -34,14 +34,15 @@ const PORT_BASE = Number(process.env["CONTRACT_PORT_BASE"] ?? 4870) + 18 * PORTS
 const TOMORROW = addDays(venueDay(DEMO_START, DEMO_ZONE), 1);
 
 /** Columns no public answer may carry, whoever asks. */
-const KEPT = /(^|_)by$|^stock_(today|on)$|^client_key$|^link_(token|stopped)$|^customer_id$|^forgotten_at$|^online$|^available$/;
+// (How the rest was paid, cash or card, is the diner's own to read: it names no person.)
+const KEPT = /(^|_)(?<!^rest_paid_)by$|^stock_(today|on)$|^client_key$|^link_(token|stopped)$|^customer_id$|^forgotten_at$|^online$|^available$/;
 
-const LINK_REFS: RefName[] = ["linkOrder", "linkLines", "linkOptions"];
+const LINK_REFS: RefName[] = ["linkOrder", "linkLines", "linkOptions", "linkPayments"];
 const CUSTOMER_REFS = (Object.keys(PUBLIC_REFS) as RefName[]).filter((name) => !LINK_REFS.includes(name));
 /** What nobody may read: a diner's own rows. */
-const OWN_REFS: RefName[] = ["account", "myOrders", "myLines", "myOptions", "linkOrder", "linkLines", "linkOptions"];
+const OWN_REFS: RefName[] = ["account", "myOrders", "myLines", "myOptions", "myPayments", "linkOrder", "linkLines", "linkOptions", "linkPayments"];
 /** Read with `availability`, never listed. */
-const AVAILABILITY: RefName[] = ["slots", "portions"];
+const AVAILABILITY: RefName[] = ["slots", "portions", "stock"];
 /** Written, never read. */
 const WRITE_ONLY: RefName[] = ["place", "enquire"];
 
