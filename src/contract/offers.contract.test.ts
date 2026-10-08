@@ -46,6 +46,8 @@ async function refusal(promise: Promise<unknown>): Promise<ApiError> {
   throw new Error("expected a refusal");
 }
 
+/** An email's words as they reach a reader: every run of spaces (a no-break one too) as one. */
+const flat = (text: string) => text.replace(/[\s\u00a0\u202f]+/g, " ").trim();
 /** The six-digit code a sign-in email carries. */
 const codeIn = (text: string) => /\b(\d{6})\b/.exec(text)?.[1] ?? "";
 
@@ -135,7 +137,15 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         const quote = await diner.quote(body);
         expect(figures(quote.data)).toEqual(["64.50", "20.85", "43.65", "3.60", "47.25"]);
         expect((quote.applied ?? []).map((one) => [one.kind, cents(one.amount), one.typed]).sort()).toEqual([["code", "4.85", true], ["offer", "16.00", false]]);
+        const mailsBefore = await stand.mailCount();
         const made = await diner.place({ ...body, expect: { total: cents(quote.data["total"]) } }, `ama-offers-${engine}-0123456789abcdef`);
+        // The confirmation names what came off, as Offers & gift cards recorded it for this order, and what is left to pay.
+        const mail = flat((await stand.mailTo(ama, mailsBefore)).text);
+        for (const words of ["Two Pepperoni & honey, the cheaper one on us", "−$16.00", "−$4.85", "$47.25"]) expect(mail, words).toContain(words);
+        // One row for the code, though it took a little off every line; each name in the diner's language, and every figure as money.
+        expect(mail).toContain("10 % off your first order — −$4.85");
+        expect(mail).not.toContain('{"');
+        expect(mail).toMatch(/Tax 8\.25%: \$3\.60/);
         expect(figures(made.data)).toEqual(["64.50", "20.85", "43.65", "3.60", "47.25"]);
         expect((made.applied ?? []).map((one) => cents(one.amount)).sort()).toEqual(["16.00", "4.85"]);
         placed = { id: made.data.id, total: cents(made.data["total"]) };
@@ -181,7 +191,12 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         expect([cents(quote.payment?.amount), cents(quote.payment?.due)]).toEqual(["19.00", "33.50"]);
         // A quote takes nothing off the card.
         expect(await balanceOf(card.id)).toBe("19.00");
+        const mailsBefore = await stand.mailCount();
         const made = await diner.place({ ...body, expect: { total: "52.50" } }, `cleo-card-${engine}-0123456789abcdef`);
+        // The confirmation says what the card paid, by its last four, and what is left for the counter — never the card's code.
+        const mail = flat((await stand.mailTo(`cleo.${engine}@juniper-diners.dev`, mailsBefore)).text);
+        for (const words of ["−$16.00", "−$19.00", card.code.slice(-4), "$33.50"]) expect(mail, words).toContain(words);
+        expect(mail).not.toContain(card.code);
         expect([cents(made.payment?.amount), cents(made.payment?.due)]).toEqual(["19.00", "33.50"]);
         carded = made.data.id;
         expect(await balanceOf(card.id)).toBe("0.00");

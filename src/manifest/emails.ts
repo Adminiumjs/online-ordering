@@ -66,7 +66,7 @@ export const EMAIL_EN: EmailWords = {
   "order-confirmation": {
     name: "Order confirmation",
     subject: "Your order #{{order.number}} is in",
-    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay.money}} to pay at pickup",
     heading: "Thanks, {{recipient.first_name}}.",
     paras: ["We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."],
     button: "Follow your order",
@@ -74,7 +74,7 @@ export const EMAIL_EN: EmailWords = {
   "order-confirmation-phone": {
     name: "Order confirmation (phone)",
     subject: "Your order #{{order.number}} is in",
-    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay.money}} to pay at pickup",
     heading: "Thanks, {{recipient.first_name}}.",
     paras: [
       "Here is the order you placed by phone: #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}.",
@@ -84,9 +84,9 @@ export const EMAIL_EN: EmailWords = {
   "order-ready": {
     name: "Order ready",
     subject: "#{{order.number}} is on the shelf",
-    preheader: "On the shelf now · {{order.to_pay}} to pay",
+    preheader: "On the shelf now · {{order.to_pay.money}} to pay",
     heading: "#{{order.number}} is ready.",
-    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "You'll pay {{order.to_pay}} at the counter."],
+    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "You'll pay {{order.to_pay.money}} at the counter."],
   },
   "order-cancelled-ran-out": {
     name: "Cancelled: something ran out",
@@ -156,14 +156,14 @@ export const EMAIL_EN: EmailWords = {
   "card-money-returned": {
     name: "Gift card money returned",
     subject: "Your gift card got its money back",
-    preheader: "#{{order.number}} · {{order.paid}} back on your gift card",
-    paras: ["{{order.paid}} went back to your gift card for order #{{order.number}}."],
+    preheader: "#{{order.number}} · {{order.paid.money}} back on your gift card",
+    paras: ["{{order.paid.money}} went back to your gift card for order #{{order.number}}."],
   },
   "card-money-kept": {
     name: "Gift card money kept",
     subject: "About your order #{{order.number}}",
     preheader: "#{{order.number}} was not collected",
-    paras: ["Your gift card paid {{order.paid}} for order #{{order.number}}, which was not collected.", "Ask at the counter, or call us on {{practice.phone}}."],
+    paras: ["Your gift card paid {{order.paid.money}} for order #{{order.number}}, which was not collected.", "Ask at the counter, or call us on {{practice.phone}}."],
   },
   "enquiry-received": {
     name: "Large order enquiry received",
@@ -211,7 +211,7 @@ const cardPayments = (all: EmailWords): Block => ({
   id: "card-payments",
   data: {
     from: { link: "order", table: "payments", via: "order_id", orderBy: "made_at", limit: 10 },
-    row: { title: all.giftCardRow, amount: "−{{row.kept}}" },
+    row: { title: all.giftCardRow, amount: "−{{row.kept.money}}" },
   },
 });
 
@@ -235,13 +235,13 @@ function layout(kind: Kind, all: EmailWords) {
         lines: [
           { label: all.subtotal, amount: "{{order.subtotal}}" },
           // "Tax 8.25%": the order's own rate, written the diner's way.
-          { label: `${all.tax} {{order.tax_rate.percent}}`, amount: "{{order.tax}}" },
+          { label: `${all.tax} {{order.tax_rate.percent}}`, amount: "{{order.tax.money}}" },
           { label: all.total, amount: "{{order.total}}" },
         ],
       },
     });
     blocks.push(cardPayments(all));
-    blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay}}" }] } });
+    blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay.money}}" }] } });
     blocks.push({ block: "email.box", id: "pay", data: { label: kind === "order-confirmation-prepaid" ? all.prepaidBox : all.payAtPickup } });
     blocks.push({ block: "email.contact", id: "where", data: { name: "{{practice.address}}" } });
     blocks.push(para("directions", "{{practice.directions}}"));
