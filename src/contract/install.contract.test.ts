@@ -109,7 +109,7 @@ describe.skipIf(why !== null)(`the app installs on a built Adminium${why === nul
         return { plan, installed };
       }
 
-      it.skipIf(engine !== "sqlite")("refuses 0.2.x as an update of an install of 0.1.3 — it is uninstalled first, its tables kept", async () => {
+      it.skipIf(engine !== "sqlite")("refuses 0.3.x as an update of an install of 0.1.3 — it is uninstalled first, its tables kept", async () => {
         const released = readFileSync(join(ADMINIUM_REPO, "packages", "manifest", "test", "fixtures", "released", "online-ordering-0.1.3.manifest.json"), "utf8");
         expect((JSON.parse(released) as { version: string }).version).toBe("0.1.3");
         // 0.1.3's tables had no prefix: it goes on an empty database of its own.
@@ -125,12 +125,14 @@ describe.skipIf(why !== null)(`the app installs on a built Adminium${why === nul
         expect(gone.uninstalled).toBe(true);
       }, 240_000);
 
-      it("plans and installs 0.2.x: every table, every rule kept, both browser keys, the outbox", async () => {
+      it("plans and installs 0.3.x: every table, every rule kept, both browser keys, the outbox", async () => {
         const { plan, installed } = await install();
-        // Both add-ons are offered for a feature each; Invoices & Receipts ticked. Neither is here, and nothing waits on them.
+        // Four add-ons are offered, each for a feature; only Invoices & Receipts ticked. None is here, and nothing waits on them.
         expect((plan.addOns ?? []).map((a) => [a.key, a.need, a.checked])).toEqual([
           ["invoices", "feature", true],
           ["holiday-calendars", "feature", false],
+          ["offers", "feature", false],
+          ["inventory", "feature", false],
         ]);
         const created = installed.schema.created.map((name) => name.replace(/^ordering_/, ""));
         expect(created.sort()).toEqual(Object.keys(COLUMNS).sort());
