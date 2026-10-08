@@ -485,3 +485,22 @@ describe("a large order", () => {
     expect((await refusal(demo.diner.enquire({ ...values, heads: 5 }, "f".repeat(22)))).params).toEqual({ column: "heads", reason: "too-small" });
   });
 });
+
+describe("a gift card on a cancelled order", () => {
+  it("gets its money back, once, and can pay again", async () => {
+    const code = "GC-7K2M-W3HN-Q4XP";
+    const before = Number((await demo.diner.cardBalance({ code }))!.balance);
+    const body = { ...kwame(), children: { ...kwame().children, payments: [{ values: { card_code: code } }] } };
+    const quote = await demo.diner.quote(body);
+    const made = await demo.diner.place({ ...body, expect: { total: Number(quote.data["total"]).toFixed(2) } }, "kwame-gift-0123456789abcdefghij");
+    const took = Number(made.payment!.amount);
+    expect(took).toBeGreaterThan(0);
+    expect(Number((await demo.diner.cardBalance({ code }))!.balance)).toBe(before - took);
+    await demo.kitchen.cancel(made.data.id, "placed", "customer_asked", null, null);
+    expect(Number((await demo.diner.cardBalance({ code }))!.balance)).toBe(before);
+    const stored = demo.world.get("orders", made.data.id)!;
+    expect([Number(stored["paid"]), Number(stored["to_pay"])]).toEqual([0, Number(stored["total"])]);
+    const [payment] = demo.world.where("payments", (p) => p["order_id"] === made.data.id);
+    expect([Number(payment!["kept"]), Number(payment!["returned"])]).toEqual([0, took]);
+  });
+});
