@@ -22,6 +22,7 @@ import { ApiError, type OrderBody, type Row } from "../data/wire.ts";
 import { DEMO_START, DEMO_ZONE } from "../demo/world.ts";
 import { instantOf, venueDay } from "../lib/venueTime.ts";
 import { ENGINES, missing, missingAddOn, ok, PORTS_PER_ENGINE, type Engine } from "./harness.ts";
+import { phoneRefusal } from "../state/kitchen.ts";
 import { standUp, type Stand } from "./stand.ts";
 
 const why = missing() ?? missingAddOn("inventory");
@@ -127,6 +128,20 @@ describe.skipIf(why !== null)(`dishes run out with their ingredients${why === nu
         }
         expect(await place("Di", "13:30", 1)).toBeGreaterThan(0);
       }, 180_000);
+
+      it("a phone order for more than is in is refused at the kitchen's door where the owner said staff stop too, and the screen says the dish ran out", async () => {
+        const [, , free] = await stock();
+        if (free! + 1 > 20) return;
+        // Inventory lets staff sell past what is in unless its owner says stop: here the owner says stop.
+        const settings = (await inv("settings"))[0]!;
+        ok(await stand.staff.patch(`${stand.data("inventory_settings")}/${String(settings.id)}`, { values: { when_out_staff: "stop" } }));
+        const body = { values: { language: "en-US", name: "Fay", phone: "+1 555 0100", pickup_at: at("13:45") }, children: { order_items: [{ values: { menu_item_id: dish.id, qty: free! + 1 } }] } } as OrderBody;
+        const error = await refusal(stand.kitchen.phoneOrder(body, `fay-${engine}-0123456789abcdefgh`));
+        expect([error.code, error.params["family"]]).toEqual(["POSTING_REFUSED", "stock"]);
+        expect(phoneRefusal(error)).toBe("soldout");
+        expect((await stock())[2]).toBe(free);
+        ok(await stand.staff.patch(`${stand.data("inventory_settings")}/${String(settings.id)}`, { values: { when_out_staff: settings["when_out_staff"] ?? "allow" } }));
+      }, 120_000);
 
       it("the page is told what Inventory says of a dish — in, or low — and of a dish linked to nothing, that it is in", async () => {
         const diner = await stand.dinerOf();

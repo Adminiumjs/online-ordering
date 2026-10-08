@@ -645,10 +645,13 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     if (during === "place") set({ placeError: "stopped" });
     return true;
   }
-  if (error.code === "PUBLIC_SOLD_OUT" && target !== undefined) {
+  // No portions left, or (with Inventory) not enough of what the dish is made of: the same words, on the same line.
+  if ((error.code === "PUBLIC_SOLD_OUT" || error.code === "PUBLIC_OUT_OF_STOCK") && target !== undefined) {
     await refreshAvailability(now);
     const state = get().dishes[day]?.find((d) => d.id === String(target.dishId));
-    const left = state?.left ?? null;
+    // How many are in, where Inventory's owner chose to tell it; else what the page already holds.
+    const told = error.code === "PUBLIC_OUT_OF_STOCK" && typeof error.params["left"] === "string" && Number.isFinite(Number(error.params["left"])) ? Math.floor(Number(error.params["left"])) : null;
+    const left = told ?? state?.left ?? null;
     // Still on sale: some are left — how many, the page is told only below five.
     const alert: LineAlert =
       state?.state === "on" ? (left !== null && left > 0 ? { kind: "short", left, day } : { kind: "fewer", day }) : { kind: "soldout", day };

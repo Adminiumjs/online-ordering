@@ -718,6 +718,8 @@ export function phoneRefusal(error: ApiError): "slot" | "soldout" | "price" | "f
   if (error.code === "CAPACITY_FULL") return error.params["kind"] === "parent" ? "soldout" : "slot";
   if (error.params["column"] === "pickup_at" || fields?.["pickup_at"] !== undefined) return "slot";
   if (error.code === "PRICE_CHANGED") return "price";
+  // With Inventory: not enough of what a dish is made of is in.
+  if (error.code === "POSTING_REFUSED" && error.params["family"] === "stock") return "soldout";
   return "failed";
 }
 
