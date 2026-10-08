@@ -21,6 +21,7 @@ import { Checkout } from "../diner/Checkout.tsx";
 import { NotFound, TrackPage } from "../diner/Track.tsx";
 import { FindPage, OrdersPage } from "../diner/Account.tsx";
 import { LargePage } from "../diner/Large.tsx";
+import { CardPage } from "../diner/Card.tsx";
 import { ReorderAsk } from "../diner/Reorder.tsx";
 
 const DINER_SCREENS: Record<DinerView, ComponentType> = {
@@ -32,6 +33,7 @@ const DINER_SCREENS: Record<DinerView, ComponentType> = {
   find: FindPage,
   orders: OrdersPage,
   large: LargePage,
+  giftCard: CardPage,
   notfound: NotFound,
 };
 

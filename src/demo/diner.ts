@@ -83,6 +83,8 @@ export class DemoDiner implements DinerPort {
 
   /** The demo's gift cards, and what each still holds. */
   readonly cards = new DemoCards();
+  /** The reductions each order was placed with, by name: what Offers & gift cards would keep for it. */
+  private readonly appliedBy = new Map<Id, DemoPriced["applied"]>();
   readonly engine: Engine;
   readonly latency: Latency;
   constructor(engine: Engine, latency: Latency = NO_LATENCY) {
@@ -259,6 +261,7 @@ export class DemoDiner implements DinerPort {
     this.keys.set(clientKey, order.id);
     this.linkSession = { orderId: order.id };
     // The codes the order keeps, and the card's payment: taken off the card now, as the save takes it.
+    if (tree.priced.applied.length > 0) this.appliedBy.set(order.id, tree.priced.applied);
     for (const typed of tree.priced.codes) this.world.insert("order_codes", { order_id: order.id, typed, code_id: null, voucher_id: null, removed_at: null });
     const card = tree.priced.card;
     if (card !== null) {
@@ -313,6 +316,13 @@ export class DemoDiner implements DinerPort {
     return { session: `link-${String(order.id)}`, expiresAt: this.engine.now + 30 * 60_000 };
   }
 
+  async cardBalance(by: { code: string } | { token: string }): Promise<{ balance: string; expiresOn: string | null } | null> {
+    await this.wait(this.latency.read);
+    if ("token" in by) return null;
+    const balance = this.cards.balance(by.code);
+    return balance === null ? null : { balance: balance.toFixed(2), expiresOn: null };
+  }
+
   /** Follow an order placed in this browser, as the confirmation page does. */
   followPlaced(id: Id): void {
     this.linkSession = { orderId: id };
@@ -346,8 +356,12 @@ export class DemoDiner implements DinerPort {
     const lineEntry = ENTRIES.find((x) => x.table === "order_items" && (x as { key?: string }).key === key)!;
     const optionEntry = ENTRIES.find((x) => x.table === "order_item_modifiers" && (x as { key?: string }).key === key)!;
     const order = this.world.get("orders", id)!;
+    const paymentEntry = ENTRIES.find((x) => x.table === "payments" && (x as { key?: string }).key === key);
+    const applied = this.appliedBy.get(id);
     return {
       order: project(order, e.select as readonly string[]),
+      payments: this.world.where("payments", (p) => p["order_id"] === id).map((p) => project(p, paymentEntry?.select as readonly string[] | undefined)),
+      ...(applied === undefined ? {} : { applied }),
       lines: this.world
         .where("order_items", (l) => l["order_id"] === id)
         .sort(byPosition)

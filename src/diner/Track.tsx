@@ -125,11 +125,15 @@ function Confirmation() {
   const number = String(o?.["number"] ?? placed?.number ?? "");
   const pickup = String(o?.["pickup_at"] ?? placed?.pickupAt ?? "");
   const total = o?.["total"] ?? placed?.total ?? 0;
+  // What is left for the counter once a gift card paid: the order's own figure, else what the save answered.
+  const toPay = o?.["to_pay"] ?? o?.["due"] ?? placed?.toPay ?? total;
+  const cardPaid = Number(o?.["paid"] ?? 0) > 0 || (placed !== null && placed !== undefined && placed.toPay < placed.total);
+  const allPaid = cardPaid && Number(toPay) <= 0;
   const big: React.CSSProperties = { fontFamily: "var(--mono)", unicodeBidi: "plaintext", fontSize: 20, fontWeight: 600 };
   const facts = [
     { label: t("confirm.order"), value: t("confirm.number", { number }), style: big, sub: null },
     { label: t("confirm.pickup"), value: pickup === "" ? "" : fmt.time(pickup), style: big, sub: pickup === "" ? null : dayWord(pickup) },
-    { label: t("confirm.pay"), value: fmt.money(total), style: big, sub: t("confirm.cashOrCard") },
+    { label: t("confirm.pay"), value: fmt.money(toPay), style: big, sub: allPaid ? t("confirm.paidByCard") : t("confirm.cashOrCard") },
     { label: t("confirm.address"), value: venue.street !== "" ? venue.street : venue.address, style: { fontSize: 15.5, fontWeight: 800, letterSpacing: "-.02em" } as React.CSSProperties, sub: venue.area },
   ];
   useEffect(() => {
@@ -222,6 +226,8 @@ function Tracking({ order }: { order: OrderWithLines }) {
   const cancelAsk = useTrack((s) => s.cancelAsk);
   const cancelling = useTrack((s) => s.cancelling);
   const o = order.order;
+  // What is left for the counter once a gift card paid; an order from before gift cards owes its total.
+  const toPay = o["to_pay"] ?? o["due"] ?? o["total"];
   const status = String(o["status"]);
   const badge = BADGES[status] ?? BADGES["placed"]!;
   const live = status !== "cancelled" && status !== "not_collected";
@@ -407,13 +413,21 @@ function Tracking({ order }: { order: OrderWithLines }) {
             ) : null}
             <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBlockStart: 14, paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
               {[
-                { label: t("totals.subtotal"), value: o["subtotal"], big: false },
-                { label: t("totals.tax", { rate: fmt.percent(o["tax_rate"]) }), value: o["tax"], big: false },
-                { label: t("totals.total"), value: o["total"], big: true },
+                { key: "sub", label: t("totals.subtotal"), value: fmt.money(o["subtotal"]), big: false, off: false },
+                // What codes and offers took off, each by its name, as Adminium kept them with the order.
+                ...(order.applied ?? []).map((one, i) => ({ key: `off-${String(i)}`, label: one.name, value: `−${fmt.money(one.amount)}`, big: false, off: true })),
+                // …or, where their names are not told, the one figure the order itself keeps.
+                ...((order.applied ?? []).length === 0 && Number(o["discount"] ?? 0) > 0 ? [{ key: "off", label: t("track.reductions"), value: `−${fmt.money(o["discount"])}`, big: false, off: true }] : []),
+                { key: "tax", label: t("totals.tax", { rate: fmt.percent(o["tax_rate"]) }), value: fmt.money(o["tax"]), big: false, off: false },
+                { key: "total", label: t("totals.total"), value: fmt.money(o["total"]), big: true, off: false },
+                ...(order.payments ?? []).map((one) => ({ key: `card-${String(one.id)}`, label: t("track.card", { last4: String(one["card_last4"] ?? "") }), value: `−${fmt.money(one["kept"] ?? one["amount"])}`, big: false, off: true })),
+                ...((order.payments ?? []).length > 0 ? [{ key: "due", label: t("offers.toPay"), value: fmt.money(toPay), big: false, off: false }] : []),
               ].map((r) => (
-                <div key={r.label} style={{ display: "flex", alignItems: "baseline", gap: 10, ...(r.big ? { paddingBlockStart: 10, borderBlockStart: "1px solid var(--border)" } : {}) }}>
-                  <span style={{ fontSize: r.big ? 17 : 13.5, fontWeight: r.big ? 800 : 600, color: r.big ? "var(--fg)" : "var(--fg-muted)" }}>{r.label}</span>
-                  <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: r.big ? 17 : 13.5, fontWeight: 600, color: r.big ? "var(--fg)" : "var(--fg-muted)" }}>{fmt.money(r.value)}</span>
+                <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 10, ...(r.big ? { paddingBlockStart: 10, borderBlockStart: "1px solid var(--border)" } : {}) }}>
+                  <span style={{ fontSize: r.big ? 17 : 13.5, fontWeight: r.big ? 800 : 600, color: r.big ? "var(--fg)" : r.off ? "var(--pos)" : "var(--fg-muted)" }}>
+                    <bdi>{r.label}</bdi>
+                  </span>
+                  <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: r.big ? 17 : 13.5, fontWeight: 600, color: r.big ? "var(--fg)" : r.off ? "var(--pos)" : "var(--fg-muted)", whiteSpace: "nowrap" }}>{r.value}</span>
                 </div>
               ))}
             </div>
@@ -434,7 +448,7 @@ function Tracking({ order }: { order: OrderWithLines }) {
             <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderRadius: 16, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
               <Icon name="wallet" size={16} style={{ color: "var(--fg-muted)" }} />
               <span style={{ fontSize: 13.5, fontWeight: 700 }}>{t("confirm.pay")}</span>
-              <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(o["total"])}</span>
+              <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(toPay)}</span>
             </div>
           </div>
         </div>

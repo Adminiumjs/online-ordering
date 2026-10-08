@@ -39,6 +39,8 @@ export const SURFACE_NAV = [
   { id: "orders", path: "orders", view: "orders", side: "customer", labelKey: "shell.nav.orders" },
   { id: "signin", path: "c", view: "orders", side: "customer", labelKey: "shell.nav.orders" },
   { id: "large", path: "large", view: "large", side: "customer", labelKey: "shell.nav.large" },
+  // A gift card's balance: where Offers & gift cards' own email sends its holder (the manifest's `giftCard` route).
+  { id: "giftCard", path: "gift-card", view: "giftCard", side: "customer", labelKey: "card.title" },
   { id: "kitchen", path: "", view: "kitchen", side: "staff", icon: "chef-hat", labelKey: "shell.kitchen" },
 ] as const satisfies readonly Entry[];
 

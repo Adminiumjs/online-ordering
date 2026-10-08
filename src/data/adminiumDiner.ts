@@ -20,7 +20,7 @@ import { createPublicClient, pictureUrl, PublicApiError, type HeldSession, type 
 import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
-import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime } from "./wire.ts";
+import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime } from "./wire.ts";
 
 /** What the door needs to start: the address, the customer key, the tables' real names and the other keys. */
 export interface DinerServed {
@@ -300,14 +300,29 @@ export class AdminiumDiner implements DinerPort {
     });
   }
 
-  /** An order with its lines, from three lists read through one key. */
-  private async withLines(client: PublicClient, refs: [string, string, string], only?: Id): Promise<OrderWithLines[]> {
+  /**
+   * An order with its lines, from three lists read through one key — and what
+   * gift cards paid of it (`payments`, a fourth list) and, for one order
+   * (`priced`), the reductions it was saved with as Adminium names them.
+   */
+  private async withLines(client: PublicClient, refs: [string, string, string], only?: Id, more: { payments?: string; priced?: boolean } = {}): Promise<OrderWithLines[]> {
     const [orders, lines, options] = await Promise.all(refs.map((ref) => this.list(client, ref)));
     const optionsOf = (lineId: unknown) => options!.filter((o) => o["order_item_id"] === lineId);
-    return orders!
-      .filter((order) => only === undefined || order.id === only)
+    // A door from before gift cards has no such list: the order is still read.
+    const payments = more.payments === undefined ? [] : await this.list(client, more.payments).catch(() => [] as Row[]);
+    const kept = orders!.filter((order) => only === undefined || order.id === only);
+    const applied = new Map<Id, Applied[]>();
+    if (more.priced === true) {
+      for (const order of kept) {
+        const read = await client.getPriced<Row>(refs[0], String(order.id)).catch(() => null);
+        if (read?.applied != null) applied.set(order.id, read.applied);
+      }
+    }
+    return kept
       .map((order) => ({
         order,
+        payments: payments.filter((payment) => payment["order_id"] === order.id),
+        ...(applied.has(order.id) ? { applied: applied.get(order.id)! } : {}),
         lines: lines!
           .filter((line) => line["order_id"] === order.id)
           .sort(byPosition)
@@ -319,9 +334,30 @@ export class AdminiumDiner implements DinerPort {
     return answer(async () => {
       const link = this.linkClient();
       if (link.session() === null) throw gone();
-      const [order] = await this.withLines(link, [this.refs.linkOrder, this.refs.linkLines, this.refs.linkOptions]);
+      const [order] = await this.withLines(link, [this.refs.linkOrder, this.refs.linkLines, this.refs.linkOptions], undefined, { payments: this.refs.linkPayments, priced: true });
       if (order === undefined) throw gone();
       return order;
+    });
+  }
+
+  cardBalance(by: { code: string } | { token: string }): Promise<{ balance: string; expiresOn: string | null } | null> {
+    return answer(async () => {
+      // The emailed link opens the card through Offers & gift cards' own key, which this page is handed by its purpose.
+      if ("token" in by) return null;
+      const config = await this.clientConfig();
+      const ref = Object.keys(config.refs).find((name) => name.startsWith(OFFERS_CARDS));
+      if (ref === undefined) return null;
+      try {
+        const [card] = (await this.customer.list<Row>(ref, { limit: 1, code: by.code })).data;
+        // Any state but "active" reads as no card at all; a balance of nothing is a balance.
+        if (card === undefined || (card["status"] !== undefined && card["status"] !== "active")) return null;
+        const expires = card["expires_on"] ?? card["expires_at"] ?? null;
+        return { balance: String(card["balance"] ?? "0"), expiresOn: expires === null ? null : String(expires).slice(0, 10) };
+      } catch (error) {
+        const refused = asApiError(error) as ApiError;
+        if (refused.code === "PUBLIC_REF_NOT_FOUND" || refused.status === 404) return null;
+        throw refused;
+      }
     });
   }
 

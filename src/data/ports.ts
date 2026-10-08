@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { CardPayment, ClaimReply, DishState, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -29,6 +29,8 @@ export interface OrderWithLines {
   lines: (Row & { options: Row[] })[];
   /** What gift cards paid of it, oldest first; none for an order no card paid (and from a door that reads none). */
   payments?: Row[];
+  /** The reductions it was saved with, by name, where the door tells them (one order read by its diner). */
+  applied?: Applied[];
 }
 
 /** How an order was paid at the hand-over: one way, or a gift card and the rest another way. */
@@ -55,6 +57,12 @@ export interface DinerPort {
   openLink(token: string): Promise<ClaimReply>;
   /** The order the link opened. */
   linkedOrder(): Promise<OrderWithLines>;
+  /**
+   * What a gift card holds, by its code (as typed) or by the code in the link
+   * its email carries. Null for anything but a card that can still pay — one
+   * answer for every cause. Nothing else of the card is ever told.
+   */
+  cardBalance(by: { code: string } | { token: string }): Promise<{ balance: string; expiresOn: string | null } | null>;
   /** Cancels the order the link opened, while the kitchen has not taken it. */
   cancelLinked(id: Id): Promise<Row>;
 

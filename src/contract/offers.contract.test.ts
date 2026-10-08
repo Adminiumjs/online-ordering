@@ -172,6 +172,9 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
       it("a gift card pays what it holds at placing: $19.00 of $52.50, and $33.50 is left for the counter", async () => {
         card = await cardWith("19.00");
         const diner = await stand.dinerOf();
+        // The balance page's own read: what is on the card and until when, by its code.
+        // (A code that is no card's answers nothing; it is not asked here, because a wrong code is a guess, and guesses are few.)
+        expect(await diner.cardBalance({ code: card.code })).toEqual({ balance: expect.stringMatching(/^19(\.0+)?$/), expiresOn: null });
         const body = await worked(diner, { name: "Cleo", email: `cleo.${engine}@juniper-diners.dev`, pickup_at: at("12:45") }, { card: card.code });
         const quote = await diner.quote(body);
         expect(figures(quote.data)).toEqual(["64.50", "16.00", "48.50", "4.00", "52.50"]);

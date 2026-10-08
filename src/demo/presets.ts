@@ -150,6 +150,8 @@ const PRESETS: Record<string, Preset> = {
   "gift-applied": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCard(DEMO_CARD.code); } },
   "gift-invalid": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCard("GC-AAAA-BBBB-CCCC"); } },
   "gift-full": { ui: async () => { replaceCart([line(dish("Lemonade"), [], 2)]); kwame(); await quoted(); goDiner("checkout"); await applyCard(DEMO_CARD.code); } },
+  "gift-balance": { ui: () => goDiner("giftCard") },
+  "offer-placed": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCode("LUNCH5"); await applyCard(DEMO_CARD.code); const placed = await placeOrder("en-US"); if (placed !== null) await followPlaced(placed); } },
   "offer-cart": { ui: async () => { workedCart(); await quoted(); goDiner("cart"); } },
   drawer: { ui: async () => { kwameCart(); await quoted(); useDiner.setState({ drawer: true }); } },
   checking: { ui: async () => { kwameCart(); kwame(); goDiner("checkout"); await quoted(); useDiner.setState({ quote: { key: "checking", state: "busy", reply: null } }); } },

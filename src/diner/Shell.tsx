@@ -276,9 +276,20 @@ function Footer({ day }: { day: DayFacts }) {
   const { t } = useI18n();
   const venue = useVenue();
   const fmt = useFmt();
+  const offers = useDiner((d) => d.data?.offers === true);
   const link = (label: string, href: string, go: () => void) => ({ label, href, go });
   const columns = [
-    { title: t("shell.footer.order"), links: [link(t("shell.footer.menu"), "menu", () => goDiner("menu")), link(t("shell.footer.cart"), "cart", () => goDiner("cart")), link(t("shell.nav.orders"), "orders", () => goDiner("orders")), link(t("shell.nav.track"), "find", trackAnOrder)] },
+    {
+      title: t("shell.footer.order"),
+      links: [
+        link(t("shell.footer.menu"), "menu", () => goDiner("menu")),
+        link(t("shell.footer.cart"), "cart", () => goDiner("cart")),
+        link(t("shell.nav.orders"), "orders", () => goDiner("orders")),
+        link(t("shell.nav.track"), "find", trackAnOrder),
+        // Only where gift cards are taken.
+        ...(offers ? [link(t("card.title"), "gift-card", () => goDiner("giftCard"))] : []),
+      ],
+    },
     { title: venue.name, links: [link(t("shell.nav.hours"), "#hours", () => toSection("jn-hours")), link(t("shell.nav.findUs"), "#find-us", () => toSection("jn-findus")), link(t("shell.nav.large"), "large", () => goDiner("large"))] },
   ];
   return (
