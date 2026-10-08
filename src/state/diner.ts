@@ -10,7 +10,7 @@
  */
 import { create } from "zustand";
 
-import type { OrderBody, QuoteReply, Row, SlotTime, DishState, Id } from "../data/wire.ts";
+import type { OrderBody, QuoteReply, Row, SlotTime, DishState, Id, StockWord } from "../data/wire.ts";
 import { ApiError, isApiError, refusedLine } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
 import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
@@ -265,6 +265,11 @@ export async function refreshAvailability(now: number): Promise<void> {
   const days = [today, addDays(today, 1)];
   const p = port();
   const [slots, dishes] = await Promise.all([Promise.all(days.map((d) => p.slots(d))), Promise.all(days.map((d) => p.dishes(d)))]);
+  // What a dish is made of, where Inventory counts it: today's answer only — stock says nothing of another day.
+  const ids = (get().data?.menu.dishes ?? []).map((dish) => dish.id);
+  const words: StockWord[] = [];
+  for (let i = 0; i < ids.length; i += 60) words.push(...(await p.stock(ids.slice(i, i + 60)).catch(() => [])));
+  dishes[0] = withStock(dishes[0] ?? [], words);
   set({ slots: Object.fromEntries(days.map((d, i) => [d, slots[i]])), dishes: Object.fromEntries(days.map((d, i) => [d, dishes[i]])) });
   preselect(now);
 }
@@ -280,6 +285,29 @@ export async function reloadAll(): Promise<void> {
   } catch {
     // The page keeps what it had; the next action reads again.
   }
+}
+
+/**
+ * A day's portions with Inventory's words folded in: a dish out of what it is
+ * made of is sold out; one running low has no more left than its ingredients
+ * allow (and no fewer than its portions say). The two are separate counts —
+ * the kitchen's own for the day, and the shelf's — and the page shows the
+ * tighter of them the one way it always has.
+ */
+export function withStock(portions: readonly DishState[], words: readonly StockWord[]): DishState[] {
+  const out = portions.map((state) => ({ ...state }));
+  for (const word of words) {
+    if (word.state === "in" && word.left === undefined) continue;
+    let state = out.find((one) => one.id === word.id);
+    if (state === undefined) {
+      state = { id: word.id, state: "on" };
+      out.push(state);
+    }
+    if (state.state !== "on") continue;
+    if (word.state === "out") state.state = "soldout";
+    else if (word.left !== undefined) state.left = state.left === undefined ? word.left : Math.min(state.left, word.left);
+  }
+  return out;
 }
 
 /** The first visit's time: the earliest free one of the day being ordered for. Never changes a chosen one. */
