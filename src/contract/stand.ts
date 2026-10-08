@@ -67,7 +67,7 @@ export function tab(): Storage {
   };
 }
 
-export async function standUp(engine: Engine, port: number, database: string, options: { addOns?: string[]; built?: boolean } = {}): Promise<Stand> {
+export async function standUp(engine: Engine, port: number, database: string, options: { addOns?: string[]; /** The add-ons whose own sample goes in too, before the app's. */ addOnSamples?: string[]; built?: boolean } = {}): Promise<Stand> {
   const server = await boot(engine, port, DEMO_START - 60_000, { database });
   const staff = new Caller(server.base, { origin: server.base });
   await staff.signIn(ADMIN.email, ADMIN.password);
@@ -94,9 +94,15 @@ export async function standUp(engine: Engine, port: number, database: string, op
   const schema = ok(await staff.get<{ model: { tables: { id: string; name: string }[] } }>(`/api/v1/connections/${connectionId}/schema`));
   const ids: Record<string, string> = {};
   for (const name of installed.schema.created) ids[name.replace(/^ordering_/, "")] = schema.model.tables.find((t) => t.name === name)!.id;
+  // An add-on's tables too, by their real names (`offers_gift_cards`).
+  for (const table of schema.model.tables) if (!(table.name.replace(/^ordering_/, "") in ids)) ids[table.name] = table.id;
 
   // The sample is written for 11:40 on the dot: the clock stands there while it goes in, then runs on.
   await server.setClock(DEMO_START, true);
+  for (const key of options.addOnSamples ?? []) {
+    ok(await staff.post(`/api/v1/add-ons/${key}/sample-data`));
+    await until(async () => (ok(await staff.get<{ loaded: boolean }>(`/api/v1/add-ons/${key}/sample-data`)).loaded ? true : undefined), `${key}'s sample to be added`);
+  }
   ok(await staff.post("/api/v1/apps/ordering/sample-data"));
   await until(async () => (ok(await staff.get<{ loaded: boolean }>("/api/v1/apps/ordering/sample-data")).loaded ? true : undefined), "the sample to be added");
   await server.setClock(DEMO_START);

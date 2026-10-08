@@ -134,6 +134,10 @@ function link(ref: string, addOn: string, table: string, label: string, rules: R
  * at exactly such a move.
  */
 const atEachMove = (formula: unknown) => ({ if: [{ isNull: "status" }, formula, formula] });
+/** What gift cards paid of an order and still hold, nothing when none did; and whether that is all of it, or part. */
+const CARDS_PAID = { coalesce: ["paid", 0] };
+const PAID_IN_FULL = { and: [{ gt: [CARDS_PAID, 0] }, { gte: [CARDS_PAID, { coalesce: ["total", 0] }] }] };
+const PAID_IN_PART = { and: [{ gt: [CARDS_PAID, 0] }, { lt: [CARDS_PAID, { coalesce: ["total", 0] }] }] };
 const stamp = (set: unknown, on: unknown) => ({ stamp: { set, on } });
 const onCreate = "create";
 const onStatus = (...values: string[]) => ({ column: "status", values });
@@ -456,31 +460,21 @@ export const TABLES: Table[] = [
       // What gift cards have paid and still hold, and what is left to collect at the counter.
       money("paid", "Paid by gift card", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
       amount("due", "Left after gift cards"),
-      // What to collect, whatever the order's age: an order from before gift cards has no `due`, and owes its total.
-      money("to_pay", "To pay at the counter", { formula: atEachMove({ coalesce: ["due", "total"] }) }),
+      // What to collect, whatever the order's age: an order from before gift cards has nothing paid by one, and owes its total.
+      // (Worked out from the total and what cards paid, as `due` is: a formula is not worked out again when a balance settles.)
+      money("to_pay", "To pay at the counter", { formula: atEachMove({ max: [0, { sub: ["total", { coalesce: ["paid", 0] }] }] }) }),
       choice("paid_method", "Paid by", { cash: "Cash", card: "Card", gift_card: "Gift card", mixed: "Gift card and more" }, opt),
       // With a gift card paying part: how the rest was paid.
       choice("rest_paid_by", "The rest paid by", { cash: "Cash", card: "Card" }, opt),
       // Whether "Paid by" agrees with what gift cards paid: the hand-over is refused when it does not.
+      // (These read the total and what cards paid, never `due`: a formula is not worked out again when a balance settles.)
       flag("method_ok", "Paid-by agrees", {
-        if: [
-          { eq: ["paid_method", "gift_card"] },
-          { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] },
-          {
-            if: [
-              { eq: ["paid_method", "mixed"] },
-              { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { gt: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] },
-              { if: [{ lte: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] },
-            ],
-          },
-        ],
+        if: [{ eq: ["paid_method", "gift_card"] }, { if: [PAID_IN_FULL, 1, 0] }, { if: [{ eq: ["paid_method", "mixed"] }, { if: [PAID_IN_PART, 1, 0] }, { if: [{ lte: [CARDS_PAID, 0] }, 1, 0] }] }],
       }),
-      flag("prepaid", "Paid in full by gift card", atEachMove({ if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] })),
-      flag("card_used", "A gift card paid", atEachMove({ if: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] })),
+      flag("prepaid", "Paid in full by gift card", atEachMove({ if: [PAID_IN_FULL, 1, 0] })),
+      flag("card_used", "A gift card paid", atEachMove({ if: [{ gt: [CARDS_PAID, 0] }, 1, 0] })),
       // Which confirmation an order gets: 0 a phone order, 1 an online order, 2 an online order a gift card paid in full.
-      flag("confirm_as", "Confirmation kind", {
-        if: [{ eq: ["channel", "phone"] }, 0, { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 2, 1] }],
-      }),
+      flag("confirm_as", "Confirmation kind", { if: [{ eq: ["channel", "phone"] }, 0, { if: [PAID_IN_FULL, 2, 1] }] }),
       // Whether the diner was signed in when a code asked who they are: Offers & gift cards is told, and it is kept.
       { ref: "customer_proved", type: "bool", nullable: true, label: l("Signed in when ordering") },
       // Until when ingredients held for this order stay held, should nothing else let them go: a day after pickup.

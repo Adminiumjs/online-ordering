@@ -173,7 +173,7 @@ function filesUnder(root: string, into: string, files: Record<string, Buffer>): 
  */
 export function appBundle(options: { built?: boolean; manifest?: string; sample?: string } = {}): Bundle & { key: string; version: string } {
   const text = options.manifest ?? read(join(REPO, "manifest.json"));
-  const manifest = JSON.parse(text) as { key: string; version: string; sampleData?: { file: string } };
+  const manifest = JSON.parse(text) as { key: string; version: string; sampleData?: { file: string; addOns?: Record<string, { file: string }> } };
   const files: Record<string, Buffer> = {
     "package.json": Buffer.from(JSON.stringify({ name: `@adminiumjs/app-${manifest.key}`, version: manifest.version })),
     "manifest.json": Buffer.from(text),
@@ -186,6 +186,8 @@ export function appBundle(options: { built?: boolean; manifest?: string; sample?
   }
   // Another app's manifest brings its own sample (`sample`); this repo's is read from its file.
   if (manifest.sampleData !== undefined) files[manifest.sampleData.file] = options.sample !== undefined ? Buffer.from(options.sample) : readFileSync(join(REPO, manifest.sampleData.file));
+  // …and the rows it adds to an add-on's tables, one file for each add-on.
+  if (options.manifest === undefined) for (const section of Object.values(manifest.sampleData?.addOns ?? {})) files[section.file] = readFileSync(join(REPO, section.file));
   return { ...bundle(files), key: manifest.key, version: manifest.version };
 }
 

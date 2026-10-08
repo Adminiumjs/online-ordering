@@ -249,7 +249,7 @@ export class AdminiumDiner implements DinerPort {
     // A price the diner was shown goes with the save alone: a dry run carrying one is refused.
     return answer(async () => {
       const quote = await this.customer.quote(this.refs.place, { values: body.values, children: body.children });
-      return { data: quote.data, children: quote.children as QuoteReply["children"], capacity: quote.capacity, exact: quote.exact };
+      return { data: quote.data, children: quote.children as QuoteReply["children"], capacity: quote.capacity, exact: quote.exact, applied: quote.applied, told: quote.told, payment: quote.payment, postings: quote.postings };
     });
   }
 
@@ -269,6 +269,10 @@ export class AdminiumDiner implements DinerPort {
         children: made.children as OrderReply["children"],
         ...(made.replayed ? { replayed: true as const } : {}),
         ...(made.link === null ? {} : { link: { key: made.link.key, token: made.link.token } }),
+        // From the save, never from the quote before it.
+        applied: made.applied,
+        told: made.told,
+        payment: made.payment,
       };
     });
   }

@@ -3029,15 +3029,35 @@
                     "isNull": "status"
                   },
                   {
-                    "coalesce": [
-                      "due",
-                      "total"
+                    "max": [
+                      0,
+                      {
+                        "sub": [
+                          "total",
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          }
+                        ]
+                      }
                     ]
                   },
                   {
-                    "coalesce": [
-                      "due",
-                      "total"
+                    "max": [
+                      0,
+                      {
+                        "sub": [
+                          "total",
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          }
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -3195,14 +3215,19 @@
                             ]
                           },
                           {
-                            "lte": [
+                            "gte": [
                               {
                                 "coalesce": [
-                                  "due",
+                                  "paid",
                                   0
                                 ]
                               },
-                              0
+                              {
+                                "coalesce": [
+                                  "total",
+                                  0
+                                ]
+                              }
                             ]
                           }
                         ]
@@ -3235,14 +3260,19 @@
                                 ]
                               },
                               {
-                                "gt": [
+                                "lt": [
                                   {
                                     "coalesce": [
-                                      "due",
+                                      "paid",
                                       0
                                     ]
                                   },
-                                  0
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
                                 ]
                               }
                             ]
@@ -3310,14 +3340,19 @@
                             ]
                           },
                           {
-                            "lte": [
+                            "gte": [
                               {
                                 "coalesce": [
-                                  "due",
+                                  "paid",
                                   0
                                 ]
                               },
-                              0
+                              {
+                                "coalesce": [
+                                  "total",
+                                  0
+                                ]
+                              }
                             ]
                           }
                         ]
@@ -3342,14 +3377,19 @@
                             ]
                           },
                           {
-                            "lte": [
+                            "gte": [
                               {
                                 "coalesce": [
-                                  "due",
+                                  "paid",
                                   0
                                 ]
                               },
-                              0
+                              {
+                                "coalesce": [
+                                  "total",
+                                  0
+                                ]
+                              }
                             ]
                           }
                         ]
@@ -3460,14 +3500,19 @@
                             ]
                           },
                           {
-                            "lte": [
+                            "gte": [
                               {
                                 "coalesce": [
-                                  "due",
+                                  "paid",
                                   0
                                 ]
                               },
-                              0
+                              {
+                                "coalesce": [
+                                  "total",
+                                  0
+                                ]
+                              }
                             ]
                           }
                         ]
@@ -9556,13 +9601,7 @@
             "id",
             "typed"
           ],
-          "max": 12,
-          "plainText": [
-            {
-              "column": "typed",
-              "max": 64
-            }
-          ]
+          "max": 12
         },
         "payments": {
           "via": "order_id",

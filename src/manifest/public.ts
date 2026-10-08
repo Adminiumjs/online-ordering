@@ -214,7 +214,7 @@ export const PUBLIC_ACCESS = [
         },
       },
       // A code is typed when the order is placed; Adminium finds what it is, and the page never names one.
-      order_codes: { via: "order_id", writable: ["typed"], select: ["id", "typed"], max: 12, plainText: [{ column: "typed", max: 64 }] },
+      order_codes: { via: "order_id", writable: ["typed"], select: ["id", "typed"], max: 12 },
       // One gift card, by its code: what it pays is the card's and the order's to say.
       payments: { via: "order_id", writable: ["card_code"], select: ["id", "amount", "card_last4"], max: 1 },
     },

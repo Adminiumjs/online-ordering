@@ -1330,13 +1330,7 @@ export const MANIFEST_RULES = {
             "id",
             "typed"
           ],
-          "max": 12,
-          "plainText": [
-            {
-              "column": "typed",
-              "max": 64
-            }
-          ]
+          "max": 12
         },
         "payments": {
           "via": "order_id",
