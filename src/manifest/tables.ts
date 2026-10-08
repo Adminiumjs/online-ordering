@@ -614,6 +614,8 @@ export const TABLES: Table[] = [
       text("card_code", 64, "Card code", opt),
       link("card_id", "offers", "gift_cards", "Gift card", {
         lookup: { from: "card_code", table: { addOn: "offers", table: "gift_cards" }, column: "code", where: [{ column: "status", eq: "active" }] },
+        // Every row here is a card's payment: one that names no card (Offers & gift cards is away, so nothing was looked up) is not saved.
+        required: true,
       }),
       text("card_last4", 4, "Card ending", { ...opt, rules: { codeLast4: { of: "card_code" } } }),
       amount("amount", "Paid"),
