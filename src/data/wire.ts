@@ -54,6 +54,19 @@ export interface StockWord {
   left?: number;
 }
 
+/**
+ * What Inventory says of a dish to the kitchen, which reads the stock itself:
+ * the word, how many more can be made, and what runs out first. `cause` says
+ * which of the two counts it is — the ingredient, or today's portions.
+ */
+export interface KitchenStock {
+  id: string;
+  state: "in" | "low" | "out";
+  exact?: number;
+  cause?: "stock" | "portions";
+  first?: string;
+}
+
 /** One child row of a create, and the rows below it. */
 export interface TreeRow {
   values: Record<string, unknown>;

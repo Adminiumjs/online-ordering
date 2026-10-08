@@ -24,11 +24,14 @@ import { SessionPortError, type SessionTransport } from "./sessionSource.ts";
 import type { StaffConfig } from "../staffConnection.ts";
 import { MOMENTS, YES_NO, yesNo } from "./columnKinds.ts";
 import { addDays, instantOf, zoneOffsetMs, type Day } from "../lib/venueTime.ts";
-import { ApiError, type CardPayment, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotCount, type TreeRow } from "./wire.ts";
+import { ApiError, isApiError, type CardPayment, type Id, type KitchenStock, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotCount, type TreeRow } from "./wire.ts";
 
 /** The app's key: its roles are named `ordering-<role>`, its tables `ordering_<table>` when the server does not say. */
 const APP_KEY = "ordering";
 const PAGE = 200;
+/** The dishes' table as Inventory's links name it, and how many dishes one question may ask about. */
+const STOCK_TABLE = "ordering:menu_items";
+const WORDS_PAGE = 60;
 
 type Table =
   | "settings" | "menu_categories" | "menu_items" | "modifier_groups" | "modifiers" | "hours" | "closures" | "slot_pauses"
@@ -337,6 +340,35 @@ export class AdminiumKitchen implements KitchenPort {
         const page = ids.slice(i, i + PAGE).join(",");
         const got = await this.t.get<{ data: { rows: { id: string; taken: number }[] } }>(await this.path("order_items", `/capacity-counts?rule=0&date=${encodeURIComponent(date)}&ids=${encodeURIComponent(page)}`));
         for (const row of got.data.rows) out[row.id] = row.taken;
+      }
+      return out;
+    });
+  }
+
+  stockWords(dishIds: readonly Id[]): Promise<KitchenStock[]> {
+    return this.run(async () => {
+      if (this.cfg.addOns?.["inventory"] === undefined || dishIds.length === 0) return [];
+      type Line = { id: string; state: string; exact?: string | number; cause?: string; first?: { item: string; unit: string } };
+      const out: KitchenStock[] = [];
+      try {
+        for (let i = 0; i < dishIds.length; i += WORDS_PAGE) {
+          const ids = encodeURIComponent(dishIds.slice(i, i + WORDS_PAGE).join(","));
+          const got = await this.t.get<{ data: Line[] }>(`/api/v1/words/inventory/stock?table=${encodeURIComponent(STOCK_TABLE)}&ids=${ids}`);
+          for (const line of got.data) {
+            const exact = line.exact === undefined ? undefined : Number(line.exact);
+            out.push({
+              id: String(line.id),
+              state: line.state === "out" ? "out" : line.state === "low" ? "low" : "in",
+              ...(exact === undefined || !Number.isFinite(exact) ? {} : { exact }),
+              ...(line.cause === "stock" || line.cause === "portions" ? { cause: line.cause } : {}),
+              ...(line.first === undefined ? {} : { first: line.first.item }),
+            });
+          }
+        }
+      } catch (error) {
+        // Signed out is for the screen to say; anything else: Inventory cannot answer, and the menu says nothing of stock.
+        if (isApiError(error) && error.status === 401) throw error;
+        return [];
       }
       return out;
     });

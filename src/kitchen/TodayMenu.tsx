@@ -59,6 +59,20 @@ function DishRow({ dish, last }: { dish: Dish; last: boolean }) {
   const limit = raw !== undefined && raw["stock_on"] === today && raw["stock_today"] !== null && raw["stock_today"] !== undefined ? num(raw["stock_today"]) : null;
   const sold = limit !== null && ordered >= limit;
   const on = dish.available;
+  // What Inventory says of the dish's ingredients, said only when it is the ingredient that is short.
+  const word = useKitchen((s) => s.stockWords[String(dish.id)]);
+  const short = word !== undefined && word.cause !== "portions" && word.state !== "in";
+  const stockLine = !short
+    ? null
+    : word.state === "out"
+      ? word.first === undefined
+        ? t("kitchen.menu.stockOut")
+        : t("kitchen.menu.stockOutOf", { item: word.first })
+      : word.exact === undefined
+        ? t("kitchen.menu.stockLow")
+        : word.first === undefined
+          ? t("kitchen.menu.stockLeft", { left: fmt.number(word.exact) })
+          : t("kitchen.menu.stockLeftOf", { left: fmt.number(word.exact), item: word.first });
   const counts = sold
     ? ordered > 0
       ? t("kitchen.menu.orderedSold", { n: fmt.number(ordered) })
@@ -85,6 +99,9 @@ function DishRow({ dish, last }: { dish: Dish; last: boolean }) {
         <Portions dish={dish} value={limit} today={today} />
         <span className="jk-mono" style={{ minWidth: 120, fontSize: 12, fontWeight: 600, color: sold ? "var(--danger)" : "var(--fg-muted)" }}>
           {counts}
+          {stockLine !== null && (
+            <span style={{ display: "block", marginBlockStart: 2, fontFamily: "inherit", fontWeight: 700, color: word?.state === "out" ? "var(--danger)" : "var(--warn)" }}>{stockLine}</span>
+          )}
         </span>
         <button
           className="jn-gi"

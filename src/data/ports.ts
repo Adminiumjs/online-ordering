@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { Applied, CardPayment, ClaimReply, DishState, StockWord, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -129,6 +129,8 @@ export interface KitchenPort {
   slotCounts(date: string): Promise<SlotCount[]>;
   /** How many of each dish the orders of a day hold. */
   dishCounts(date: string): Promise<Record<string, number>>;
+  /** What Inventory says of each dish today; nothing where it is not in use, or a dish is linked to no stock. */
+  stockWords(dishIds: readonly Id[]): Promise<KitchenStock[]>;
   pause(at: string): Promise<Row>;
   reopen(pauseId: Id): Promise<Row>;
 

@@ -9,7 +9,7 @@
 import { DEMO_HOLIDAYS } from "../data/demo.ts";
 import type { KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
 import { DemoCards } from "./offers.ts";
-import { ApiError, type CardPayment, type Id, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
+import { ApiError, type CardPayment, type Id, type KitchenStock, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
 import { venueDay } from "../lib/venueTime.ts";
 import { Engine, type Writer } from "./engine.ts";
 import { MANIFEST_RULES } from "./rules.ts";
@@ -150,6 +150,11 @@ export class DemoKitchen implements KitchenPort {
 
   async giftCards(): Promise<boolean> {
     return true;
+  }
+
+  /** The demo keeps no ingredient stock: its dishes run out by the kitchen's own portions alone. */
+  async stockWords(): Promise<KitchenStock[]> {
+    return [];
   }
 
   /** What a card would pay of what the order still owes; the one refusal a card gets, with its plain reason for staff. */

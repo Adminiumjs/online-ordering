@@ -11,7 +11,7 @@
 import { create } from "zustand";
 
 import type { KitchenPerson, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
-import type { ApiError, CardPayment, Id, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
+import type { ApiError, CardPayment, Id, KitchenStock, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
 import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
@@ -76,6 +76,8 @@ interface KitchenState {
   orders: OrderWithLines[];
   slots: Record<Day, SlotCount[] | undefined>;
   dishCounts: Record<Day, Record<string, number> | undefined>;
+  /** What Inventory says of each dish today, by the dish; empty where it is not in use. */
+  stockWords: Record<string, KitchenStock>;
   holidays: { date: string; name: string }[] | null;
   receipts: boolean;
   /** The menu is another app's too (the till's). */
@@ -121,6 +123,7 @@ export const useKitchen = create<KitchenState>(() => ({
   orders: [],
   slots: {},
   dishCounts: {},
+  stockWords: {},
   holidays: null,
   receipts: false,
   menuShared: false,
@@ -224,6 +227,10 @@ async function readCounts(): Promise<void> {
   const days = [today, addDays(today, 1)];
   const answers = await Promise.all(days.map((d) => port().dishCounts(d)));
   set({ dishCounts: Object.fromEntries(days.map((d, i) => [d, answers[i]])) });
+  // What is ordered moves what is held: Inventory is asked again with the counts.
+  const ids = (get().menuRows?.items ?? []).map((dish) => dish.id);
+  const words = await port().stockWords(ids).catch(() => []);
+  set({ stockWords: Object.fromEntries(words.map((one) => [one.id, one])) });
 }
 
 async function readMenu(): Promise<void> {

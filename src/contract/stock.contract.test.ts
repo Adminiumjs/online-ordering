@@ -143,6 +143,55 @@ describe.skipIf(why !== null)(`dishes run out with their ingredients${why === nu
         ok(await stand.staff.patch(`${stand.data("inventory_settings")}/${String(settings.id)}`, { values: { when_out_staff: settings["when_out_staff"] ?? "allow" } }));
       }, 120_000);
 
+      it("the kitchen is told the figure itself, and that it is the ingredient that counts", async () => {
+        const [, , free] = await stock();
+        const other = (await stand.rows("menu_items")).find((one) => one["name"] === "Margherita")!;
+        const words = Object.fromEntries((await stand.kitchen.stockWords([dish.id, other.id])).map((one) => [one.id, one]));
+        expect([words[String(dish.id)]?.exact, words[String(dish.id)]?.cause]).toEqual([free, "stock"]);
+        // A dish linked to nothing is in, with no figure to tell.
+        expect([words[String(other.id)]?.state ?? "in", words[String(other.id)]?.exact]).toEqual(["in", undefined]);
+      }, 60_000);
+
+      it("cancelled once the kitchen has started: what was cooked is not put back", async () => {
+        const id = await place("Gil", "14:15", 1);
+        await stand.kitchen.move(id, "placed", "confirmed");
+        await stand.kitchen.move(id, "confirmed", "preparing");
+        const cooking = await stock();
+        await stand.kitchen.cancel(id, "preparing", "too_busy", null, null);
+        expect(await stock()).toEqual(cooking);
+      }, 180_000);
+
+      it("a dish added to a placed order is held in its own save; added once the kitchen has started, it is taken at once", async () => {
+        const other = (await stand.rows("menu_items")).find((one) => one["name"] === "Margherita")!;
+        const add = (order: number) => stand.staff.post<{ data: Row }>(stand.data("order_items"), { values: { order_id: order, menu_item_id: dish.id, qty: 1 } });
+        // An order of something else, so the dish's only line is the one added.
+        const diner = await stand.dinerOf();
+        const body: OrderBody = { values: { language: "en-US", name: "Hal", email: `hal.${engine}@juniper-diners.dev`, pickup_at: at("14:30") }, children: { order_items: [{ values: { menu_item_id: other.id, qty: 1 } }] } };
+        const quote = await diner.quote(body);
+        const id = (await diner.place({ ...body, expect: { total: Number(quote.data["total"]).toFixed(2) } }, `hal-${engine}-0123456789abcdefgh`)).data.id;
+        const before = await stock();
+        const held = await add(id);
+        expect(held.status, JSON.stringify(held.body).slice(0, 500)).toBe(201);
+        expect(await stock()).toEqual([before[0], before[1]! + 1, before[2]! - 1]);
+        await stand.kitchen.move(id, "placed", "confirmed");
+        await stand.kitchen.move(id, "confirmed", "preparing");
+        expect(await stock()).toEqual([before[0]! - 1, before[1], before[2]! - 1]);
+        // Cooking already: one more is off the shelf with the save that adds it.
+        const late = await add(id);
+        expect(late.status, JSON.stringify(late.body).slice(0, 500)).toBe(201);
+        expect(await stock()).toEqual([before[0]! - 2, before[1], before[2]! - 2]);
+      }, 180_000);
+
+      it("Inventory switched off for the app: orders are still placed, and nothing is held", async () => {
+        ok(await stand.staff.patch("/api/v1/add-ons/inventory", { attachedTo: "ordering", enabled: false }));
+        const before = await stock();
+        const diner = await stand.dinerOf();
+        expect((await diner.stock([dish.id])).every((one) => one.state === "in")).toBe(true);
+        expect(await place("Ivy", "14:45", 2)).toBeGreaterThan(0);
+        expect(await stock()).toEqual(before);
+        ok(await stand.staff.patch("/api/v1/add-ons/inventory", { attachedTo: "ordering", enabled: true }));
+      }, 180_000);
+
       it("the page is told what Inventory says of a dish — in, or low — and of a dish linked to nothing, that it is in", async () => {
         const diner = await stand.dinerOf();
         const other = (await stand.rows("menu_items")).find((one) => one["name"] === "Margherita")!;
