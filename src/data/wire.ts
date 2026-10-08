@@ -23,6 +23,11 @@ export interface PublicConfig {
   currency: string | null;
   /** The server's clock, when it says it. */
   now?: string;
+  /**
+   * Whether Offers & gift cards is in use for the app: the page then offers a
+   * code field and a gift card field. Absent means no (an older door).
+   */
+  offers?: boolean;
 }
 
 /** A pickup time of a day: free, full (or too soon, or past), or paused. */

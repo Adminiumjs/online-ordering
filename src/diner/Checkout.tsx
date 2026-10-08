@@ -34,6 +34,7 @@ import { useFmt, useVenue } from "../app/venue.ts";
 import { Bdi } from "../components/Bdi.tsx";
 import { PickupCard } from "./Cart.tsx";
 import { Totals, useLineAmount, useLineStates } from "./cartParts.tsx";
+import { OfferFields, PriceMoved } from "./offerParts.tsx";
 import { Tile } from "./dish.tsx";
 import { useDay } from "./useDay.ts";
 
@@ -133,6 +134,10 @@ export function Checkout() {
   const pick = validPick(day.now);
   const pickWord = pick === null ? t("co.pickATime") : t("co.pickup", { day: pick.day === day.today ? t("pick.today") : pick.day === day.tomorrow ? t("pick.tomorrow") : fmt.weekday(pick.day), time: fmt.wall(pick.day, pick.time) });
   const total = fresh === null ? null : fmt.money(fresh.data["total"]);
+  // With a gift card on the order: what it leaves for the counter, as Adminium answered it. The total otherwise.
+  const payment = fresh?.payment ?? null;
+  const due = fresh === null ? null : payment === null ? total : fmt.money(payment.due);
+  const cardPaysAll = payment !== null && Number(payment.due) <= 0;
   const place = async () => {
     if (block !== null) return;
     const placed = await placeOrder(locale);
@@ -200,10 +205,12 @@ export function Checkout() {
               <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                 <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.02em" }}>{t("co.pay")}</span>
                 <span style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--fg-muted)" }}>
-                  {total === null ? (
+                  {due === null ? (
                     t("co.pay.checking")
+                  ) : cardPaysAll ? (
+                    t("co.pay.card")
                   ) : (
-                    <Rich text={t("co.pay.body")} parts={{ total: <span className="jk-mono" style={{ fontWeight: 600, color: "var(--fg)" }}>{total}</span> }} />
+                    <Rich text={t("co.pay.body")} parts={{ total: <span className="jk-mono" style={{ fontWeight: 600, color: "var(--fg)" }}>{due}</span> }} />
                   )}
                 </span>
               </span>
@@ -241,7 +248,8 @@ export function Checkout() {
                 })}
               </div>
               <div style={{ paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
-                <Totals gap={10} />
+                <Totals gap={10} removable />
+                <OfferFields />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 9, marginBlockStart: 16, padding: "12px 14px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                 <Icon name="map-pin" size={15} style={{ color: "var(--accent-ink)" }} />
@@ -259,6 +267,7 @@ export function Checkout() {
                   />
                 </span>
               </div>
+              <PriceMoved />
               <PlaceError />
               <button
                 className="jn-btn"
@@ -268,7 +277,7 @@ export function Checkout() {
                 style={{ width: "100%", marginBlockStart: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 52, borderRadius: 13, border: "none", background: block !== null ? "var(--surface-3)" : "var(--accent)", color: block !== null ? "var(--fg-subtle)" : "var(--accent-fg)", fontSize: 15, fontWeight: 800, cursor: block !== null || s.placing ? "not-allowed" : "pointer" }}
               >
                 {s.placing ? <span aria-hidden="true" style={{ flex: "none", width: 14, height: 14, borderRadius: 999, border: "2px solid currentColor", borderInlineEndColor: "transparent", animation: "jn-spin .75s linear infinite" }} /> : <Icon name="check" size={17} />}
-                {s.placing ? t("co.placing") : total === null ? t("co.placeNoTotal") : t("co.place", { total })}
+                {s.placing ? t("co.placing") : total === null ? t("co.placeNoTotal") : payment === null ? t("co.place", { total }) : cardPaysAll ? t("co.place.card") : t("co.place.due", { due: due ?? "" })}
               </button>
               {block !== null && !s.placing && (
                 <span id={reasonId} style={{ display: "flex", alignItems: "center", gap: 7, marginBlockStart: 11, fontSize: 12.5, fontWeight: 600, color: "var(--fg-subtle)" }}>

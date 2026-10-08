@@ -49,6 +49,16 @@ export type LineAlert =
 
 export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed";
 
+/**
+ * Why a typed code was not taken, as Adminium said it. `invalid` is every
+ * answer that says nothing more (unknown, used up, not for this diner);
+ * `off` is Offers & gift cards not answering.
+ */
+export type CodeError = { kind: "invalid" | "items" | "signin" | "busy" | "off" } | { kind: "minimum"; amount: string };
+
+/** Why a gift card was not taken: one answer for every cause, by design. */
+export type CardError = "invalid" | "busy" | "off";
+
 /** A detail Adminium refused as the diner typed it. */
 export type FieldError = "invalid" | "plain";
 
@@ -64,12 +74,16 @@ export interface Placed {
   name: string;
   pickupAt: string;
   total: number;
+  /** What is left for the counter once a gift card paid; the total when none did. */
+  toPay: number;
   replayed: boolean;
 }
 
 interface Loaded {
   zone: string;
   currency: string;
+  /** Whether codes and gift cards are offered (Offers & gift cards is in use for the app). */
+  offers: boolean;
   settings: Row;
   menu: MenuModel;
   hours: Row[];
@@ -105,6 +119,15 @@ interface DinerState {
   soldOut: { dishId: Id; short: boolean; left: number | null; day: Day } | null;
   slotNotice: SlotNotice | null;
   placed: Placed | null;
+  /** The code the diner applied, as Adminium took it; and the one gift card that is to pay. */
+  code: string | null;
+  card: string | null;
+  /** Which of the two is being asked about now: the totals wait for it. */
+  checking: "code" | "card" | null;
+  codeError: CodeError | null;
+  cardError: CardError | null;
+  /** The order's price moved at the save because a code no longer applies: said above the button until the diner acts. */
+  priceMoved: boolean;
 }
 
 const CART_KEY = "online-ordering-cart";
@@ -142,6 +165,12 @@ export const useDiner = create<DinerState>(() => ({
   soldOut: null,
   slotNotice: null,
   placed: null,
+  code: null,
+  card: null,
+  checking: null,
+  codeError: null,
+  cardError: null,
+  priceMoved: false,
 }));
 
 // A cart waiting for the free times to be priced on: priced as soon as they are read.
@@ -222,7 +251,7 @@ export async function loadDiner(): Promise<void> {
   try {
     const p = port();
     const [config, settings, menu, hours, closures] = await Promise.all([p.config(), p.settings(), p.menu(), p.hours(), p.closures()]);
-    set({ data: { zone: config.timezone, currency: config.currency ?? sources().currency, settings, menu: menuModel(menu), hours, closures } });
+    set({ data: { zone: config.timezone, currency: config.currency ?? sources().currency, offers: config.offers === true, settings, menu: menuModel(menu), hours, closures } });
     await refreshAvailability(sources().clock.now());
     set({ load: "ok" });
   } catch {
@@ -396,9 +425,12 @@ function quoteTime(): { day: Day; time: string } | null {
 }
 
 /** The order as it would be sent: the diner's values, each line with its options (a quote's at the time it is asked for). */
-export function orderBody(values: Record<string, unknown> = {}, forQuote = false): OrderBody {
+export function orderBody(values: Record<string, unknown> = {}, forQuote = false, tried: { code?: string | null; card?: string | null } = {}): OrderBody {
   const s = get();
   const pick = forQuote ? quoteTime() : s.pick;
+  // What the diner applied — or, while one is being asked about, the one being tried.
+  const code = tried.code === undefined ? s.code : tried.code;
+  const card = tried.card === undefined ? s.card : tried.card;
   return {
     values: { ...values, ...(pick === null ? {} : { pickup_at: new Date(instantOf(pick.day, pick.time, zoneOf())).toISOString() }) },
     children: {
@@ -406,11 +438,13 @@ export function orderBody(values: Record<string, unknown> = {}, forQuote = false
         values: { menu_item_id: l.dishId, qty: l.qty, ...(l.note === "" ? {} : { note: l.note }) },
         ...(l.options.length === 0 ? {} : { children: { order_item_modifiers: l.options.map((id) => ({ values: { modifier_id: id } })) } }),
       })),
+      ...(code === null ? {} : { order_codes: [{ values: { typed: code } }] }),
+      ...(card === null ? {} : { payments: [{ values: { card_code: card } }] }),
     },
   };
 }
 
-const quoteKeyOf = () => JSON.stringify([get().cart, get().pick ?? quoteTime()]);
+const quoteKeyOf = () => JSON.stringify([get().cart, get().pick ?? quoteTime(), get().code, get().card]);
 let quoteTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Asks Adminium for the order's figures once the cart has been still for a moment. */
@@ -437,12 +471,130 @@ export async function runQuote(): Promise<void> {
     const reply = await port().quote(orderBody({}, true));
     // The cart, the time or the free times moved while it was asked: ask again for what is there now.
     if (quoteKeyOf() !== key) return scheduleQuote();
+    // The card would not pay this order any more (spent meanwhile): taken off, and said under its field.
+    if (get().card !== null && cardRefused(reply)) {
+      set({ card: null, cardError: "invalid" });
+      return scheduleQuote();
+    }
     set({ quote: { key, state: "ok", reply }, alerts: {} });
   } catch (error) {
     if (quoteKeyOf() !== key) return scheduleQuote();
+    // A change of the cart made the applied code or card fail: it is taken off, its field says why, and the order is priced without it.
+    if (isApiError(error) && dropRefused(error)) return scheduleQuote();
     set({ quote: { key, state: "err", reply: null } });
     if (isApiError(error)) await readRefusal(error, "quote").catch(() => false);
   }
+}
+
+// ── a code, and a gift card ─────────────────────────────────────────────────
+
+/** Whether a quote says the gift card on the order would pay nothing: Adminium's one answer for a card that is not valid. */
+const cardRefused = (reply: QuoteReply): boolean => (reply.postings ?? []).some((one) => one.ledger === "value" && one.state === "refused");
+
+/** Whether a refusal is about the typed code (a child of the order named `order_codes`). */
+const aboutCode = (error: ApiError): boolean => error.code === "PUBLIC_WRITE_REFUSED" && (error.params["child"] === "order_codes" || error.params["column"] === "typed");
+/** …or about the gift card: its own refusal, or the payment's row. */
+const aboutCard = (error: ApiError): boolean => error.code === "PUBLIC_CARD_REFUSED" || (error.code === "PUBLIC_WRITE_REFUSED" && error.params["child"] === "payments");
+
+/** What Adminium said of a typed code, as the field says it. Whether a code exists is never told apart from "used up". */
+export function codeErrorOf(error: ApiError): CodeError {
+  if (error.code === "PUBLIC_RATE_LIMITED") return { kind: "busy" };
+  const reason = error.params["reason"];
+  if (reason === "needs-minimum") return { kind: "minimum", amount: String(error.params["amount"] ?? "") };
+  if (reason === "not-for-these-items") return { kind: "items" };
+  if (reason === "needs-sign-in") return { kind: "signin" };
+  // No reason at all: Offers & gift cards is not there to ask.
+  return { kind: typeof reason === "string" ? "invalid" : "off" };
+}
+
+const cardErrorOf = (error: ApiError): CardError => (error.code === "PUBLIC_RATE_LIMITED" ? "busy" : error.code === "PUBLIC_CARD_REFUSED" ? "invalid" : "off");
+
+/** Takes off the applied code or card a refusal is about, and keeps why for its field. False when it is about neither. */
+function dropRefused(error: ApiError): boolean {
+  if (get().code !== null && aboutCode(error)) {
+    set({ code: null, codeError: codeErrorOf(error) });
+    return true;
+  }
+  if (get().card !== null && aboutCard(error)) {
+    set({ card: null, cardError: cardErrorOf(error) });
+    return true;
+  }
+  return false;
+}
+
+/** A code as codes are kept: no spaces, upper case. */
+const codeAsKept = (text: string) => text.replace(/\s+/g, "").toUpperCase();
+
+/**
+ * A gift card's code as the page's door takes one: `GC-` and twelve
+ * characters, dashes and spaces left out as the diner pleases. Null when it is
+ * not that — the page then says so without asking, and spends no guess.
+ */
+export function cardAsKept(text: string): string | null {
+  const bare = text.toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/^GC/, "");
+  return bare.length === 12 ? `GC-${bare.slice(0, 4)}-${bare.slice(4, 8)}-${bare.slice(8)}` : null;
+}
+
+/**
+ * Asks Adminium whether a code applies to this order, and applies it when it
+ * does. The order is priced with it in the same answer; nothing is kept on a
+ * refusal but why.
+ */
+export async function applyCode(text: string): Promise<boolean> {
+  const code = codeAsKept(text);
+  if (code === "" || get().checking !== null || get().cart.length === 0 || quoteTime() === null) return false;
+  set({ checking: "code", codeError: null, priceMoved: false });
+  try {
+    const reply = await port().quote(orderBody({}, true, { code }));
+    set({ code, checking: null });
+    set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    return true;
+  } catch (error) {
+    set({ checking: null, codeError: isApiError(error) && error.status !== 0 && error.status < 500 ? codeErrorOf(error) : { kind: "busy" } });
+    return false;
+  }
+}
+
+export function removeCode(): void {
+  set({ code: null, codeError: null, priceMoved: false });
+  scheduleQuote();
+}
+
+/** Asks Adminium what a gift card would pay of this order, and puts it on the order when it would pay something. */
+export async function applyCard(text: string): Promise<boolean> {
+  const card = cardAsKept(text);
+  if (get().checking !== null || get().cart.length === 0 || quoteTime() === null) return false;
+  if (card === null) {
+    set({ cardError: "invalid" });
+    return false;
+  }
+  set({ checking: "card", cardError: null });
+  try {
+    const reply = await port().quote(orderBody({}, true, { card }));
+    if (cardRefused(reply) || reply.payment === null || reply.payment === undefined) {
+      set({ checking: null, cardError: "invalid" });
+      return false;
+    }
+    set({ card, checking: null });
+    set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    return true;
+  } catch (error) {
+    set({ checking: null, cardError: isApiError(error) && error.status !== 0 && error.status < 500 ? cardErrorOf(error) : "busy" });
+    return false;
+  }
+}
+
+export function removeCard(): void {
+  set({ card: null, cardError: null });
+  scheduleQuote();
+}
+
+/** The field's own words are cleared as the diner types again. */
+export function clearCodeError(): void {
+  if (get().codeError !== null) set({ codeError: null });
+}
+export function clearCardError(): void {
+  if (get().cardError !== null) set({ cardError: null });
 }
 
 /** A quote that answers for this very cart and time. */
@@ -515,6 +667,11 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     await refreshAvailability(now);
     return true;
   }
+  // The applied code or card was refused at the save (used meanwhile, spent meanwhile): taken off, said under its field.
+  if (during === "place" && dropRefused(error)) {
+    set({ priceMoved: true });
+    return true;
+  }
   if (error.code === "PUBLIC_PRICE_CHANGED" && during === "place") {
     const before = freshQuoteLines();
     // The lines as the save would have written them, under their list: `{order_items: [{data, children}]}`.
@@ -522,6 +679,13 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     const changed = lines
       .map((l, i) => ({ name: s.data?.menu.dish(s.cart[i]?.dishId ?? -1)?.name ?? "", from: before[i] ?? 0, to: Number(l.data["unit_total"] ?? 0) }))
       .filter((l) => l.from !== l.to);
+    // No dish's price moved: the code ran out between the quote and the save. The strip says so, the code
+    // is gone and its field says why; the diner looks at the new total and presses again.
+    if (changed.length === 0 && get().code !== null) {
+      set({ code: null, codeError: { kind: "invalid" }, priceMoved: true });
+      scheduleQuote();
+      return true;
+    }
     set({ priceChanged: { lines: changed, total: Number(error.params["total"] ?? 0), totalText: String(error.params["total"] ?? "") } });
     return true;
   }
@@ -563,7 +727,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
   const quote = freshQuote();
   if (s.placing || quote === null || s.pick === null) return null;
   const clientKey = s.clientKey ?? mintKey();
-  set({ placing: true, placeError: null, clientKey, slotNotice: null });
+  set({ placing: true, placeError: null, clientKey, slotNotice: null, priceMoved: false });
   const f = s.form;
   const values = {
     name: f.name.trim(),
@@ -586,9 +750,11 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         name: values.name,
         pickupAt: String(reply.data["pickup_at"]),
         total: Number(reply.data["total"]),
+        // From the save itself, never from the quote before it.
+        toPay: reply.payment === null || reply.payment === undefined ? Number(reply.data["total"]) : Number(reply.payment.due),
         replayed: reply.replayed === true,
       };
-      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {} });
+      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {}, code: null, card: null, codeError: null, cardError: null, priceMoved: false });
       // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
       void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);

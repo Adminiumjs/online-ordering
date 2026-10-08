@@ -16,6 +16,8 @@ import {
   choosePickDay,
   freshQuote,
   openSheet,
+  removeCard,
+  removeCode,
   removeLine,
   rulesOf,
   runQuote,
@@ -294,28 +296,63 @@ export function PickupPicker({ compact }: { compact: boolean }) {
   );
 }
 
-/** Subtotal, tax and total — Adminium's dry run for this very cart and time, "Checking prices…" meanwhile. */
-export function Totals({ gap }: { gap: number }) {
+/**
+ * Subtotal, each reduction by its name, tax and total — and, with a gift card
+ * on the order, what it pays and what is left for the counter. Every figure is
+ * Adminium's dry run for this very cart and time, never the page's sum:
+ * "Checking prices…" meanwhile. At checkout a typed code and the card can be
+ * taken off again (`removable`); the cart and its drawer only show them.
+ */
+export function Totals({ gap, removable = false }: { gap: number; removable?: boolean }) {
   const { t } = useI18n();
   const fmt = useFmt();
   const quote = useDiner((s) => s.quote);
   const fresh = useDiner(() => freshQuote());
+  const checking = useDiner((s) => s.checking);
   const settingsRate = useDiner((s) => s.data?.settings["tax_rate"]);
   const failed = quote?.state === "err";
   const busy = !failed && fresh === null;
   const rate = fresh?.data["tax_rate"] ?? settingsRate ?? 0;
-  const rows = [
-    { key: "sub", label: t("totals.subtotal"), value: fresh?.data["subtotal"] },
-    { key: "tax", label: t("totals.tax", { rate: fmt.percent(rate) }), value: fresh?.data["tax"] },
-  ];
+  const applied = fresh?.applied ?? [];
+  const payment = fresh?.payment ?? null;
+  /** After "Remove" the link it was is gone: the field's own opener takes the focus. */
+  const remove = (what: "code" | "card") => {
+    if (what === "code") removeCode();
+    else removeCard();
+    requestAnimationFrame(() => document.getElementById(what === "code" ? "jn-offer-code-open" : "jn-offer-card-open")?.focus());
+  };
+  const light = { fontSize: 13.5, fontWeight: 600, color: "var(--fg-muted)" } as const;
+  const removeLink = (what: "code" | "card", name: string) => (
+    <button
+      className="jn-nav"
+      onClick={() => remove(what)}
+      aria-label={what === "code" ? t("offers.remove.code", { name }) : t("offers.remove.card")}
+      // A text link, with room around it for a finger.
+      style={{ border: "none", background: "transparent", paddingBlock: 6, paddingInline: 6, marginBlock: -6, color: "var(--fg-subtle)", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}
+    >
+      {t("offers.remove")}
+    </button>
+  );
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap }}>
-      {rows.map((r) => (
-        <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--fg-muted)" }}>{r.label}</span>
-          {fresh !== null && <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 13.5, fontWeight: 600, color: "var(--fg-muted)" }}>{fmt.money(r.value)}</span>}
+    // While a code or a card is asked about the rows wait where they are: dimmed, nothing moves.
+    <div aria-busy={checking !== null} style={{ display: "flex", flexDirection: "column", gap, opacity: checking !== null ? 0.45 : 1, transition: "opacity .15s ease" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span style={light}>{t("totals.subtotal")}</span>
+        {fresh !== null && <span className="jk-mono" style={{ marginInlineStart: "auto", ...light }}>{fmt.money(fresh.data["subtotal"])}</span>}
+      </div>
+      {applied.map((one, i) => (
+        <div key={`${one.name}-${String(i)}`} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--pos)", minWidth: 0 }}>
+            <bdi>{one.name}</bdi>
+          </span>
+          {removable && one.typed && removeLink("code", one.name)}
+          <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 13.5, fontWeight: 600, color: "var(--pos)", whiteSpace: "nowrap" }}>−{fmt.money(one.amount)}</span>
         </div>
       ))}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <span style={light}>{t("totals.tax", { rate: fmt.percent(rate) })}</span>
+        {fresh !== null && <span className="jk-mono" style={{ marginInlineStart: "auto", ...light }}>{fmt.money(fresh.data["tax"])}</span>}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBlockStart: 10, borderBlockStart: "1px solid var(--border)" }}>
         <span style={{ fontSize: 17, fontWeight: 800, color: "var(--fg)" }}>{t("totals.total")}</span>
         {fresh !== null && <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 17, fontWeight: 600 }}>{fmt.money(fresh.data["total"])}</span>}
@@ -332,6 +369,19 @@ export function Totals({ gap }: { gap: number }) {
           </button>
         )}
       </div>
+      {fresh !== null && payment !== null && (
+        <>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--pos)" }}>{t("offers.card.link")}</span>
+            {removable && removeLink("card", "")}
+            <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 13.5, fontWeight: 600, color: "var(--pos)", whiteSpace: "nowrap" }}>−{fmt.money(payment.amount)}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--fg)" }}>{t("offers.toPay")}</span>
+            <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(payment.due)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

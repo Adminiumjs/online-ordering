@@ -63,6 +63,9 @@ function asApiError(error: unknown): unknown {
   return error;
 }
 
+/** The add-on's gift cards, as its entries on the page's key are named. */
+const OFFERS_CARDS = "offers_gift_cards";
+
 async function answer<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
@@ -197,7 +200,9 @@ export class AdminiumDiner implements DinerPort {
     return answer(async () => {
       const c = await this.customer.config();
       this.config$ = Promise.resolve(c);
-      return { timezone: c.timezone, currency: c.currency, ...(c.now === undefined ? {} : { now: c.now }) };
+      // Offers & gift cards joins the page's key with its own entry while it is in use for the app: that is how the page knows.
+      const offers = Object.keys(c.refs).some((ref) => ref.startsWith(OFFERS_CARDS));
+      return { timezone: c.timezone, currency: c.currency, ...(c.now === undefined ? {} : { now: c.now }), offers };
     });
   }
 
