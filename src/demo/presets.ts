@@ -10,13 +10,14 @@ import { instantOf, venueDay, addDays } from "../lib/venueTime.ts";
 import { afterClosing, fillSlot, moveOn, sellOut } from "./shortcuts.ts";
 import { DEMO_SIGN_IN } from "./diner.ts";
 import { openSignInLink, useAccount } from "../state/account.ts";
-import { lineKey, openSheet, placeOrder, replaceCart, runQuote, setField, toggleOption, useDiner, type CartLine } from "../state/diner.ts";
+import { applyCard, applyCode, type CartLine, lineKey, openSheet, placeOrder, replaceCart, runQuote, setField, toggleOption, useDiner } from "../state/diner.ts";
 import { freshPhone, addPhoneLine, setPhone, useKitchen } from "../state/kitchen.ts";
 import { setLarge, useLarge } from "../state/large.ts";
 import { useReorderAsk } from "../state/reorder.ts";
 import { openTrack, useTrack } from "../state/track.ts";
 import { goDiner, useUi } from "../state/ui.ts";
 import { followPlaced } from "../diner/Checkout.tsx";
+import { DEMO_CARD } from "./offers.ts";
 
 const demo = () => demoAdminium();
 const zone = () => demo().world.zone;
@@ -48,6 +49,17 @@ function kwame(): void {
   setField("name", "Kwame");
   setField("email", "kwame.b@mail.example");
   setField("phone", "(555) 019-2205");
+}
+
+/** Juniper's worked order: two Pepperoni & honey, a Wild mushroom, Charred brussels, a Lemon tart and a Lemonade — $64.50. */
+function workedCart(): void {
+  replaceCart([line(dish("Pepperoni & honey"), [], 2), line(dish("Wild mushroom"), []), line(dish("Charred brussels"), []), line(dish("Lemon tart"), []), line(dish("Lemonade"), [])]);
+}
+
+/** Opens the code field or the gift card field, as a press of its link does. */
+async function openOffer(which: "code" | "card"): Promise<void> {
+  await until(() => document.getElementById(`jn-offer-${which}-open`) !== null, 3000);
+  document.getElementById(`jn-offer-${which}-open`)?.click();
 }
 
 async function quoted(): Promise<void> {
@@ -126,6 +138,19 @@ const PRESETS: Record<string, Preset> = {
   "large-sent": { ui: async () => { setLarge({ ...sample, date: addDays(today(), 4) }); goDiner("large"); const { sendEnquiry } = await import("../state/large.ts"); await sendEnquiry("en-US"); } },
   // States 3 — Cart and Checkout
   cart: { ui: async () => { kwameCart(); await quoted(); goDiner("cart"); } },
+  // Offers — a code and a gift card at checkout (the worked order: $64.50, Pizza pair −$16.00)
+  "offer-code": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await openOffer("code"); } },
+  "offer-applied": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCode("LUNCH5"); } },
+  "offer-invalid": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCode("WELCOME01"); } },
+  "offer-signin": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCode("WELCOME10"); } },
+  "offer-min": { ui: async () => { replaceCart([line(dish("Margherita"), []), line(dish("Lemonade"), [])]); kwame(); await quoted(); goDiner("checkout"); await applyCode("LUNCH5"); } },
+  "offer-checking": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await openOffer("code"); useDiner.setState({ checking: "code" }); } },
+  "offer-changed": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); useDiner.setState({ priceMoved: true, codeError: { kind: "invalid" } }); } },
+  "gift-open": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await openOffer("card"); } },
+  "gift-applied": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCard(DEMO_CARD.code); } },
+  "gift-invalid": { ui: async () => { workedCart(); kwame(); await quoted(); goDiner("checkout"); await applyCard("GC-AAAA-BBBB-CCCC"); } },
+  "gift-full": { ui: async () => { replaceCart([line(dish("Lemonade"), [], 2)]); kwame(); await quoted(); goDiner("checkout"); await applyCard(DEMO_CARD.code); } },
+  "offer-cart": { ui: async () => { workedCart(); await quoted(); goDiner("cart"); } },
   drawer: { ui: async () => { kwameCart(); await quoted(); useDiner.setState({ drawer: true }); } },
   checking: { ui: async () => { kwameCart(); kwame(); goDiner("checkout"); await quoted(); useDiner.setState({ quote: { key: "checking", state: "busy", reply: null } }); } },
   checkout: { ui: async () => { kwameCart(); kwame(); await quoted(); goDiner("checkout"); } },

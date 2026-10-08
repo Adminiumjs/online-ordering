@@ -15,6 +15,7 @@ import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, typ
 import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { columnOf, LINE_NOTE_RULE, linkFreeText, ruleOf, type PlainTextColumn } from "../lib/plainText.ts";
+import { DemoCards, priceDemoOrder, type DemoPriced } from "./offers.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
 type Entry = (typeof MANIFEST_RULES.publicAccess)[number] & Record<string, unknown>;
@@ -80,6 +81,8 @@ export class DemoDiner implements DinerPort {
   /** Something the demo card makes happen just before the next placing lands (another diner takes the time, a price moves). */
   beforePlace: ((body: OrderBody) => void) | null = null;
 
+  /** The demo's gift cards, and what each still holds. */
+  readonly cards = new DemoCards();
   readonly engine: Engine;
   readonly latency: Latency;
   constructor(engine: Engine, latency: Latency = NO_LATENCY) {
@@ -101,7 +104,8 @@ export class DemoDiner implements DinerPort {
 
   async config() {
     await this.wait(this.latency.read);
-    return { timezone: this.world.zone, currency: this.world.currency, now: new Date(this.engine.now).toISOString() };
+    // The demo plays Offers & gift cards too, with its own offer, codes and card.
+    return { timezone: this.world.zone, currency: this.world.currency, now: new Date(this.engine.now).toISOString(), offers: true };
   }
 
   async settings(): Promise<Row> {
@@ -187,11 +191,16 @@ export class DemoDiner implements DinerPort {
 
   private judged(body: OrderBody, dry: boolean) {
     if (this.world.settings()["online_on"] !== true) throw new ApiError(403, "PUBLIC_SWITCHED_OFF", "This is not open online right now.");
-    return this.engine.orderTree(this.orderValues(body, dry), this.lines(body), GUEST, {
+    const tree = this.engine.orderTree(this.orderValues(body, dry), this.lines(body), GUEST, {
       dry,
       readableDish: this.readable("menu_items"),
       readableOption: this.readable("modifiers"),
     });
+    // What the demo's offers, the codes typed and the gift card make of it: the order's own figures, as the save would write them.
+    const priced: DemoPriced = priceDemoOrder(tree.order, tree.lines, body, { signedIn: this.signIn !== null, cards: this.cards });
+    Object.assign(tree.order, priced.figures);
+    tree.lines.forEach((one, i) => (one.line["discount"] = priced.lineDiscounts[i] === 0 ? null : priced.lineDiscounts[i]));
+    return { ...tree, priced };
   }
 
   async quote(body: OrderBody): Promise<QuoteReply> {
@@ -202,6 +211,10 @@ export class DemoDiner implements DinerPort {
       children: { order_items: tree.lines.map((l) => ({ data: l.line, children: { order_item_modifiers: l.options.map((o) => ({ data: o })) } })) },
       capacity: [{ pool: "orders", state: "available" }],
       exact: true,
+      applied: tree.priced.applied,
+      told: tree.priced.told,
+      payment: tree.priced.payment,
+      postings: [],
     };
   }
 
@@ -235,6 +248,7 @@ export class DemoDiner implements DinerPort {
       throw new ApiError(409, "PUBLIC_PRICE_CHANGED", "The price changed.", {
         total: Number(tree.order["total"]).toFixed(2),
         lines: { order_items: tree.lines.map((l) => ({ data: l.line, children: { order_item_modifiers: l.options.map((o) => ({ data: o })) } })) },
+        applied: tree.priced.applied,
       });
     }
     // The person the order is for, found by the address typed, or made.
@@ -244,7 +258,14 @@ export class DemoDiner implements DinerPort {
     const { order } = this.engine.writeOrder(tree, GUEST, { customer_id: customer.id, email, link_token: token });
     this.keys.set(clientKey, order.id);
     this.linkSession = { orderId: order.id };
-    return { ...this.reply(order.id), link: { key: "link", token } };
+    // The codes the order keeps, and the card's payment: taken off the card now, as the save takes it.
+    for (const typed of tree.priced.codes) this.world.insert("order_codes", { order_id: order.id, typed, code_id: null, voucher_id: null, removed_at: null });
+    const card = tree.priced.card;
+    if (card !== null) {
+      this.cards.spend(card.code, card.amount);
+      this.world.insert("payments", { order_id: order.id, card_code: card.code, card_id: null, card_last4: card.code.replace(/[^0-9A-Za-z]/g, "").slice(-4).toUpperCase(), amount: card.amount, card_balance_after: this.cards.balance(card.code), returned: null, kept: card.amount, made_at: new Date(this.engine.now).toISOString(), made_by: "customer", client_key: null });
+    }
+    return { ...this.reply(order.id), link: { key: "link", token }, applied: tree.priced.applied, told: tree.priced.told, payment: tree.priced.payment };
   }
 
   /** Charges the caps for one save by a stranger: an address's rolling day, and one visitor's hour on this entry. */

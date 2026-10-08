@@ -35,6 +35,9 @@ export const TABLES = [
   "orders",
   "order_items",
   "order_item_modifiers",
+  "order_codes",
+  "payments",
+  "payment_refunds",
   "enquiries",
   "messages",
 ] as const;
