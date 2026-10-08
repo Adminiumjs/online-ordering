@@ -3024,9 +3024,22 @@
             },
             "rules": {
               "formula": {
-                "coalesce": [
-                  "due",
-                  "total"
+                "if": [
+                  {
+                    "isNull": "status"
+                  },
+                  {
+                    "coalesce": [
+                      "due",
+                      "total"
+                    ]
+                  },
+                  {
+                    "coalesce": [
+                      "due",
+                      "total"
+                    ]
+                  }
                 ]
               }
             }
@@ -3279,33 +3292,72 @@
               "formula": {
                 "if": [
                   {
-                    "and": [
+                    "isNull": "status"
+                  },
+                  {
+                    "if": [
                       {
-                        "gt": [
+                        "and": [
                           {
-                            "coalesce": [
-                              "paid",
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
                               0
                             ]
                           },
-                          0
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "due",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
                         ]
                       },
+                      1,
+                      0
+                    ]
+                  },
+                  {
+                    "if": [
                       {
-                        "lte": [
+                        "and": [
                           {
-                            "coalesce": [
-                              "due",
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
                               0
                             ]
                           },
-                          0
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "due",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
                         ]
-                      }
+                      },
+                      1,
+                      0
                     ]
-                  },
-                  1,
-                  0
+                  }
                 ]
               }
             }
@@ -3328,18 +3380,42 @@
               "formula": {
                 "if": [
                   {
-                    "gt": [
+                    "isNull": "status"
+                  },
+                  {
+                    "if": [
                       {
-                        "coalesce": [
-                          "paid",
+                        "gt": [
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          },
                           0
                         ]
                       },
+                      1,
                       0
                     ]
                   },
-                  1,
-                  0
+                  {
+                    "if": [
+                      {
+                        "gt": [
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  }
                 ]
               }
             }

@@ -125,6 +125,15 @@ function flag(ref: string, label: string, formula: unknown): Column {
 function link(ref: string, addOn: string, table: string, label: string, rules: Record<string, unknown> = {}): Column {
   return { ref, type: "int", nullable: true, label: l(label), rules: { addOnLink: { addOn, table }, ...rules } };
 }
+/**
+ * A figure worked out again at every move of the order, not only when what it
+ * reads changes: Adminium works a formula out when one of its columns is
+ * written, so naming the status makes each step of the order's life one of
+ * them. An order placed before these columns existed has none of them until
+ * it next moves — and an email that tests one (ready, paid in full?) is sent
+ * at exactly such a move.
+ */
+const atEachMove = (formula: unknown) => ({ if: [{ isNull: "status" }, formula, formula] });
 const stamp = (set: unknown, on: unknown) => ({ stamp: { set, on } });
 const onCreate = "create";
 const onStatus = (...values: string[]) => ({ column: "status", values });
@@ -448,7 +457,7 @@ export const TABLES: Table[] = [
       money("paid", "Paid by gift card", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
       amount("due", "Left after gift cards"),
       // What to collect, whatever the order's age: an order from before gift cards has no `due`, and owes its total.
-      money("to_pay", "To pay at the counter", { formula: { coalesce: ["due", "total"] } }),
+      money("to_pay", "To pay at the counter", { formula: atEachMove({ coalesce: ["due", "total"] }) }),
       choice("paid_method", "Paid by", { cash: "Cash", card: "Card", gift_card: "Gift card", mixed: "Gift card and more" }, opt),
       // With a gift card paying part: how the rest was paid.
       choice("rest_paid_by", "The rest paid by", { cash: "Cash", card: "Card" }, opt),
@@ -466,8 +475,8 @@ export const TABLES: Table[] = [
           },
         ],
       }),
-      flag("prepaid", "Paid in full by gift card", { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] }),
-      flag("card_used", "A gift card paid", { if: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] }),
+      flag("prepaid", "Paid in full by gift card", atEachMove({ if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] })),
+      flag("card_used", "A gift card paid", atEachMove({ if: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] })),
       // Which confirmation an order gets: 0 a phone order, 1 an online order, 2 an online order a gift card paid in full.
       flag("confirm_as", "Confirmation kind", {
         if: [{ eq: ["channel", "phone"] }, 0, { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 2, 1] }],
