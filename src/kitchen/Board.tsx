@@ -11,7 +11,7 @@ import { useNow } from "../data/sources.ts";
 import { useI18n, type TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { storedOptionsText } from "../lib/menu.ts";
-import { BOARD, NEXT, dayOf, kToday, num, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
+import { BOARD, NEXT, dayOf, kToday, num, owed, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
 import { useUi } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 import { advance, undo, useRecentMove } from "./moves.ts";
@@ -163,7 +163,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
           </button>
         )}
         <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 12, fontWeight: 600, color: "var(--fg-muted)" }}>
-          {fmt.money(o["total"])}
+          {fmt.money(owed(o))}
         </span>
       </div>
       <button className="jn-btn" onClick={go} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, borderRadius: 12, border: "none", background: column === "ready" ? "var(--pos)" : "var(--accent)", color: column === "ready" ? (theme === "dark" ? "#0f0f14" : "#ffffff") : "var(--accent-fg)", fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}>

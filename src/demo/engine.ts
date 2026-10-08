@@ -340,6 +340,9 @@ export class Engine {
    * made only by a write naming the state it saw, within its time, and
    * empties the stamps marked `clearOnBack` of the state it leaves.
    */
+  /** Set by whoever keeps the demo's gift cards: called once an order is cancelled, whoever cancelled it. */
+  onCancelled: ((id: Id) => void) | null = null;
+
   updateOrder(id: Id, values: Record<string, unknown>, writer: Writer, opts: { from?: string } = {}): Row {
     const stored = this.world.get("orders", id);
     if (stored === undefined) throw new ApiError(404, "NOT_FOUND", "No such order.");
@@ -420,7 +423,12 @@ export class Engine {
     }
     // A backward move never stamps the state it returns to again.
     if (!backward) change = { ...change, ...this.stampsFor("orders", stored, { ...stored, ...change }, writer) };
-    const row = this.world.update("orders", id, change);
+    let row = this.world.update("orders", id, change);
+    // Cancelled: what gift cards paid goes back to them, as the order's reversed payments do on a real Adminium.
+    if (to === "cancelled" && was !== "cancelled" && this.onCancelled !== null) {
+      this.onCancelled(id);
+      row = this.world.get("orders", id) ?? row;
+    }
     if (to !== was) this.produce("orders", before, row);
     return row;
   }

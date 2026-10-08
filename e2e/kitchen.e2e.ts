@@ -60,7 +60,7 @@ for (const variant of VARIANTS) {
 
     // Handing over the bag on the shelf.
     await page.getByRole("region", { name: t("kitchen.col.ready") }).getByRole("button", { name: t("kitchen.btn.handOff") }).first().click();
-    await page.getByRole("radio", { name: t("kitchen.handoff.card") }).click();
+    await page.getByRole("radio", { name: t("kitchen.handoff.card"), exact: true }).click();
     await check(page, PROJECT, "handoff", variant);
     await page.getByRole("button", { name: t("kitchen.handoff.notYet") }).click();
 

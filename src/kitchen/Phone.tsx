@@ -338,6 +338,8 @@ export function PhoneOrder() {
         {quote !== null ? (
           [
             { key: "sub", label: t("totals.subtotal"), value: quote.data["subtotal"], size: 13 },
+            // What offers took off, as Adminium priced it: without this row the total would not be the sum of the others.
+            ...(Number(quote.data["discount"] ?? 0) > 0 ? [{ key: "off", label: t("kitchen.phone.reductions"), value: -Number(quote.data["discount"]), size: 13 }] : []),
             { key: "tax", label: t("totals.tax", { rate: fmt.percent(quote.data["tax_rate"]) }), value: quote.data["tax"], size: 13 },
             { key: "total", label: t("totals.total"), value: quote.data["total"], size: 15 },
           ].map((r) => (

@@ -146,6 +146,7 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         expect(mail).toContain("10 % off your first order — −$4.85");
         expect(mail).not.toContain('{"');
         expect(mail).toMatch(/Tax 8\.25%: \$3\.60/);
+        expect(mail).toContain("To pay at pickup: $47.25");
         expect(figures(made.data)).toEqual(["64.50", "20.85", "43.65", "3.60", "47.25"]);
         expect((made.applied ?? []).map((one) => cents(one.amount)).sort()).toEqual(["16.00", "4.85"]);
         placed = { id: made.data.id, total: cents(made.data["total"]) };
@@ -195,7 +196,7 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         const made = await diner.place({ ...body, expect: { total: "52.50" } }, `cleo-card-${engine}-0123456789abcdef`);
         // The confirmation says what the card paid, by its last four, and what is left for the counter — never the card's code.
         const mail = flat((await stand.mailTo(`cleo.${engine}@juniper-diners.dev`, mailsBefore)).text);
-        for (const words of ["−$16.00", "−$19.00", card.code.slice(-4), "$33.50"]) expect(mail, words).toContain(words);
+        for (const words of ["−$16.00", "−$19.00", card.code.slice(-4), "To pay at pickup: $33.50"]) expect(mail, words).toContain(words);
         expect(mail).not.toContain(card.code);
         expect([cents(made.payment?.amount), cents(made.payment?.due)]).toEqual(["19.00", "33.50"]);
         carded = made.data.id;

@@ -8631,7 +8631,6 @@
         "table:@orders:read",
         "table:@order_items:read",
         "table:@order_item_modifiers:read",
-        "table:@order_codes:read",
         "table:@payments:read",
         "table:@settings:read",
         "table:@hours:read",
@@ -8722,25 +8721,6 @@
         }
       },
       "tables": [
-        {
-          "addOn": "offers",
-          "table": "applied",
-          "actions": [
-            "read"
-          ],
-          "limit": {
-            "readable": [
-              "source_table",
-              "source_row",
-              "source_line",
-              "name",
-              "kind",
-              "amount",
-              "typed",
-              "at"
-            ]
-          }
-        },
         {
           "addOn": "inventory",
           "table": "items",
@@ -8990,6 +8970,11 @@
             "kept",
             "made_at",
             "made_by"
+          ],
+          "creatable": [
+            "order_id",
+            "card_code",
+            "client_key"
           ]
         }
       },

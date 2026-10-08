@@ -19,7 +19,7 @@ import { goDiner } from "../state/ui.ts";
 import { useFmt } from "../app/venue.ts";
 import { NotFound } from "./Track.tsx";
 
-type Answer = { kind: "idle" } | { kind: "busy" } | { kind: "invalid" } | { kind: "wait" } | { kind: "card"; balance: string; expiresOn: string | null };
+type Answer = { kind: "idle" } | { kind: "busy" } | { kind: "invalid" } | { kind: "wait" } | { kind: "failed" } | { kind: "card"; balance: string; expiresOn: string | null };
 
 export function CardPage() {
   const { t } = useI18n();
@@ -31,6 +31,7 @@ export function CardPage() {
   const id = useId();
   if (loaded === "ok" && !offers) return <NotFound />;
   const ask = async () => {
+    if (answer.kind === "busy") return;
     // Twelve characters after the prefix, or it is no card: said without asking, and no guess is spent.
     const kept = cardAsKept(code);
     if (kept === null) return setAnswer({ kind: "invalid" });
@@ -39,10 +40,12 @@ export function CardPage() {
       const card = await sources().diner.cardBalance({ code: kept });
       setAnswer(card === null ? { kind: "invalid" } : { kind: "card", ...card });
     } catch (error) {
-      setAnswer(isApiError(error) && error.code === "PUBLIC_RATE_LIMITED" ? { kind: "wait" } : { kind: "invalid" });
+      // Not reached, or the kitchen's side failed: said as that, never as a card that is not valid.
+      const unreached = !isApiError(error) || error.status === 0 || error.status >= 500;
+      setAnswer(unreached ? { kind: "failed" } : error.code === "PUBLIC_RATE_LIMITED" ? { kind: "wait" } : { kind: "invalid" });
     }
   };
-  const bad = answer.kind === "invalid" || answer.kind === "wait";
+  const bad = answer.kind === "invalid" || answer.kind === "wait" || answer.kind === "failed";
   return (
     <div className="jn-view jk-shell">
       <div style={{ maxWidth: 520, paddingBlock: "clamp(24px,4vw,42px) clamp(34px,5vw,62px)" }}>
@@ -83,7 +86,7 @@ export function CardPage() {
           {bad && (
             <span id={`${id}-msg`} role="alert" style={{ display: "flex", alignItems: "center", gap: 6, marginBlockStart: 9, fontSize: 12.5, fontWeight: 600, color: "var(--danger)" }}>
               <Icon name="alert-circle" size={13} />
-              {answer.kind === "wait" ? t("co.err.busy") : t("card.invalid")}
+              {answer.kind === "wait" ? t("co.err.busy") : answer.kind === "failed" ? t("card.failed") : t("card.invalid")}
             </span>
           )}
           {answer.kind === "card" && (

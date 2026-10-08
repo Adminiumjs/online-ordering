@@ -13,7 +13,7 @@ import { useId, useRef, useState } from "react";
 
 import { Icon } from "../components/Icon.tsx";
 import { useI18n } from "../i18n/index.tsx";
-import { applyCard, applyCode, clearCardError, clearCodeError, freshQuote, useDiner, type CardError, type CodeError } from "../state/diner.ts";
+import { applyCard, applyCode, clearCardError, clearCodeError, freshQuote, removeCode, useDiner, type CardError, type CodeError } from "../state/diner.ts";
 import { goDiner } from "../state/ui.ts";
 import { useFmt } from "../app/venue.ts";
 
@@ -150,6 +150,8 @@ export function OfferFields() {
   const [cardDraft, setCardDraft] = useState("");
   const codeRef = useRef<HTMLInputElement | null>(null);
   const cardRef = useRef<HTMLInputElement | null>(null);
+  const codeDoneRef = useRef<HTMLSpanElement | null>(null);
+  const cardDoneRef = useRef<HTMLDivElement | null>(null);
   const codeId = useId();
   const cardId = useId();
   if (!on) return null;
@@ -162,12 +164,15 @@ export function OfferFields() {
     if (await applyCode(codeDraft)) {
       setCodeDraft("");
       setCodeOpen(false);
+      // The field is gone: what took its place is where the reader is.
+      requestAnimationFrame(() => codeDoneRef.current?.focus());
     } else codeRef.current?.focus();
   };
   const sendCard = async () => {
     if (await applyCard(cardDraft)) {
       setCardDraft("");
       setCardOpen(false);
+      requestAnimationFrame(() => cardDoneRef.current?.focus());
     } else cardRef.current?.focus();
   };
   const told = fresh?.told ?? [];
@@ -178,11 +183,17 @@ export function OfferFields() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBlockStart: 14 }}>
       {code !== null ? (
-        <span role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: "var(--pos)" }}>
+        <span ref={codeDoneRef} tabIndex={-1} role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13.5, fontWeight: 700, color: "var(--pos)", outline: "none" }}>
           <Icon name="check" size={15} />
           <span>
             <bdi className="jk-mono">{t("offers.code.applied", { code })}</bdi>
           </span>
+          {/* A code a better offer beat has no row among the totals to take it off from: taken off here. */}
+          {fresh !== null && !(fresh.applied ?? []).some((one) => one.typed) && (
+            <button className="jn-nav" onClick={() => { removeCode(); requestAnimationFrame(() => document.getElementById("jn-offer-code-open")?.focus()); }} aria-label={t("offers.remove.code", { name: code })} style={{ border: "none", background: "transparent", paddingBlock: 6, paddingInline: 6, marginBlock: -6, color: "var(--fg-subtle)", fontSize: 12, fontWeight: 600, textDecoration: "underline", cursor: "pointer", fontFamily: "inherit" }}>
+              {t("offers.remove")}
+            </button>
+          )}
         </span>
       ) : showCode ? (
         <ApplyField
@@ -209,8 +220,11 @@ export function OfferFields() {
           {t("offers.better", { name: one.name })}
         </span>
       ))}
-      {card !== null && payment !== null ? (
-        <div role="status" style={noteStyle}>
+      {card !== null && payment === null ? (
+        // The card is on the order and the order is being priced again: said, never a link that does nothing.
+        <span role="status" style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-muted)" }}>{t("totals.checking")}</span>
+      ) : card !== null && payment !== null ? (
+        <div ref={cardDoneRef} tabIndex={-1} role="status" style={{ ...noteStyle, outline: "none" }}>
           <Icon name="gift" size={15} style={{ flex: "none", marginBlockStart: 2 }} />
           <span style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             <span>{Number(payment.due) > 0 ? t("offers.card.split", { paid: fmt.money(payment.amount), due: fmt.money(payment.due) }) : t("offers.card.full")}</span>

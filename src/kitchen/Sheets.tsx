@@ -52,7 +52,7 @@ function printTicket(t: TFunction, fmt: Formatter, order: OrderWithLines, venue:
     })
     .join("");
   const dir = document.documentElement.dir === "rtl" ? "rtl" : "ltr";
-  const html = `<!doctype html><html lang="${esc(document.documentElement.lang)}" dir="${dir}"><head><meta charset="utf-8"><title>#${esc(o["number"])}</title><style>@page{margin:6mm}body{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;margin:0;padding:8px;width:280px;color:#000}h1{font-size:30px;margin:0}td{vertical-align:top;padding:4px 0}.q{width:36px;font-weight:700}.n{font-weight:700}div{margin-top:2px}hr{border:0;border-top:1px dashed #000;margin:10px 0}</style></head><body><div>${esc(venue)}${o["channel"] === "phone" ? ` · ${esc(t("kitchen.phone"))}` : ""}</div><h1>#${esc(o["number"])}</h1><div><b>${esc(o["name"])}</b></div><div>${esc(t("kitchen.pickup"))} ${esc(fmt.time(String(o["pickup_at"])))} · ${esc(dayLine(t, fmt, String(o["pickup_at"]), today))}</div><div>${esc(t("kitchen.ticket.placed"))} ${esc(fmt.time(String(o["placed_at"] ?? "")))}</div>${o["note"] ? `<hr><div class="n">${esc(o["note"])}</div>` : ""}<hr><table>${lines}</table><hr><div><b>${esc(t("totals.total"))} ${esc(fmt.money(o["total"]))}</b> · ${esc(t("kitchen.ticket.payAtPickup"))}</div></body></html>`;
+  const html = `<!doctype html><html lang="${esc(document.documentElement.lang)}" dir="${dir}"><head><meta charset="utf-8"><title>#${esc(o["number"])}</title><style>@page{margin:6mm}body{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;margin:0;padding:8px;width:280px;color:#000}h1{font-size:30px;margin:0}td{vertical-align:top;padding:4px 0}.q{width:36px;font-weight:700}.n{font-weight:700}div{margin-top:2px}hr{border:0;border-top:1px dashed #000;margin:10px 0}</style></head><body><div>${esc(venue)}${o["channel"] === "phone" ? ` · ${esc(t("kitchen.phone"))}` : ""}</div><h1>#${esc(o["number"])}</h1><div><b>${esc(o["name"])}</b></div><div>${esc(t("kitchen.pickup"))} ${esc(fmt.time(String(o["pickup_at"])))} · ${esc(dayLine(t, fmt, String(o["pickup_at"]), today))}</div><div>${esc(t("kitchen.ticket.placed"))} ${esc(fmt.time(String(o["placed_at"] ?? "")))}</div>${o["note"] ? `<hr><div class="n">${esc(o["note"])}</div>` : ""}<hr><table>${lines}</table><hr><div><b>${esc(num(o["paid"], 0) > 0 ? t("kitchen.collect") : t("totals.total"))} ${esc(fmt.money(owed(o)))}</b> · ${esc(num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup"))}</div></body></html>`;
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText = "position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;";
@@ -188,11 +188,11 @@ export function Ticket() {
           </>
         )}
         <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBlockStart: 18, paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>{t("totals.total")}</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>{num(o["paid"], 0) > 0 ? t("kitchen.collect") : t("totals.total")}</span>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 16, fontWeight: 600 }}>
-            {fmt.money(o["total"])}
+            {fmt.money(owed(o))}
           </span>
-          <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>· {t("kitchen.ticket.payAtPickup")}</span>
+          <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>· {num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup")}</span>
         </div>
       </div>
       <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 10, padding: "16px 20px 20px", borderBlockStart: "1px solid var(--border)", background: "var(--surface-2)" }}>
@@ -385,7 +385,9 @@ export function HandOffSheet() {
   const pays = PAYS.filter((p) => p.id !== "gift" || giftCards);
   const card = h.card;
   const cardBusy = card.state !== "idle";
-  const ready = left <= 0 || h.paid === "cash" || h.paid === "card";
+  // "Paid by" is asked unless gift cards paid all of it — also of an order that comes to nothing, as it always was.
+  const asks = left > 0 || cardsPaid <= 0;
+  const ready = !asks || h.paid === "cash" || h.paid === "card";
   return (
     <Modal labelledBy={titleId} width={440} z={560} onClose={close}>
       <div style={{ padding: "24px 24px 0", overflowY: "auto" }}>
@@ -431,7 +433,7 @@ export function HandOffSheet() {
             <span>{left > 0 ? t("kitchen.handoff.paidSoFar", { amount: fmt.money(cardsPaid), due: fmt.money(left) }) : t("kitchen.handoff.paidAll")}</span>
           </div>
         )}
-        {left > 0 && (
+        {asks && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", marginBlockStart: 14 }}>
           <span id={paidId} style={{ fontSize: 13, fontWeight: 800 }}>
             {t("kitchen.handoff.paidBy")}

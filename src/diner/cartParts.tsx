@@ -335,7 +335,7 @@ export function Totals({ gap, removable = false }: { gap: number; removable?: bo
   );
   return (
     // While a code or a card is asked about the rows wait where they are: dimmed, nothing moves.
-    <div aria-busy={checking !== null} style={{ display: "flex", flexDirection: "column", gap, opacity: checking !== null ? 0.45 : 1, transition: "opacity .15s ease" }}>
+    <div aria-busy={checking !== null} style={{ display: "flex", flexDirection: "column", gap }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
         <span style={light}>{t("totals.subtotal")}</span>
         {fresh !== null && <span className="jk-mono" style={{ marginInlineStart: "auto", ...light }}>{fmt.money(fresh.data["subtotal"])}</span>}

@@ -78,7 +78,12 @@ describe.skipIf(why !== null)(`with the add-ons away, or unable to answer${why =
         expect([cents(quote.data["subtotal"]), cents(quote.data["tax"]), cents(quote.data["total"])]).toEqual(["27.00", "2.23", "29.23"]);
         expect(quote.applied ?? []).toEqual([]);
         expect(quote.payment ?? null).toBeNull();
+        const mailsBefore = await stand.mailCount();
         const made = await diner.place({ ...order, expect: { total: "29.23" } }, `ana-absent-${engine}-0123456789ab`);
+        // The confirmation is 0.2.3's but for one row: what is paid at pickup, which is the total.
+        const mail = (await stand.mailTo(`ana.${engine}@juniper-diners.dev`, mailsBefore)).text.replace(/\s+/g, " ");
+        expect(mail).toContain("$29.23");
+        expect(mail).toContain("To pay at pickup: $29.23");
         const stored = (await stand.rows("orders")).find((one) => one.id === made.data.id)!;
         // Nothing is decided where nobody answers: no reduction is written, and what is owed is the total.
         expect([stored["discount"] ?? null, cents(stored["total"]), cents(stored["to_pay"]), Number(stored["card_used"] ?? 0)]).toEqual([null, "29.23", "29.23", 0]);

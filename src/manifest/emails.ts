@@ -241,6 +241,7 @@ function layout(kind: Kind, all: EmailWords) {
       },
     });
     blocks.push(cardPayments(all));
+    // Always there: with no gift card it repeats the total (a block can be left out for an empty value, and "paid" is 0, never empty).
     blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay.money}}" }] } });
     blocks.push({ block: "email.box", id: "pay", data: { label: kind === "order-confirmation-prepaid" ? all.prepaidBox : all.payAtPickup } });
     blocks.push({ block: "email.contact", id: "where", data: { name: "{{practice.address}}" } });

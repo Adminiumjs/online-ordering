@@ -90,6 +90,20 @@ export class DemoDiner implements DinerPort {
   constructor(engine: Engine, latency: Latency = NO_LATENCY) {
     this.engine = engine;
     this.latency = latency;
+    // A cancelled order's gift card money goes back: each payment's kept part to its card, and the order owes its total again.
+    engine.onCancelled = (id) => {
+      let back = 0;
+      for (const payment of this.world.all("payments")) {
+        const kept = Number(payment["kept"] ?? 0);
+        if (payment["order_id"] !== id || kept <= 0) continue;
+        this.cards.giveBack(String(payment["card_code"]), kept);
+        this.world.update("payments", payment.id, { returned: Number(payment["returned"] ?? 0) + kept, kept: 0 });
+        back += kept;
+      }
+      if (back === 0) return;
+      const order = this.world.get("orders", id);
+      if (order !== undefined) this.world.update("orders", id, { paid: 0, due: Number(order["total"] ?? 0), to_pay: Number(order["total"] ?? 0), prepaid: 0 });
+    };
   }
 
   private get world() {

@@ -26,7 +26,7 @@ const view = (page: string) => `page:@${page}:view`;
 const pii = (table: string) => `table:@${table}:read_pii`;
 
 /** What the kitchen reads to run the day. */
-const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "order_codes", "payments", "settings", "hours", "closures", "slot_pauses"];
+const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "payments", "settings", "hours", "closures", "slot_pauses"];
 
 /**
  * What a desk role reads of the add-ons' own tables, column by column. A code
@@ -39,9 +39,9 @@ const OFFERS_LOOK_UP = [
   { addOn: "offers", table: "vouchers", actions: ["read"], limit: { readable: ["code_last4", "worth", "value", "what", "units", "public_name", "uses_left", "uses_total", "status", "expires_on"] } },
   { addOn: "offers", table: "codes", actions: ["read"], limit: { readable: ["offer_id", "active", "valid_until"] } },
 ];
+/** The reductions of an order, as the dashboard's order page lists them: a manager's, never the kitchen screens'. */
+const APPLIED_READ = { addOn: "offers", table: "applied", actions: ["read"], limit: { readable: ["source_table", "source_row", "source_line", "name", "kind", "amount", "typed", "at"] } };
 const KITCHEN_ADD_ON_TABLES = [
-  // The reductions of an order, for the ticket and the hand-over sheet.
-  { addOn: "offers", table: "applied", actions: ["read"], limit: { readable: ["source_table", "source_row", "source_line", "name", "kind", "amount", "typed", "at"] } },
   // What a dish is made of and how much is in, for the kitchen's own stock words.
   { addOn: "inventory", table: "items", actions: ["read"], limit: { readable: ["id", "name", "unit", "decimals", "active"] } },
   { addOn: "inventory", table: "stock_points", actions: ["read"], limit: { readable: ["id", "item_id", "place_id", "on_hand", "available", "low", "state"] } },
@@ -117,8 +117,9 @@ export const ROLES = [
         writableValues: { cancel_code: KITCHEN_CANCEL_CODES },
       },
       // A gift card's whole code is typed and never read back, by a manager either.
-      payments: { readable: PAYMENT_READS },
+      // …and what a card gives is Adminium's to say: a payment is made with the order and the code, nothing else.
+      payments: { readable: PAYMENT_READS, creatable: ["order_id", "card_code", "client_key"] },
     },
-    tables: KITCHEN_ADD_ON_TABLES,
+    tables: [APPLIED_READ, ...KITCHEN_ADD_ON_TABLES],
   },
 ];

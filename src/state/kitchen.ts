@@ -336,8 +336,10 @@ export interface HandoffCard {
   state: "idle" | "checking" | "using";
   would: CardPayment | null;
   error: string | null;
+  /** What makes a second press the same payment: kept from the first press until the card is taken or typed again. */
+  key: string | null;
 }
-export const NO_CARD: HandoffCard = { draft: "", state: "idle", would: null, error: null };
+export const NO_CARD: HandoffCard = { draft: "", state: "idle", would: null, error: null, key: null };
 
 export type MoveResult =
   | { ok: true; order: Row }
@@ -395,8 +397,9 @@ export async function handOff(): Promise<{ ok: true; order: OrderWithLines; paid
   const cards = Number(order.order["paid"] ?? 0);
   const left = owed(order.order);
   const rest = h.paid === "cash" || h.paid === "card" ? h.paid : null;
-  if (left > 0 && rest === null) return { ok: false, result: { ok: false, kind: "failed" } };
-  const paid: PaidBy = cards > 0 ? (left > 0 ? "mixed" : "gift_card") : (rest as "cash" | "card");
+  // How it was paid is said by a person unless gift cards paid all of it: also for an order that comes to nothing.
+  if ((left > 0 || cards <= 0) && rest === null) return { ok: false, result: { ok: false, kind: "failed" } };
+  const paid: PaidBy = cards > 0 ? (left > 0 ? "mixed" : "gift_card") : (rest ?? "cash");
   set({ handoff: { ...h, busy: true } });
   try {
     await port().handOff(h.id, paid, paid === "mixed" ? (rest ?? undefined) : undefined);
@@ -452,9 +455,10 @@ export async function checkHandoffCard(): Promise<void> {
 export async function takeHandoffCard(): Promise<void> {
   const h = get().handoff;
   if (h === null || h.card.would === null || h.card.state !== "idle") return;
-  set({ handoff: { ...h, card: { ...h.card, state: "using", error: null } } });
+  const key = h.card.key ?? mintKey();
+  set({ handoff: { ...h, card: { ...h.card, state: "using", error: null, key } } });
   try {
-    await port().cardUse(h.id, h.card.draft.trim(), crypto.randomUUID());
+    await port().cardUse(h.id, h.card.draft.trim(), key);
     await refreshNow(["orders"]);
     const now = get().handoff;
     if (now?.id === h.id) set({ handoff: { ...now, paid: null, card: NO_CARD } });

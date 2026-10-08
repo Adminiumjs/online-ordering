@@ -571,19 +571,33 @@ export function cardAsKept(text: string): string | null {
 export async function applyCode(text: string): Promise<boolean> {
   const code = codeAsKept(text);
   if (code === "" || get().checking !== null || get().cart.length === 0 || quoteTime() === null) return false;
+  if (pendingRetry()) return false;
   set({ checking: "code", codeError: null, priceMoved: false });
+  const asked = quoteKeyOf();
   try {
     const reply = await port().quote(orderBody({}, true, { code }));
+    // The cart or the time moved while it was asked: the code stays, and the order as it is now is priced with it.
+    const same = quoteKeyOf() === asked;
     set({ code, checking: null });
-    set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    if (same) set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    else scheduleQuote();
     return true;
   } catch (error) {
-    set({ checking: null, codeError: isApiError(error) && error.status !== 0 && error.status < 500 ? codeErrorOf(error) : { kind: "busy" } });
+    set({ checking: null });
+    if (!isApiError(error) || error.status === 0 || error.status >= 500) set({ codeError: { kind: "busy" } });
+    // About the code: its field says why. About the card already on the order: that is taken off, under its own field.
+    else if (aboutCode(error) || error.code === "PUBLIC_RATE_LIMITED") set({ codeError: codeErrorOf(error) });
+    else if (!dropRefused(error)) {
+      // About the order itself (a dish ran out, the time filled up): said where it belongs, and the code is not blamed.
+      await readRefusal(error, "quote").catch(() => false);
+      scheduleQuote();
+    } else scheduleQuote();
     return false;
   }
 }
 
 export function removeCode(): void {
+  if (pendingRetry()) return;
   set({ code: null, codeError: null, priceMoved: false });
   scheduleQuote();
 }
@@ -592,27 +606,38 @@ export function removeCode(): void {
 export async function applyCard(text: string): Promise<boolean> {
   const card = cardAsKept(text);
   if (get().checking !== null || get().cart.length === 0 || quoteTime() === null) return false;
+  if (pendingRetry()) return false;
   if (card === null) {
     set({ cardError: "invalid" });
     return false;
   }
   set({ checking: "card", cardError: null });
+  const asked = quoteKeyOf();
   try {
     const reply = await port().quote(orderBody({}, true, { card }));
     if (cardRefused(reply) || reply.payment === null || reply.payment === undefined) {
       set({ checking: null, cardError: "invalid" });
       return false;
     }
+    const same = quoteKeyOf() === asked;
     set({ card, checking: null });
-    set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    if (same) set({ quote: { key: quoteKeyOf(), state: "ok", reply }, alerts: {} });
+    else scheduleQuote();
     return true;
   } catch (error) {
-    set({ checking: null, cardError: isApiError(error) && error.status !== 0 && error.status < 500 ? cardErrorOf(error) : "busy" });
+    set({ checking: null });
+    if (!isApiError(error) || error.status === 0 || error.status >= 500) set({ cardError: "busy" });
+    else if (aboutCard(error) || error.code === "PUBLIC_RATE_LIMITED") set({ cardError: cardErrorOf(error) });
+    else if (!dropRefused(error)) {
+      await readRefusal(error, "quote").catch(() => false);
+      scheduleQuote();
+    } else scheduleQuote();
     return false;
   }
 }
 
 export function removeCard(): void {
+  if (pendingRetry()) return;
   set({ card: null, cardError: null });
   scheduleQuote();
 }
@@ -713,7 +738,8 @@ async function readRefusal(error: ApiError, during: "quote" | "place"): Promise<
     // No dish's price moved: the code ran out between the quote and the save. The strip says so, the code
     // is gone and its field says why; the diner looks at the new total and presses again.
     if (changed.length === 0 && get().code !== null) {
-      set({ code: null, codeError: { kind: "invalid" }, priceMoved: true });
+      // (Which it was — the code, an offer that ended, the tax — the next price says: a code that no longer applies is refused there, and taken off with its reason.)
+      set({ priceMoved: true });
       scheduleQuote();
       return true;
     }
@@ -782,7 +808,8 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         pickupAt: String(reply.data["pickup_at"]),
         total: Number(reply.data["total"]),
         // From the save itself, never from the quote before it.
-        toPay: reply.payment === null || reply.payment === undefined ? Number(reply.data["total"]) : Number(reply.payment.due),
+        // (A save sent again answers the order as it stands, with no payment beside it: its own "to pay" is read.)
+        toPay: reply.payment !== null && reply.payment !== undefined ? Number(reply.payment.due) : Number(reply.data["to_pay"] ?? reply.data["due"] ?? reply.data["total"]),
         replayed: reply.replayed === true,
       };
       set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {}, code: null, card: null, codeError: null, cardError: null, priceMoved: false });

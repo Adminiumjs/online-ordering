@@ -1669,6 +1669,11 @@ export const MANIFEST_RULES = {
             "kept",
             "made_at",
             "made_by"
+          ],
+          "creatable": [
+            "order_id",
+            "card_code",
+            "client_key"
           ]
         }
       }
