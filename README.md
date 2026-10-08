@@ -17,11 +17,18 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.8** or later, on SQLite, Postgres or MySQL.
-- Nothing else. **Invoices & Receipts** is offered at install: with it, a diner
-  is emailed a receipt when they pick up and the dashboard prints one.
-  **Holiday calendars** is offered too: with it, the kitchen's Hours tab lists
-  the coming public holidays, each a closure in a tap.
+- Adminium **0.3.20** or later, on SQLite, Postgres or MySQL.
+- Nothing else. Four add-ons are offered at install, and the app is whole
+  without any of them:
+  - **Offers & gift cards** — diners type a code at checkout, automatic offers
+    reduce the order by themselves, and a gift card pays for all or part of an
+    order, online or at the counter.
+  - **Inventory** — a dish linked to a stock item is held when it is ordered,
+    taken when the kitchen starts cooking, and runs out with its ingredient.
+  - **Invoices & Receipts** — a diner is emailed a receipt when they pick up
+    and the dashboard prints one.
+  - **Holiday calendars** — the kitchen's Hours tab lists the coming public
+    holidays, each a closure in a tap.
 
 ## What it does
 
@@ -34,6 +41,10 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 - Checkout with a name, an email and an optional phone. The prices, tax and
   total come from Adminium before the order is placed, and again as it is
   placed: a price that changed in between is shown, never charged blind.
+- With Offers & gift cards: a code and a gift card at checkout, each priced by
+  Adminium and shown as it answered; and a page to check what a gift card
+  still holds. A card is taken when the kitchen confirms the order, and what
+  it took is put back when an order it paid for is cancelled.
 - A confirmation email with a link to follow the order, and a page that follows
   it from "waiting for the kitchen" to "ready". While the kitchen has not taken
   it, the diner can cancel it there.
@@ -43,7 +54,8 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 **For the kitchen** (the app's staff side, on a tablet):
 - The board: new, confirmed, preparing and ready orders, each one tap from the
   next, with a chime for a new order.
-- The shelf and the hand-off: the amount to collect, and cash or card.
+- The shelf and the hand-off: the amount to collect, and cash or card — and,
+  with Offers & gift cards, a gift card for all of it or for a part.
 - Slots: how full each pickup slot is, pausing one, or stopping online orders
   for the rest of the day.
 - Today's menu: switching a dish or an option off, setting today's portions,
@@ -68,6 +80,14 @@ add it later from the app's settings.
 Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
 and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
+
+**Moving from 0.2.x.** 0.3.0 updates a 0.2.x install in place: update
+Adminium to 0.3.20 first, then the app. Every order, dish, slot and customer
+is kept as it is. Orders gain what was taken off, what was paid and what is
+still owed; an order placed before the update owes its whole total, as it did.
+Nothing changes for diners or the kitchen until an add-on is switched on: tick
+Offers & gift cards or Inventory in the app's settings whenever you like, and
+untick it again to go back.
 
 **Coming from 0.1.x?** 0.2.0 is a different app on new tables, and it cannot
 update a 0.1.x install in place. Uninstall 0.1.x first (its tables stay unless
