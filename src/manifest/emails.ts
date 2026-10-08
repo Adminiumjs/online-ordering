@@ -39,6 +39,12 @@ export type EmailWords = Record<Kind, Words> & {
   subtotal: string;
   tax: string;
   total: string;
+  /** "To pay at pickup", beside what is left once reductions and gift cards are taken off. */
+  toPay: string;
+  /** One gift card's payment, by the last four of its code. */
+  giftCardRow: string;
+  /** In place of "Pay at pickup" when a gift card paid it all. */
+  prepaidBox: string;
   /** The footer of an email about an order, and of one about an enquiry. */
   orderFoot: string;
   enquiryFoot: string;
@@ -52,12 +58,15 @@ export const EMAIL_EN: EmailWords = {
   subtotal: "Subtotal",
   tax: "Tax",
   total: "Total",
+  toPay: "To pay at pickup",
+  giftCardRow: "Gift card ending {{row.card_last4}}",
+  prepaidBox: "Paid by gift card. Nothing to pay at the counter.",
   orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us.",
   enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you sent us a large-order enquiry.",
   "order-confirmation": {
     name: "Order confirmation",
     subject: "Your order #{{order.number}} is in",
-    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.total}} to pay at pickup",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
     heading: "Thanks, {{recipient.first_name}}.",
     paras: ["We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."],
     button: "Follow your order",
@@ -65,7 +74,7 @@ export const EMAIL_EN: EmailWords = {
   "order-confirmation-phone": {
     name: "Order confirmation (phone)",
     subject: "Your order #{{order.number}} is in",
-    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.total}} to pay at pickup",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
     heading: "Thanks, {{recipient.first_name}}.",
     paras: [
       "Here is the order you placed by phone: #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}.",
@@ -75,9 +84,9 @@ export const EMAIL_EN: EmailWords = {
   "order-ready": {
     name: "Order ready",
     subject: "#{{order.number}} is on the shelf",
-    preheader: "On the shelf now · {{order.total}} to pay",
+    preheader: "On the shelf now · {{order.to_pay}} to pay",
     heading: "#{{order.number}} is ready.",
-    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "You'll pay {{order.total}} at the counter."],
+    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "You'll pay {{order.to_pay}} at the counter."],
   },
   "order-cancelled-ran-out": {
     name: "Cancelled: something ran out",
@@ -129,6 +138,33 @@ export const EMAIL_EN: EmailWords = {
     heading: "Thanks for picking up #{{order.number}}.",
     paras: ["Your receipt is attached: {{order.total}}.", "Paid by: {{order.paid_method.label}}"],
   },
+  "order-confirmation-prepaid": {
+    name: "Order confirmation (paid by gift card)",
+    subject: "Your order #{{order.number}} is in",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · paid by gift card",
+    heading: "Thanks, {{recipient.first_name}}.",
+    paras: ["We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."],
+    button: "Follow your order",
+  },
+  "order-ready-prepaid": {
+    name: "Order ready (paid by gift card)",
+    subject: "#{{order.number}} is on the shelf",
+    preheader: "On the shelf now · nothing to pay",
+    heading: "#{{order.number}} is ready.",
+    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "It's paid by gift card: nothing to pay at the counter."],
+  },
+  "card-money-returned": {
+    name: "Gift card money returned",
+    subject: "Your gift card got its money back",
+    preheader: "#{{order.number}} · {{order.paid}} back on your gift card",
+    paras: ["{{order.paid}} went back to your gift card for order #{{order.number}}."],
+  },
+  "card-money-kept": {
+    name: "Gift card money kept",
+    subject: "About your order #{{order.number}}",
+    preheader: "#{{order.number}} was not collected",
+    paras: ["Your gift card paid {{order.paid}} for order #{{order.number}}, which was not collected.", "Ask at the counter, or call us on {{practice.phone}}."],
+  },
   "enquiry-received": {
     name: "Large order enquiry received",
     subject: "We got your enquiry, {{enquiry.ref}}",
@@ -155,8 +191,34 @@ const LINES: Block = {
   },
 };
 
+/**
+ * What codes and offers took off, one line each, as Offers & gift cards
+ * recorded them for this order. With the add-on away, or nothing taken off,
+ * the list is empty and the block is left out.
+ */
+const REDUCTIONS: Block = {
+  block: "email.rows",
+  id: "reductions",
+  data: {
+    from: { link: "order", addOn: "offers", table: "applied", match: { table: "source_table", row: "source_row" }, orderBy: "id", limit: 20 },
+    row: { title: "{{row.name}}", amount: "−{{row.amount}}" },
+  },
+};
+
+/** What each gift card paid, by the last four of its code. */
+const cardPayments = (all: EmailWords): Block => ({
+  block: "email.rows",
+  id: "card-payments",
+  data: {
+    from: { link: "order", table: "payments", via: "order_id", orderBy: "made_at", limit: 10 },
+    row: { title: all.giftCardRow, amount: "−{{row.kept}}" },
+  },
+});
+
 /** The emails that list what was ordered and what it costs. */
-const WITH_LINES: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-phone"]);
+const WITH_LINES: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-phone", "order-confirmation-prepaid"]);
+/** The confirmations of an online order: they carry the order's own link. */
+const WITH_LINK: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-prepaid"]);
 
 function layout(kind: Kind, all: EmailWords) {
   const w = all[kind];
@@ -165,6 +227,7 @@ function layout(kind: Kind, all: EmailWords) {
   blocks.push(para("body", ...w.paras));
   if (WITH_LINES.has(kind)) {
     blocks.push(LINES);
+    blocks.push(REDUCTIONS);
     blocks.push({
       block: "email.tax-breakdown",
       id: "totals",
@@ -177,11 +240,13 @@ function layout(kind: Kind, all: EmailWords) {
         ],
       },
     });
-    blocks.push({ block: "email.box", id: "pay", data: { label: all.payAtPickup } });
+    blocks.push(cardPayments(all));
+    blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay}}" }] } });
+    blocks.push({ block: "email.box", id: "pay", data: { label: kind === "order-confirmation-prepaid" ? all.prepaidBox : all.payAtPickup } });
     blocks.push({ block: "email.contact", id: "where", data: { name: "{{practice.address}}" } });
     blocks.push(para("directions", "{{practice.directions}}"));
   }
-  if (kind === "order-confirmation" && w.button !== undefined) {
+  if (WITH_LINK.has(kind) && w.button !== undefined) {
     blocks.push({ block: "email.button", id: "follow", data: { label: w.button, url: "{{manage_url}}#{{order.link_token}}" } });
   }
   return {

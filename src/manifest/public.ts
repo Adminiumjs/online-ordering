@@ -34,9 +34,16 @@ export const ORDER_SELECT = [
   "item_count",
   "subtotal",
   "tax_rate",
+  // What codes and offers took off, and what a gift card paid: Adminium's figures, never the page's.
+  "discount",
+  "net",
   "tax",
   "total",
+  "paid",
+  "due",
+  "to_pay",
   "paid_method",
+  "rest_paid_by",
   "cancel_code",
   "cancel_dish",
   "cancel_note",
@@ -57,7 +64,7 @@ export const ORDER_SELECT = [
  */
 export const PLACED_SELECT = ORDER_SELECT.filter((column) => !["name", "phone", "email"].includes(column));
 
-export const LINE_SELECT = ["id", "order_id", "position", "menu_item_id", "qty", "note", "name", "unit_price", "options_total", "unit_total", "line_total"];
+export const LINE_SELECT = ["id", "order_id", "position", "menu_item_id", "qty", "note", "name", "unit_price", "options_total", "unit_total", "line_total", "discount"];
 export const OPTION_SELECT = ["id", "order_item_id", "modifier_id", "name", "price_delta"];
 
 /** The menu as a diner reads it: never the portions (only "N left", from availability). */
@@ -110,10 +117,14 @@ const OWN_CANCEL = {
   defaults: { cancel_code: "self" },
 };
 
-/** An order's lines and each line's options, read where the order is. */
+/** What a diner sees of a gift card's payment: what it paid and kept, and the card's last four. Never the code, never what is left on it. */
+export const PAYMENT_SELECT = ["id", "order_id", "amount", "returned", "kept", "card_last4"];
+
+/** An order's lines, each line's options and its gift card payments, read where the order is. */
 function linesOf(key?: string) {
   const keyed = key === undefined ? {} : { key };
   return [
+    { table: "payments", ...keyed, methods: ["GET"], level: "verified", visibleWith: { table: "orders", via: "order_id" }, select: PAYMENT_SELECT },
     { table: "order_items", ...keyed, methods: ["GET"], level: "verified", visibleWith: { table: "orders", via: "order_id" }, select: LINE_SELECT },
     { table: "order_item_modifiers", ...keyed, methods: ["GET"], level: "verified", visibleWith: { table: "order_items", via: "order_item_id" }, select: OPTION_SELECT },
   ];
@@ -140,6 +151,8 @@ export const PUBLIC_ACCESS = [
   // Whether a pickup slot is still free, and a dish still has portions ("3 left" only below five).
   { table: "orders", kind: "availability", methods: ["GET"] },
   { table: "order_items", kind: "availability", methods: ["GET"], showLeft: { below: 5 } },
+  // Whether a dish's ingredients are in: Inventory's own words, and how much is left only as its owner set it.
+  { table: "menu_items", kind: "availability", methods: ["GET"], words: "inventory:stock" },
 
   // ── the menu, the hours, the kitchen ─────────────────────────────────────────
   ...MENU_TABLES.map((table) => ({
@@ -200,6 +213,10 @@ export const PUBLIC_ACCESS = [
           },
         },
       },
+      // A code is typed when the order is placed; Adminium finds what it is, and the page never names one.
+      order_codes: { via: "order_id", writable: ["typed"], select: ["id", "typed"], max: 12, plainText: [{ column: "typed", max: 64 }] },
+      // One gift card, by its code: what it pays is the card's and the order's to say.
+      payments: { via: "order_id", writable: ["card_code"], select: ["id", "amount", "card_last4"], max: 1 },
     },
     dryRun: true,
     expect: "total",

@@ -38,6 +38,17 @@ export const MANIFEST_RULES = {
       }
     },
     "orders": {
+      "hold_until": {
+        "set": {
+          "moment": {
+            "column": "pickup_at",
+            "plus": {
+              "days": 1
+            }
+          }
+        },
+        "on": "create"
+      },
       "placed_at": {
         "set": "now",
         "on": "create"
@@ -160,6 +171,31 @@ export const MANIFEST_RULES = {
         }
       }
     },
+    "payments": {
+      "made_at": {
+        "set": "now",
+        "on": "create"
+      },
+      "made_by": {
+        "set": {
+          "byOrigin": {
+            "public": "customer",
+            "staff": "user-name"
+          }
+        },
+        "on": "create"
+      }
+    },
+    "payment_refunds": {
+      "made_at": {
+        "set": "now",
+        "on": "create"
+      },
+      "made_by": {
+        "set": "user-name",
+        "on": "create"
+      }
+    },
     "enquiries": {
       "handled_by": {
         "set": "user-name",
@@ -225,6 +261,12 @@ export const MANIFEST_RULES = {
       ],
       "paid_method": [
         "cash",
+        "card",
+        "gift_card",
+        "mixed"
+      ],
+      "rest_paid_by": [
+        "cash",
         "card"
       ],
       "cancel_code": [
@@ -238,6 +280,9 @@ export const MANIFEST_RULES = {
     },
     "order_items": {},
     "order_item_modifiers": {},
+    "order_codes": {},
+    "payments": {},
+    "payment_refunds": {},
     "enquiries": {
       "status": [
         "new",
@@ -257,6 +302,10 @@ export const MANIFEST_RULES = {
         "order-cancelled-closed",
         "order-cancelled-other",
         "order-cancelled-by-you",
+        "order-confirmation-prepaid",
+        "order-ready-prepaid",
+        "card-money-returned",
+        "card-money-kept",
         "order-receipt",
         "enquiry-received"
       ],
@@ -336,6 +385,11 @@ export const MANIFEST_RULES = {
         "max": 20
       }
     },
+    "payment_refunds": {
+      "amount": {
+        "min": 0.01
+      }
+    },
     "enquiries": {
       "heads": {
         "min": 6,
@@ -374,6 +428,24 @@ export const MANIFEST_RULES = {
       "id": "holiday-closures",
       "requires": [
         "holiday-calendars"
+      ]
+    },
+    {
+      "id": "codes",
+      "requires": [
+        "offers"
+      ]
+    },
+    {
+      "id": "gift-cards",
+      "requires": [
+        "offers"
+      ]
+    },
+    {
+      "id": "ingredients",
+      "requires": [
+        "inventory"
       ]
     }
   ],
@@ -544,6 +616,10 @@ export const MANIFEST_RULES = {
                 {
                   "column": "paid_method",
                   "isNull": false
+                },
+                {
+                  "column": "method_ok",
+                  "eq": 1
                 }
               ]
             }
@@ -592,7 +668,8 @@ export const MANIFEST_RULES = {
             ],
             "undo": true,
             "clears": [
-              "paid_method"
+              "paid_method",
+              "rest_paid_by"
             ]
           }
         ]
@@ -611,6 +688,19 @@ export const MANIFEST_RULES = {
         "order_items": {
           "via": "order_id",
           "lock": true
+        },
+        "order_codes": {
+          "via": "order_id",
+          "lock": true
+        },
+        "payments": {
+          "via": "order_id",
+          "createIn": [
+            "placed",
+            "confirmed",
+            "preparing",
+            "ready"
+          ]
         }
       },
       "timed": [
@@ -766,9 +856,15 @@ export const MANIFEST_RULES = {
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -799,6 +895,25 @@ export const MANIFEST_RULES = {
       }
     },
     {
+      "table": "payments",
+      "methods": [
+        "GET"
+      ],
+      "level": "verified",
+      "visibleWith": {
+        "table": "orders",
+        "via": "order_id"
+      },
+      "select": [
+        "id",
+        "order_id",
+        "amount",
+        "returned",
+        "kept",
+        "card_last4"
+      ]
+    },
+    {
       "table": "order_items",
       "methods": [
         "GET"
@@ -819,7 +934,8 @@ export const MANIFEST_RULES = {
         "unit_price",
         "options_total",
         "unit_total",
-        "line_total"
+        "line_total",
+        "discount"
       ]
     },
     {
@@ -856,6 +972,14 @@ export const MANIFEST_RULES = {
       "showLeft": {
         "below": 5
       }
+    },
+    {
+      "table": "menu_items",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ],
+      "words": "inventory:stock"
     },
     {
       "table": "menu_categories",
@@ -1032,9 +1156,15 @@ export const MANIFEST_RULES = {
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -1127,7 +1257,8 @@ export const MANIFEST_RULES = {
             "unit_price",
             "options_total",
             "unit_total",
-            "line_total"
+            "line_total",
+            "discount"
           ],
           "position": "position",
           "min": 1,
@@ -1189,6 +1320,35 @@ export const MANIFEST_RULES = {
               ]
             }
           }
+        },
+        "order_codes": {
+          "via": "order_id",
+          "writable": [
+            "typed"
+          ],
+          "select": [
+            "id",
+            "typed"
+          ],
+          "max": 12,
+          "plainText": [
+            {
+              "column": "typed",
+              "max": 64
+            }
+          ]
+        },
+        "payments": {
+          "via": "order_id",
+          "writable": [
+            "card_code"
+          ],
+          "select": [
+            "id",
+            "amount",
+            "card_last4"
+          ],
+          "max": 1
         }
       },
       "dryRun": true,
@@ -1265,9 +1425,15 @@ export const MANIFEST_RULES = {
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -1306,6 +1472,26 @@ export const MANIFEST_RULES = {
       }
     },
     {
+      "table": "payments",
+      "key": "link",
+      "methods": [
+        "GET"
+      ],
+      "level": "verified",
+      "visibleWith": {
+        "table": "orders",
+        "via": "order_id"
+      },
+      "select": [
+        "id",
+        "order_id",
+        "amount",
+        "returned",
+        "kept",
+        "card_last4"
+      ]
+    },
+    {
       "table": "order_items",
       "key": "link",
       "methods": [
@@ -1327,7 +1513,8 @@ export const MANIFEST_RULES = {
         "unit_price",
         "options_total",
         "unit_total",
-        "line_total"
+        "line_total",
+        "discount"
       ]
     },
     {
@@ -1360,7 +1547,8 @@ export const MANIFEST_RULES = {
             "cancel_code",
             "cancel_dish",
             "cancel_note",
-            "paid_method"
+            "paid_method",
+            "rest_paid_by"
           ],
           "writableValues": {
             "status": [
@@ -1403,6 +1591,13 @@ export const MANIFEST_RULES = {
           "writable": [
             "available"
           ]
+        },
+        "payments": {
+          "creatable": [
+            "order_id",
+            "card_code",
+            "client_key"
+          ]
         }
       }
     },
@@ -1420,12 +1615,10 @@ export const MANIFEST_RULES = {
             "email",
             "channel",
             "note",
-            "item_count",
-            "subtotal",
             "tax_rate",
-            "tax",
-            "total",
             "paid_method",
+            "rest_paid_by",
+            "hold_until",
             "cancel_code",
             "cancel_dish",
             "cancel_note",
@@ -1466,8 +1659,19 @@ export const MANIFEST_RULES = {
       "onCreate": {
         "table": "orders",
         "where": {
-          "column": "channel",
-          "eq": "online"
+          "column": "confirm_as",
+          "eq": 1
+        }
+      }
+    },
+    {
+      "kind": "order-confirmation-prepaid",
+      "link": "order_id",
+      "onCreate": {
+        "table": "orders",
+        "where": {
+          "column": "confirm_as",
+          "eq": 2
         }
       }
     },
@@ -1494,7 +1698,45 @@ export const MANIFEST_RULES = {
       "onChange": {
         "table": "orders",
         "column": "status",
-        "to": "ready"
+        "to": "ready",
+        "where": {
+          "column": "prepaid",
+          "eq": 0
+        }
+      },
+      "holdSeconds": 20,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "placed",
+            "confirmed",
+            "preparing",
+            "picked_up",
+            "cancelled",
+            "not_collected"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
+    },
+    {
+      "kind": "order-ready-prepaid",
+      "link": "order_id",
+      "gate": {
+        "setting": {
+          "table": "settings",
+          "column": "ready_email_on"
+        }
+      },
+      "onChange": {
+        "table": "orders",
+        "column": "status",
+        "to": "ready",
+        "where": {
+          "column": "prepaid",
+          "eq": 1
+        }
       },
       "holdSeconds": 20,
       "dropWhen": [
@@ -1591,6 +1833,32 @@ export const MANIFEST_RULES = {
       }
     },
     {
+      "kind": "card-money-returned",
+      "link": "order_id",
+      "onChange": {
+        "table": "orders",
+        "column": "status",
+        "to": "cancelled",
+        "where": {
+          "column": "card_used",
+          "eq": 1
+        }
+      }
+    },
+    {
+      "kind": "card-money-kept",
+      "link": "order_id",
+      "onChange": {
+        "table": "orders",
+        "column": "status",
+        "to": "not_collected",
+        "where": {
+          "column": "card_used",
+          "eq": 1
+        }
+      }
+    },
+    {
       "kind": "order-receipt",
       "link": "order_id",
       "gate": {
@@ -1641,6 +1909,10 @@ export const MANIFEST_RULES = {
     "order-cancelled-other": "ordering-order-cancelled-other",
     "order-cancelled-by-you": "ordering-order-cancelled-by-you",
     "order-receipt": "ordering-order-receipt",
-    "enquiry-received": "ordering-enquiry-received"
+    "enquiry-received": "ordering-enquiry-received",
+    "order-confirmation-prepaid": "ordering-order-confirmation-prepaid",
+    "order-ready-prepaid": "ordering-order-ready-prepaid",
+    "card-money-returned": "ordering-card-money-returned",
+    "card-money-kept": "ordering-card-money-kept"
   }
 } as const;

@@ -27,6 +27,8 @@ export const PUBLIC_REFS = {
   // What is still free: a pickup slot, a dish's portions.
   slots: ["orders", "_availability"],
   portions: ["order_items", "_availability"],
+  // Whether a dish's ingredients are in (Inventory's words; answered only while Inventory is in use).
+  stock: ["menu_items", "_availability"],
   // Placing an order with its lines and options, priced by Adminium; a large-order enquiry.
   place: ["orders", "_verified_2"],
   enquire: ["enquiries", ""],
@@ -35,10 +37,12 @@ export const PUBLIC_REFS = {
   myOrders: ["orders", "_verified"],
   myLines: ["order_items", "_verified"],
   myOptions: ["order_item_modifiers", "_verified"],
+  myPayments: ["payments", "_verified"],
   // The `link` key: the one order its own link opens.
   linkOrder: ["orders", "_claimed"],
   linkLines: ["order_items", "_verified_2"],
   linkOptions: ["order_item_modifiers", "_verified_2"],
+  linkPayments: ["payments", "_verified_2"],
 } as const satisfies Record<string, readonly [string, string]>;
 
 export type RefName = keyof typeof PUBLIC_REFS;

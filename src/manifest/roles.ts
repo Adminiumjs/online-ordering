@@ -26,7 +26,30 @@ const view = (page: string) => `page:@${page}:view`;
 const pii = (table: string) => `table:@${table}:read_pii`;
 
 /** What the kitchen reads to run the day. */
-const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "settings", "hours", "closures", "slot_pauses"];
+const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "order_codes", "payments", "settings", "hours", "closures", "slot_pauses"];
+
+/**
+ * What a desk role reads of the add-ons' own tables, column by column. A code
+ * that is scanned or typed is looked up, and the look-up answers only what the
+ * caller may read: a card's state, balance and expiry, never its code or its
+ * holder. Nothing here is held while the add-on is away.
+ */
+const OFFERS_LOOK_UP = [
+  { addOn: "offers", table: "gift_cards", actions: ["read"], limit: { readable: ["kind", "label", "status", "balance", "expires_on"] } },
+  { addOn: "offers", table: "vouchers", actions: ["read"], limit: { readable: ["code_last4", "worth", "value", "what", "units", "public_name", "uses_left", "uses_total", "status", "expires_on"] } },
+  { addOn: "offers", table: "codes", actions: ["read"], limit: { readable: ["offer_id", "active", "valid_until"] } },
+];
+const KITCHEN_ADD_ON_TABLES = [
+  // The reductions of an order, for the ticket and the hand-over sheet.
+  { addOn: "offers", table: "applied", actions: ["read"], limit: { readable: ["source_table", "source_row", "source_line", "name", "kind", "amount", "typed", "at"] } },
+  // What a dish is made of and how much is in, for the kitchen's own stock words.
+  { addOn: "inventory", table: "items", actions: ["read"], limit: { readable: ["id", "name", "unit", "decimals", "active"] } },
+  { addOn: "inventory", table: "stock_points", actions: ["read"], limit: { readable: ["id", "item_id", "place_id", "on_hand", "available", "low", "state"] } },
+  ...OFFERS_LOOK_UP,
+];
+
+/** What an add-on's answer fills on an order: nobody's to write, whatever their role. */
+const DECIDED_ON_ORDERS: ReadonlySet<string> = new Set(["discount", "due", "customer_proved"]);
 
 export const ROLES = [
   {
@@ -41,13 +64,15 @@ export const ROLES = [
       ...grant("orders", "create", "update"),
       ...grant("order_items", "create"),
       ...grant("order_item_modifiers", "create"),
+      // Another gift card at the counter: its own save, never a line of the hand-over.
+      ...grant("payments", "create"),
       ...grant("slot_pauses", "create", "update"),
       ...grant("menu_items", "update"),
       ...grant("modifiers", "update"),
     ],
     limits: {
       orders: {
-        writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method"],
+        writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method", "rest_paid_by"],
         writableValues: {
           // Forward, and back one step (the Undo) — never back from a hand-over.
           status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"],
@@ -60,7 +85,10 @@ export const ROLES = [
       },
       menu_items: { writable: ["available", "stock_today", "stock_on"] },
       modifiers: { writable: ["available"] },
+      // The card's code and the order it pays: what the card gives is never the kitchen's to type.
+      payments: { creatable: ["order_id", "card_code", "client_key"] },
     },
+    tables: KITCHEN_ADD_ON_TABLES,
   },
   {
     key: "manager",
@@ -77,9 +105,11 @@ export const ROLES = [
     limits: {
       // "Cancelled by the customer" and "not ready by closing" are the diner's and the clock's to give, never a person's here.
       orders: {
-        writable: TABLES.find((t) => t.ref === "orders")!.columns.map((c) => c.ref).filter((ref) => ref !== "id"),
+        // Every column a person writes: never one Adminium works out, or Offers & gift cards decides.
+        writable: TABLES.find((t) => t.ref === "orders")!.columns.filter((c) => !DECIDED_ON_ORDERS.has(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined).map((c) => c.ref).filter((ref) => ref !== "id"),
         writableValues: { cancel_code: KITCHEN_CANCEL_CODES },
       },
     },
+    tables: KITCHEN_ADD_ON_TABLES,
   },
 ];

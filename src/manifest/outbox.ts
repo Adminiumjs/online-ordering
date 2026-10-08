@@ -21,7 +21,13 @@
  *                              its switch in Settings is on) — once per
  *                              hand-over, so one taken back and made again
  *                              (paid another way) sends the corrected one;
- *   enquiry-received           a large-order enquiry, with its reference.
+ *   enquiry-received           a large-order enquiry, with its reference;
+ *   order-confirmation-prepaid an online order a gift card paid in full: the
+ *   order-ready-prepaid        same two emails, saying nothing is left to pay;
+ *   card-money-returned        a cancelled order a gift card had paid: the
+ *                              money is back on the card;
+ *   card-money-kept            an order nobody collected that a gift card had
+ *                              paid: the money stayed, ask at the counter.
  *
  * The ready and receipt emails wait twenty seconds first, so the kitchen's
  * Undo takes them back before they go; one taken back so does not stop the
@@ -43,6 +49,10 @@ export const KINDS = [
   "order-cancelled-by-you",
   "order-receipt",
   "enquiry-received",
+  "order-confirmation-prepaid",
+  "order-ready-prepaid",
+  "card-money-returned",
+  "card-money-kept",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -98,16 +108,22 @@ export const OUTBOX = {
   pages: { manage: "/o", booking: "/" },
   kinds: Object.fromEntries(KINDS.map((kind) => [kind, `ordering-${kind}`])),
   producers: [
-    { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "online" } } },
+    // One decided column says which confirmation: an online order (1), or one a gift card paid in full (2).
+    { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 1 } } },
+    { kind: "order-confirmation-prepaid", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 2 } } },
     { kind: "order-confirmation-phone", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "phone" } } },
-    {
-      kind: "order-ready",
+    // "You'll pay … at the counter", or "nothing to pay": one email, by whether a gift card paid it all.
+    ...([["order-ready", 0], ["order-ready-prepaid", 1]] as const).map(([kind, prepaid]) => ({
+      kind,
       link: "order_id",
       gate: { setting: { table: "settings", column: "ready_email_on" } },
-      ...onOrder("status", "ready"),
+      ...onOrder("status", "ready", { column: "prepaid", eq: prepaid }),
       ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
-    },
+    })),
     ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }) })),
+    // A cancelled order a gift card paid: the money went back to the card. One nobody collected: it stayed, and the counter can give it back.
+    { kind: "card-money-returned", link: "order_id", ...onOrder("status", "cancelled", { column: "card_used", eq: 1 }) },
+    { kind: "card-money-kept", link: "order_id", ...onOrder("status", "not_collected", { column: "card_used", eq: 1 }) },
     // Drawn by Invoices & Receipts: without it attached, or with the switch off, no receipt is queued at all.
     // One per hand-over (its stamp), not one per order: a hand-over taken back and made again is receipted again.
     {

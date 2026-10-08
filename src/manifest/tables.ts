@@ -55,6 +55,10 @@ export interface Table {
   unique?: string[][];
   capacity?: Record<string, unknown>;
   states?: Record<string, unknown>;
+  /** The price question an add-on answers inside every save of this table. */
+  adjust?: Record<string, unknown>;
+  /** What this table hands an add-on's ledger, and when. */
+  postings?: Record<string, unknown>[];
   columns: Column[];
 }
 
@@ -109,6 +113,18 @@ function choice(
   };
 }
 
+/** Money somebody else decides (an add-on's answer), or nobody has yet: empty until then. */
+function amount(ref: string, label: string): Column {
+  return { ref, type: "decimal", scale: "currency", nullable: true, label: l(label) };
+}
+/** A whole number Adminium works out, for a rule or an email to test: 1 or 0, never a person's to write. */
+function flag(ref: string, label: string, formula: unknown): Column {
+  return { ref, type: "int", nullable: true, label: l(label), rules: { formula } };
+}
+/** A row of an add-on's table, by its key. No database link: the add-on may be away, and its table with it. */
+function link(ref: string, addOn: string, table: string, label: string, rules: Record<string, unknown> = {}): Column {
+  return { ref, type: "int", nullable: true, label: l(label), rules: { addOnLink: { addOn, table }, ...rules } };
+}
 const stamp = (set: unknown, on: unknown) => ({ stamp: { set, on } });
 const onCreate = "create";
 const onStatus = (...values: string[]) => ({ column: "status", values });
@@ -198,6 +214,10 @@ const EMAIL_KINDS: Record<string, string> = {
   "order-cancelled-closed": "Cancelled: not ready by closing",
   "order-cancelled-other": "Cancelled: another reason",
   "order-cancelled-by-you": "Cancelled by the customer",
+  "order-confirmation-prepaid": "Order confirmation (paid by gift card)",
+  "order-ready-prepaid": "Order ready (paid by gift card)",
+  "card-money-returned": "Gift card money returned",
+  "card-money-kept": "Gift card money kept",
   "order-receipt": "Receipt",
   "enquiry-received": "Large order enquiry received",
 };
@@ -323,6 +343,37 @@ export const TABLES: Table[] = [
       noticeMinutes: setting("lead_minutes"),
       windowDays: setting("preorder_days"),
     },
+    // Offers & gift cards works out what a code or an offer takes off, inside the save.
+    adjust: {
+      by: { addOn: "offers" },
+      needs: "codes",
+      lines: [
+        {
+          table: "order_items",
+          via: "order_id",
+          price: "unit_total",
+          quantity: "qty",
+          discount: "discount",
+          what: [
+            { column: "menu_item_id", as: "item" },
+            { column: "category_id", as: "category" },
+          ],
+        },
+      ],
+      order: {
+        discount: "discount",
+        // Who is buying: a signed-in diner only. An earlier order counts unless it was cancelled or never collected.
+        customer: { link: "customer_id", address: "email", proved: "customer_proved", counts: { column: "status", in: COUNTED } },
+      },
+      codes: { table: "order_codes", via: "order_id", typed: "typed", code: "code_id", voucher: "voucher_id", removed: "removed_at" },
+      uses: "uses",
+      frozen: { to: ["picked_up", "cancelled", "not_collected"] },
+      expect: "total",
+    },
+    postings: [
+      // A code's use is taken when the order is placed and given back when it is cancelled.
+      { id: "uses", into: { addOn: "offers", ledger: "value", action: "redeem" }, needs: "codes", post: { on: { create: true } }, reverse: { on: { to: ["cancelled"] } }, map: {} },
+    ],
     states: {
       column: "status",
       initial: "placed",
@@ -334,19 +385,26 @@ export const TABLES: Table[] = [
         confirmed: ["preparing", cancel(), undo("placed", "confirmed_at")],
         preparing: ["ready", cancel(), undo("confirmed", "preparing_at")],
         ready: [
-          { to: "picked_up", requires: { where: [{ column: "paid_method", isNull: false }] } },
+          // How it was paid must be said, and must agree with what a gift card already paid.
+          { to: "picked_up", requires: { where: [{ column: "paid_method", isNull: false }, { column: "method_ok", eq: 1 }] } },
           cancel(),
           // Made by the clock at closing; by hand only by a manager.
           { to: "not_collected", roles: ["manager"] },
           undo("preparing", "ready_at"),
         ],
         // A hand-over made by mistake: a manager takes it back, whenever it is noticed.
-        picked_up: [{ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method"] }],
+        picked_up: [{ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method", "rest_paid_by"] }],
       },
       // A finished order is never re-priced: its lines are locked with it. A
       // hand-over taken back empties how it was paid (`clears`), and nothing else opens it.
       lock: { when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] },
-      children: { order_items: { via: "order_id", lock: true } },
+      children: {
+        order_items: { via: "order_id", lock: true },
+        // A code is typed when the order is placed, and at no other time.
+        order_codes: { via: "order_id", lock: true },
+        // A gift card may pay until the order is handed over.
+        payments: { via: "order_id", createIn: ["placed", "confirmed", "preparing", "ready"] },
+      },
       timed: [
         { from: "ready", to: "not_collected", at: closing() },
         // Half an hour after closing, what was never finished is cancelled, and the diner told why.
@@ -380,9 +438,44 @@ export const TABLES: Table[] = [
       money("subtotal", "Subtotal", { rollup: { from: "order_items", via: "order_id", sum: "line_total" } }),
       // The rate of the day the order was made, kept with it.
       { ref: "tax_rate", type: "decimal", scale: 3, nullable: true, label: l("Tax rate (%)"), rules: { default: { from: setting("tax_rate") } } },
-      money("tax", "Tax", { formula: { round: { div: [{ mul: ["subtotal", { coalesce: ["tax_rate", 0] }] }, 100] } } }),
-      money("total", "Total", { formula: { add: ["subtotal", { coalesce: ["tax", 0] }] } }),
-      choice("paid_method", "Paid by", { cash: "Cash", card: "Card" }, opt),
+      // What codes and offers took off, decided by Offers & gift cards; empty when it is not in use.
+      amount("discount", "Reductions"),
+      money("net", "After reductions", { formula: { max: [0, { sub: ["subtotal", { coalesce: ["discount", 0] }] }] } }),
+      // Tax follows the reduction. An order from before these columns has no `net`, and keeps its cents.
+      money("tax", "Tax", { formula: { round: { div: [{ mul: [{ coalesce: ["net", "subtotal"] }, { coalesce: ["tax_rate", 0] }] }, 100] } } }),
+      money("total", "Total", { formula: { add: [{ coalesce: ["net", "subtotal"] }, { coalesce: ["tax", 0] }] } }),
+      // What gift cards have paid and still hold, and what is left to collect at the counter.
+      money("paid", "Paid by gift card", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
+      amount("due", "Left after gift cards"),
+      // What to collect, whatever the order's age: an order from before gift cards has no `due`, and owes its total.
+      money("to_pay", "To pay at the counter", { formula: { coalesce: ["due", "total"] } }),
+      choice("paid_method", "Paid by", { cash: "Cash", card: "Card", gift_card: "Gift card", mixed: "Gift card and more" }, opt),
+      // With a gift card paying part: how the rest was paid.
+      choice("rest_paid_by", "The rest paid by", { cash: "Cash", card: "Card" }, opt),
+      // Whether "Paid by" agrees with what gift cards paid: the hand-over is refused when it does not.
+      flag("method_ok", "Paid-by agrees", {
+        if: [
+          { eq: ["paid_method", "gift_card"] },
+          { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] },
+          {
+            if: [
+              { eq: ["paid_method", "mixed"] },
+              { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { gt: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] },
+              { if: [{ lte: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] },
+            ],
+          },
+        ],
+      }),
+      flag("prepaid", "Paid in full by gift card", { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 1, 0] }),
+      flag("card_used", "A gift card paid", { if: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, 1, 0] }),
+      // Which confirmation an order gets: 0 a phone order, 1 an online order, 2 an online order a gift card paid in full.
+      flag("confirm_as", "Confirmation kind", {
+        if: [{ eq: ["channel", "phone"] }, 0, { if: [{ and: [{ gt: [{ coalesce: ["paid", 0] }, 0] }, { lte: [{ coalesce: ["due", 0] }, 0] }] }, 2, 1] }],
+      }),
+      // Whether the diner was signed in when a code asked who they are: Offers & gift cards is told, and it is kept.
+      { ref: "customer_proved", type: "bool", nullable: true, label: l("Signed in when ordering") },
+      // Until when ingredients held for this order stay held, should nothing else let them go: a day after pickup.
+      at("hold_until", "Ingredients held until", { ...opt, rules: stamp({ moment: { column: "pickup_at", plus: { days: 1 } } }, onCreate) }),
       choice("cancel_code", "Why it was cancelled", {
         ran_out: "Something ran out",
         too_busy: "The kitchen was too busy",
@@ -442,6 +535,24 @@ export const TABLES: Table[] = [
       money("options_total", "Options", { rollup: { from: "order_item_modifiers", via: "order_item_id", sum: "price_delta" } }),
       money("unit_total", "Each", { formula: { add: ["unit_price", { coalesce: ["options_total", 0] }] } }),
       money("line_total", "Line total", { formula: { mul: ["qty", "unit_total"] } }),
+      // This line's share of the order's reductions, decided by Offers & gift cards.
+      amount("discount", "Reduction"),
+      // The dish's category, kept with the line: an offer may be for a category.
+      fk("category_id", "menu_categories", "Category", { ...opt, rules: { copy: { via: "menu_item_id", from: "category_id", mode: "always" } } }),
+    ],
+    postings: [
+      // A dish's ingredients are held when the order is placed, taken when the kitchen starts, and let go on a cancel before that.
+      {
+        id: "ingredients",
+        into: { addOn: "inventory", ledger: "stock", action: "hold" },
+        needs: "ingredients",
+        via: "order_id",
+        reserve: { on: { create: true } },
+        post: { on: { to: ["preparing"] } },
+        reverse: { on: { to: ["cancelled"], from: ["placed", "confirmed"] } },
+        heldUntil: { parent: "hold_until" },
+        map: { what: "menu_item_id", quantity: "qty" },
+      },
     ],
   },
   {
@@ -457,6 +568,83 @@ export const TABLES: Table[] = [
       fk("modifier_id", "modifiers", "Option"),
       text("name", 80, "Option name", { ...opt, rules: { copy: { via: "modifier_id", from: "name", mode: "always" } } }),
       { ref: "price_delta", type: "money", nullable: true, label: l("Extra charge"), rules: { copy: { via: "modifier_id", from: "price_delta", mode: "always" } } },
+    ],
+  },
+  {
+    ref: "order_codes",
+    label: l("Code on an order"),
+    labelPlural: l("Codes on orders"),
+    keyField: "typed",
+    columns: [
+      id,
+      fk("order_id", "orders", "Order"),
+      text("typed", 64, "Code as typed", opt),
+      link("code_id", "offers", "codes", "Discount code"),
+      link("voucher_id", "offers", "vouchers", "Voucher"),
+      at("removed_at", "Removed", opt),
+    ],
+  },
+  {
+    // Every row is a gift card's payment: cash and card are said at the hand-over, as before.
+    ref: "payments",
+    label: l("Gift card payment"),
+    labelPlural: l("Gift card payments"),
+    keyField: "card_last4",
+    postings: [
+      // The card pays when the row is made, and gets its money back when the order is cancelled.
+      {
+        id: "card",
+        into: { addOn: "offers", ledger: "value", action: "spend" },
+        needs: "gift-cards",
+        via: "order_id",
+        post: { on: { create: true } },
+        reverse: { on: { to: ["cancelled"] } },
+        map: { card: "card_id", amount: "amount", due: { parent: "due" }, balance_after: "card_balance_after" },
+      },
+    ],
+    columns: [
+      id,
+      fk("order_id", "orders", "Order", { index: true }),
+      // The kitchen's sheet makes this, so a save sent twice is one payment.
+      text("client_key", 64, "Retry key", { ...opt, unique: true }),
+      // The whole code, as typed: read by no page and no role.
+      text("card_code", 64, "Card code", opt),
+      link("card_id", "offers", "gift_cards", "Gift card", {
+        lookup: { from: "card_code", table: { addOn: "offers", table: "gift_cards" }, column: "code", where: [{ column: "status", eq: "active" }] },
+      }),
+      text("card_last4", 4, "Card ending", { ...opt, rules: { codeLast4: { of: "card_code" } } }),
+      amount("amount", "Paid"),
+      amount("card_balance_after", "Left on the card"),
+      money("returned", "Given back", { rollup: { from: "payment_refunds", via: "payment_id", sum: "amount" } }),
+      money("kept", "Kept", { formula: { sub: ["amount", { coalesce: ["returned", 0] }] } }),
+      at("made_at", "Made", { ...opt, rules: stamp("now", onCreate) }),
+      text("made_by", 80, "Made by", { ...opt, rules: stamp({ byOrigin: { public: "customer", staff: "user-name" } }, onCreate) }),
+    ],
+  },
+  {
+    // Money a manager gives back to a gift card: after an order nobody collected, or one made smaller.
+    ref: "payment_refunds",
+    label: l("Money back to a gift card"),
+    labelPlural: l("Money back to gift cards"),
+    keyField: "reason",
+    postings: [
+      {
+        id: "card-refund",
+        into: { addOn: "offers", ledger: "value", action: "refund" },
+        needs: "gift-cards",
+        post: { on: { create: true } },
+        map: { amount: "amount", against_table: { value: "ordering:payments" }, against_row: "payment_id" },
+      },
+    ],
+    columns: [
+      id,
+      { ref: "payment_id", type: "fk", references: "payments", label: l("Gift card payment"), index: true },
+      text("client_key", 64, "Retry key", { ...opt, unique: true }),
+      fk("order_id", "orders", "Order"),
+      { ref: "amount", type: "decimal", scale: "currency", label: l("Amount"), rules: { validation: { min: 0.01 } } },
+      text("reason", 120, "Reason", opt),
+      at("made_at", "Made", { ...opt, rules: stamp("now", onCreate) }),
+      text("made_by", 80, "Made by", { ...opt, rules: stamp("user-name", onCreate) }),
     ],
   },
   {

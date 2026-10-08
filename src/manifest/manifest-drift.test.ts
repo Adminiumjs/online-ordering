@@ -95,7 +95,7 @@ describe("a diner reads nothing of anyone else's, and nothing the kitchen keeps"
   });
 
   it("lists only dishes that are on and sold online, and options that are on", () => {
-    const menu = manifest.publicAccess.find((e) => e.table === "menu_items")!;
+    const menu = manifest.publicAccess.find((e) => e.table === "menu_items" && e.kind === undefined)!;
     expect(menu["filters"]).toEqual([
       { column: "available", op: "eq", value: true },
       { column: "online", op: "eq", value: true },
@@ -108,6 +108,8 @@ describe("a diner reads nothing of anyone else's, and nothing the kitchen keeps"
     expect(availability).toEqual([
       { table: "orders", kind: "availability", methods: ["GET"] },
       { table: "order_items", kind: "availability", methods: ["GET"], showLeft: { below: 5 } },
+      // Ingredients: Inventory's own words. How much is left is told as its owner set it, so no "below" here.
+      { table: "menu_items", kind: "availability", methods: ["GET"], words: "inventory:stock" },
     ]);
   });
 
@@ -146,7 +148,12 @@ describe("the order's life is Adminium's", () => {
   it("moves one step at a time, refuses a second screen's repeat, and locks a finished order with its lines", () => {
     expect(states()["strict"]).toBe(true);
     expect(states()["lock"]).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] });
-    expect(states()["children"]).toEqual({ order_items: { via: "order_id", lock: true } });
+    // A typed code is locked with the order; a gift card may pay until the hand-over, and never after.
+    expect(states()["children"]).toEqual({
+      order_items: { via: "order_id", lock: true },
+      order_codes: { via: "order_id", lock: true },
+      payments: { via: "order_id", createIn: ["placed", "confirmed", "preparing", "ready"] },
+    });
   });
 
   it("cancels only with a reason, and holds no role on the cancel the diner makes too", () => {
@@ -160,7 +167,8 @@ describe("the order's life is Adminium's", () => {
 
   it("hands over only with how it was paid, and lets only the clock or a manager mark it not collected", () => {
     const ready = states().moves["ready"]!;
-    expect(ready).toContainEqual({ to: "picked_up", requires: { where: [{ column: "paid_method", isNull: false }] } });
+    // …and how it was paid must agree with what a gift card already paid.
+    expect(ready).toContainEqual({ to: "picked_up", requires: { where: [{ column: "paid_method", isNull: false }, { column: "method_ok", eq: 1 }] } });
     expect(ready).toContainEqual({ to: "not_collected", roles: ["manager"] });
     expect(states()["timed"]).toContainEqual(expect.objectContaining({ from: "ready", to: "not_collected" }));
   });
@@ -170,8 +178,8 @@ describe("the order's life is Adminium's", () => {
     for (const [from, to, stamp] of [["confirmed", "placed", "confirmed_at"], ["preparing", "confirmed", "preparing_at"], ["ready", "preparing", "ready_at"]] as const) {
       expect(back(from, to), `${from} → ${to}`).toEqual({ to, roles: ["kitchen", "manager"], undo: true, requires: { time: { before: { column: stamp, plus: { minutes: 1 } } } } });
     }
-    // A hand-over taken back: a manager's, at any time, and unpaid again.
-    expect(back("picked_up", "ready")).toEqual({ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method"] });
+    // A hand-over taken back: a manager's, at any time, and unpaid again (how the rest was paid with it).
+    expect(back("picked_up", "ready")).toEqual({ to: "ready", roles: ["manager"], undo: true, clears: ["paid_method", "rest_paid_by"] });
     // Nothing else of a finished order opens: how it was paid only by that move.
     expect(states().lock).toEqual({ when: ["picked_up", "cancelled", "not_collected"], except: ["link_stopped"] });
     for (const column of ["confirmed_at", "confirmed_by", "preparing_at", "ready_at", "ready_by", "picked_up_at", "picked_up_by"]) {
@@ -233,7 +241,8 @@ describe("the kitchen writes only what running the day needs", () => {
 
   it("moves, cancels with its own reasons, and records how an order was paid — nothing else of an order", () => {
     expect(role("kitchen").limits!["orders"]).toEqual({
-      writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method"],
+      // …and, with a gift card paying part, how the rest was paid.
+      writable: ["status", "cancel_code", "cancel_dish", "cancel_note", "paid_method", "rest_paid_by"],
       writableValues: { status: ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled"], cancel_code: KITCHEN_CANCEL_CODES },
       // A phone order, and only one: never a customer, a link's code, how it was paid or another channel.
       creatable: ["name", "phone", "email", "note", "pickup_at", "channel"],
@@ -243,6 +252,9 @@ describe("the kitchen writes only what running the day needs", () => {
     expect((rules("orders", "link_token")["code"] as Json)["hiddenFromStaff"]).toBe(true);
     expect(KITCHEN_CANCEL_CODES).not.toContain("self");
     expect(KITCHEN_CANCEL_CODES).not.toContain("closed");
+    // Another gift card at the counter: the card's code and the order, never what it pays. Giving money back is a manager's.
+    expect(role("kitchen").limits!["payments"]).toEqual({ creatable: ["order_id", "card_code", "client_key"] });
+    expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual([]);
   });
 
   it("switches dishes and options and sets portions, and never touches the settings, hours, closures or customers", () => {

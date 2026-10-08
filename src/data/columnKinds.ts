@@ -8,7 +8,10 @@
 export const MOMENTS: Readonly<Record<string, readonly string[]>> = {
   slot_pauses: ["slot_at", "paused_at"],
   customers: ["forgotten_at", "created_at"],
-  orders: ["pickup_at", "placed_at", "confirmed_at", "preparing_at", "ready_at", "picked_up_at", "cancelled_at", "not_collected_at", "link_expires"],
+  orders: ["pickup_at", "hold_until", "placed_at", "confirmed_at", "preparing_at", "ready_at", "picked_up_at", "cancelled_at", "not_collected_at", "link_expires"],
+  order_codes: ["removed_at"],
+  payments: ["made_at"],
+  payment_refunds: ["made_at"],
   enquiries: ["created_at"],
   messages: ["due", "created_at", "sent_at"],
 };
@@ -20,7 +23,7 @@ export const YES_NO: Readonly<Record<string, readonly string[]>> = {
   hours: ["open"],
   closures: ["active"],
   slot_pauses: ["active"],
-  orders: ["link_stopped"],
+  orders: ["customer_proved", "link_stopped"],
 };
 
 /** A yes/no as a boolean: SQLite and MySQL (and an Adminium before 0.3.9 on any door) hand back 0 or 1. */

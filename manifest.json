@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "key": "ordering",
   "name": "Online Ordering",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "publisher": {
     "id": "adminium",
     "name": "Adminium",
@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.9",
+    "minAdminiumVersion": "0.3.19",
     "engines": [
       "sqlite",
       "postgres",
@@ -75,7 +75,8 @@
         "track": "/o",
         "find": "/find",
         "orders": "/orders",
-        "large": "/large"
+        "large": "/large",
+        "giftCard": "/gift-card"
       }
     }
   ],
@@ -108,6 +109,34 @@
           "ar-EG": "أغلق في العطلات الرسمية بلمسة من تبويب ساعات العمل في المطبخ.",
           "zh-CN": "在厨房的营业时间页一键设置节假日休息。",
           "zh-TW": "在廚房的營業時間頁一鍵設定國定假日休息。"
+        }
+      },
+      {
+        "key": "offers",
+        "range": ">=1.0.9",
+        "reason": {
+          "en-US": "Take discount codes and gift cards at checkout and at the counter.",
+          "de-DE": "Rabattcodes und Geschenkkarten an der Kasse und an der Theke annehmen.",
+          "fr-FR": "Acceptez les codes de réduction et les cartes cadeaux à la commande et au comptoir.",
+          "da-DK": "Tag imod rabatkoder og gavekort ved bestilling og ved disken.",
+          "cs-CZ": "Přijímejte slevové kódy a dárkové karty při objednání i u pultu.",
+          "ar-EG": "اقبل رموز الخصم وبطاقات الهدايا عند إتمام الطلب وعند المنضدة.",
+          "zh-CN": "在结账时和柜台接受折扣码与礼品卡。",
+          "zh-TW": "在結帳時和櫃檯接受折扣碼與禮品卡。"
+        }
+      },
+      {
+        "key": "inventory",
+        "range": ">=1.0.9",
+        "reason": {
+          "en-US": "Count ingredients, so a dish runs out when what it is made of does.",
+          "de-DE": "Zutaten zählen, damit ein Gericht ausverkauft ist, wenn seine Zutaten ausgehen.",
+          "fr-FR": "Comptez les ingrédients : un plat est épuisé quand ce qui le compose l’est.",
+          "da-DK": "Tæl ingredienser, så en ret er udsolgt, når det, den er lavet af, er sluppet op.",
+          "cs-CZ": "Počítejte suroviny, aby jídlo došlo, když dojde to, z čeho se vaří.",
+          "ar-EG": "عُدّ المكونات، فينفد الطبق عندما ينفد ما يُصنع منه.",
+          "zh-CN": "清点食材，食材用完时菜品即售罄。",
+          "zh-TW": "清點食材，食材用完時餐點即售罄。"
         }
       }
     ],
@@ -142,6 +171,54 @@
         },
         "requires": [
           "holiday-calendars"
+        ]
+      },
+      {
+        "id": "codes",
+        "label": {
+          "en-US": "Discount codes and offers",
+          "de-DE": "Rabattcodes und Angebote",
+          "fr-FR": "Codes de réduction et offres",
+          "da-DK": "Rabatkoder og tilbud",
+          "cs-CZ": "Slevové kódy a nabídky",
+          "ar-EG": "رموز الخصم والعروض",
+          "zh-CN": "折扣码与优惠",
+          "zh-TW": "折扣碼與優惠"
+        },
+        "requires": [
+          "offers"
+        ]
+      },
+      {
+        "id": "gift-cards",
+        "label": {
+          "en-US": "Gift cards",
+          "de-DE": "Geschenkkarten",
+          "fr-FR": "Cartes cadeaux",
+          "da-DK": "Gavekort",
+          "cs-CZ": "Dárkové karty",
+          "ar-EG": "بطاقات الهدايا",
+          "zh-CN": "礼品卡",
+          "zh-TW": "禮品卡"
+        },
+        "requires": [
+          "offers"
+        ]
+      },
+      {
+        "id": "ingredients",
+        "label": {
+          "en-US": "Ingredient stock",
+          "de-DE": "Zutatenbestand",
+          "fr-FR": "Stock d’ingrédients",
+          "da-DK": "Ingredienslager",
+          "cs-CZ": "Zásoba surovin",
+          "ar-EG": "مخزون المكونات",
+          "zh-CN": "食材库存",
+          "zh-TW": "食材庫存"
+        },
+        "requires": [
+          "inventory"
         ]
       }
     ]
@@ -2047,6 +2124,90 @@
             "column": "preorder_days"
           }
         },
+        "adjust": {
+          "by": {
+            "addOn": "offers"
+          },
+          "needs": "codes",
+          "lines": [
+            {
+              "table": "order_items",
+              "via": "order_id",
+              "price": "unit_total",
+              "quantity": "qty",
+              "discount": "discount",
+              "what": [
+                {
+                  "column": "menu_item_id",
+                  "as": "item"
+                },
+                {
+                  "column": "category_id",
+                  "as": "category"
+                }
+              ]
+            }
+          ],
+          "order": {
+            "discount": "discount",
+            "customer": {
+              "link": "customer_id",
+              "address": "email",
+              "proved": "customer_proved",
+              "counts": {
+                "column": "status",
+                "in": [
+                  "placed",
+                  "confirmed",
+                  "preparing",
+                  "ready",
+                  "picked_up"
+                ]
+              }
+            }
+          },
+          "codes": {
+            "table": "order_codes",
+            "via": "order_id",
+            "typed": "typed",
+            "code": "code_id",
+            "voucher": "voucher_id",
+            "removed": "removed_at"
+          },
+          "uses": "uses",
+          "frozen": {
+            "to": [
+              "picked_up",
+              "cancelled",
+              "not_collected"
+            ]
+          },
+          "expect": "total"
+        },
+        "postings": [
+          {
+            "id": "uses",
+            "into": {
+              "addOn": "offers",
+              "ledger": "value",
+              "action": "redeem"
+            },
+            "needs": "codes",
+            "post": {
+              "on": {
+                "create": true
+              }
+            },
+            "reverse": {
+              "on": {
+                "to": [
+                  "cancelled"
+                ]
+              }
+            },
+            "map": {}
+          }
+        ],
         "states": {
           "column": "status",
           "initial": "placed",
@@ -2138,6 +2299,10 @@
                     {
                       "column": "paid_method",
                       "isNull": false
+                    },
+                    {
+                      "column": "method_ok",
+                      "eq": 1
                     }
                   ]
                 }
@@ -2186,7 +2351,8 @@
                 ],
                 "undo": true,
                 "clears": [
-                  "paid_method"
+                  "paid_method",
+                  "rest_paid_by"
                 ]
               }
             ]
@@ -2205,6 +2371,19 @@
             "order_items": {
               "via": "order_id",
               "lock": true
+            },
+            "order_codes": {
+              "via": "order_id",
+              "lock": true
+            },
+            "payments": {
+              "via": "order_id",
+              "createIn": [
+                "placed",
+                "confirmed",
+                "preparing",
+                "ready"
+              ]
             }
           },
           "timed": [
@@ -2660,6 +2839,56 @@
             }
           },
           {
+            "ref": "discount",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Reductions",
+              "de-DE": "Abzüge",
+              "fr-FR": "Réductions",
+              "da-DK": "Fradrag",
+              "cs-CZ": "Slevy",
+              "ar-EG": "التخفيضات",
+              "zh-CN": "优惠",
+              "zh-TW": "優惠"
+            }
+          },
+          {
+            "ref": "net",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "After reductions",
+              "de-DE": "Nach Abzügen",
+              "fr-FR": "Après réductions",
+              "da-DK": "Efter fradrag",
+              "cs-CZ": "Po slevách",
+              "ar-EG": "بعد التخفيضات",
+              "zh-CN": "优惠后",
+              "zh-TW": "優惠後"
+            },
+            "rules": {
+              "formula": {
+                "max": [
+                  0,
+                  {
+                    "sub": [
+                      "subtotal",
+                      {
+                        "coalesce": [
+                          "discount",
+                          0
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
             "ref": "tax",
             "type": "decimal",
             "scale": "currency",
@@ -2680,7 +2909,12 @@
                   "div": [
                     {
                       "mul": [
-                        "subtotal",
+                        {
+                          "coalesce": [
+                            "net",
+                            "subtotal"
+                          ]
+                        },
                         {
                           "coalesce": [
                             "tax_rate",
@@ -2713,7 +2947,12 @@
             "rules": {
               "formula": {
                 "add": [
-                  "subtotal",
+                  {
+                    "coalesce": [
+                      "net",
+                      "subtotal"
+                    ]
+                  },
                   {
                     "coalesce": [
                       "tax",
@@ -2725,11 +2964,81 @@
             }
           },
           {
+            "ref": "paid",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid by gift card",
+              "de-DE": "Mit Geschenkkarte bezahlt",
+              "fr-FR": "Payé par carte cadeau",
+              "da-DK": "Betalt med gavekort",
+              "cs-CZ": "Zaplaceno dárkovou kartou",
+              "ar-EG": "مدفوع ببطاقة هدية",
+              "zh-CN": "礼品卡已付",
+              "zh-TW": "禮品卡已付"
+            },
+            "rules": {
+              "rollup": {
+                "from": "payments",
+                "via": "order_id",
+                "sum": "kept",
+                "balance": {
+                  "column": "due",
+                  "of": "total"
+                },
+                "cap": true
+              }
+            }
+          },
+          {
+            "ref": "due",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Left after gift cards",
+              "de-DE": "Rest nach Geschenkkarten",
+              "fr-FR": "Reste après cartes cadeaux",
+              "da-DK": "Tilbage efter gavekort",
+              "cs-CZ": "Zbývá po dárkových kartách",
+              "ar-EG": "المتبقي بعد بطاقات الهدايا",
+              "zh-CN": "礼品卡支付后余额",
+              "zh-TW": "禮品卡支付後餘額"
+            }
+          },
+          {
+            "ref": "to_pay",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "To pay at the counter",
+              "de-DE": "An der Theke zu zahlen",
+              "fr-FR": "À payer au comptoir",
+              "da-DK": "Betales ved disken",
+              "cs-CZ": "K zaplacení u pultu",
+              "ar-EG": "يُدفع عند المنضدة",
+              "zh-CN": "到店支付",
+              "zh-TW": "到店支付"
+            },
+            "rules": {
+              "formula": {
+                "coalesce": [
+                  "due",
+                  "total"
+                ]
+              }
+            }
+          },
+          {
             "ref": "paid_method",
             "type": "enum",
             "enum": [
               "cash",
-              "card"
+              "card",
+              "gift_card",
+              "mixed"
             ],
             "label": {
               "en-US": "Paid by",
@@ -2764,8 +3073,377 @@
                     "ar-EG": "بطاقة",
                     "zh-CN": "刷卡",
                     "zh-TW": "刷卡"
+                  },
+                  "gift_card": {
+                    "en-US": "Gift card",
+                    "de-DE": "Geschenkkarte",
+                    "fr-FR": "Carte cadeau",
+                    "da-DK": "Gavekort",
+                    "cs-CZ": "Dárková karta",
+                    "ar-EG": "بطاقة هدية",
+                    "zh-CN": "礼品卡",
+                    "zh-TW": "禮品卡"
+                  },
+                  "mixed": {
+                    "en-US": "Gift card and more",
+                    "de-DE": "Geschenkkarte und mehr",
+                    "fr-FR": "Carte cadeau et autre",
+                    "da-DK": "Gavekort og mere",
+                    "cs-CZ": "Dárková karta a další",
+                    "ar-EG": "بطاقة هدية وغيرها",
+                    "zh-CN": "礼品卡加其他",
+                    "zh-TW": "禮品卡加其他"
                   }
                 }
+              }
+            }
+          },
+          {
+            "ref": "rest_paid_by",
+            "type": "enum",
+            "enum": [
+              "cash",
+              "card"
+            ],
+            "label": {
+              "en-US": "The rest paid by",
+              "de-DE": "Rest bezahlt mit",
+              "fr-FR": "Le reste payé par",
+              "da-DK": "Resten betalt med",
+              "cs-CZ": "Zbytek zaplacen",
+              "ar-EG": "الباقي دُفع بـ",
+              "zh-CN": "其余付款方式",
+              "zh-TW": "其餘付款方式"
+            },
+            "nullable": true,
+            "rules": {
+              "enumLabels": {
+                "labels": {
+                  "cash": {
+                    "en-US": "Cash",
+                    "de-DE": "Bar",
+                    "fr-FR": "Espèces",
+                    "da-DK": "Kontant",
+                    "cs-CZ": "Hotově",
+                    "ar-EG": "نقدًا",
+                    "zh-CN": "现金",
+                    "zh-TW": "現金"
+                  },
+                  "card": {
+                    "en-US": "Card",
+                    "de-DE": "Karte",
+                    "fr-FR": "Carte",
+                    "da-DK": "Kort",
+                    "cs-CZ": "Karta",
+                    "ar-EG": "بطاقة",
+                    "zh-CN": "刷卡",
+                    "zh-TW": "刷卡"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "ref": "method_ok",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid-by agrees",
+              "de-DE": "Zahlungsart stimmt",
+              "fr-FR": "Mode de paiement cohérent",
+              "da-DK": "Betalingsmåde stemmer",
+              "cs-CZ": "Způsob platby souhlasí",
+              "ar-EG": "طريقة الدفع مطابقة",
+              "zh-CN": "付款方式相符",
+              "zh-TW": "付款方式相符"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "eq": [
+                      "paid_method",
+                      "gift_card"
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "due",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "eq": [
+                          "paid_method",
+                          "mixed"
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "due",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          1,
+                          0
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          },
+                          1,
+                          0
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "prepaid",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid in full by gift card",
+              "de-DE": "Vollständig mit Geschenkkarte bezahlt",
+              "fr-FR": "Payé en totalité par carte cadeau",
+              "da-DK": "Betalt fuldt ud med gavekort",
+              "cs-CZ": "Plně zaplaceno dárkovou kartou",
+              "ar-EG": "مدفوع بالكامل ببطاقة هدية",
+              "zh-CN": "礼品卡全额支付",
+              "zh-TW": "禮品卡全額支付"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "and": [
+                      {
+                        "gt": [
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      {
+                        "lte": [
+                          {
+                            "coalesce": [
+                              "due",
+                              0
+                            ]
+                          },
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "ref": "card_used",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "A gift card paid",
+              "de-DE": "Eine Geschenkkarte hat bezahlt",
+              "fr-FR": "Une carte cadeau a payé",
+              "da-DK": "Et gavekort betalte",
+              "cs-CZ": "Platila dárková karta",
+              "ar-EG": "دفعت بطاقة هدية",
+              "zh-CN": "礼品卡已付款",
+              "zh-TW": "禮品卡已付款"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "gt": [
+                      {
+                        "coalesce": [
+                          "paid",
+                          0
+                        ]
+                      },
+                      0
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          },
+          {
+            "ref": "confirm_as",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Confirmation kind",
+              "de-DE": "Art der Bestätigung",
+              "fr-FR": "Type de confirmation",
+              "da-DK": "Type bekræftelse",
+              "cs-CZ": "Druh potvrzení",
+              "ar-EG": "نوع التأكيد",
+              "zh-CN": "确认类型",
+              "zh-TW": "確認類型"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "eq": [
+                      "channel",
+                      "phone"
+                    ]
+                  },
+                  0,
+                  {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          },
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "due",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      2,
+                      1
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "customer_proved",
+            "type": "bool",
+            "nullable": true,
+            "label": {
+              "en-US": "Signed in when ordering",
+              "de-DE": "Bei der Bestellung angemeldet",
+              "fr-FR": "Connecté lors de la commande",
+              "da-DK": "Logget ind ved bestilling",
+              "cs-CZ": "Přihlášen(a) při objednání",
+              "ar-EG": "مسجّل الدخول عند الطلب",
+              "zh-CN": "下单时已登录",
+              "zh-TW": "下單時已登入"
+            }
+          },
+          {
+            "ref": "hold_until",
+            "type": "timestamptz",
+            "label": {
+              "en-US": "Ingredients held until",
+              "de-DE": "Zutaten reserviert bis",
+              "fr-FR": "Ingrédients réservés jusqu’au",
+              "da-DK": "Ingredienser reserveret indtil",
+              "cs-CZ": "Suroviny drženy do",
+              "ar-EG": "المكونات محجوزة حتى",
+              "zh-CN": "食材保留至",
+              "zh-TW": "食材保留至"
+            },
+            "nullable": true,
+            "rules": {
+              "stamp": {
+                "set": {
+                  "moment": {
+                    "column": "pickup_at",
+                    "plus": {
+                      "days": 1
+                    }
+                  }
+                },
+                "on": "create"
               }
             }
           },
@@ -3601,6 +4279,87 @@
                 ]
               }
             }
+          },
+          {
+            "ref": "discount",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Reduction",
+              "de-DE": "Abzug",
+              "fr-FR": "Réduction",
+              "da-DK": "Fradrag",
+              "cs-CZ": "Sleva",
+              "ar-EG": "تخفيض",
+              "zh-CN": "优惠",
+              "zh-TW": "優惠"
+            }
+          },
+          {
+            "ref": "category_id",
+            "type": "fk",
+            "references": "menu_categories",
+            "label": {
+              "en-US": "Category",
+              "de-DE": "Kategorie",
+              "fr-FR": "Catégorie",
+              "da-DK": "Kategori",
+              "cs-CZ": "Kategorie",
+              "ar-EG": "الفئة",
+              "zh-CN": "分类",
+              "zh-TW": "分類"
+            },
+            "nullable": true,
+            "rules": {
+              "copy": {
+                "via": "menu_item_id",
+                "from": "category_id",
+                "mode": "always"
+              }
+            }
+          }
+        ],
+        "postings": [
+          {
+            "id": "ingredients",
+            "into": {
+              "addOn": "inventory",
+              "ledger": "stock",
+              "action": "hold"
+            },
+            "needs": "ingredients",
+            "via": "order_id",
+            "reserve": {
+              "on": {
+                "create": true
+              }
+            },
+            "post": {
+              "on": {
+                "to": [
+                  "preparing"
+                ]
+              }
+            },
+            "reverse": {
+              "on": {
+                "to": [
+                  "cancelled"
+                ],
+                "from": [
+                  "placed",
+                  "confirmed"
+                ]
+              }
+            },
+            "heldUntil": {
+              "parent": "hold_until"
+            },
+            "map": {
+              "what": "menu_item_id",
+              "quantity": "qty"
+            }
           }
         ]
       },
@@ -3712,6 +4471,606 @@
                 "via": "modifier_id",
                 "from": "price_delta",
                 "mode": "always"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "ref": "order_codes",
+        "label": {
+          "en-US": "Code on an order",
+          "de-DE": "Code einer Bestellung",
+          "fr-FR": "Code d’une commande",
+          "da-DK": "Kode på en bestilling",
+          "cs-CZ": "Kód u objednávky",
+          "ar-EG": "رمز على طلب",
+          "zh-CN": "订单上的代码",
+          "zh-TW": "訂單上的代碼"
+        },
+        "labelPlural": {
+          "en-US": "Codes on orders",
+          "de-DE": "Codes von Bestellungen",
+          "fr-FR": "Codes des commandes",
+          "da-DK": "Koder på bestillinger",
+          "cs-CZ": "Kódy u objednávek",
+          "ar-EG": "رموز على الطلبات",
+          "zh-CN": "订单上的代码",
+          "zh-TW": "訂單上的代碼"
+        },
+        "keyField": "typed",
+        "columns": [
+          {
+            "ref": "id",
+            "type": "int",
+            "role": "pk"
+          },
+          {
+            "ref": "order_id",
+            "type": "fk",
+            "references": "orders",
+            "label": {
+              "en-US": "Order",
+              "de-DE": "Bestellung",
+              "fr-FR": "Commande",
+              "da-DK": "Bestilling",
+              "cs-CZ": "Objednávka",
+              "ar-EG": "الطلب",
+              "zh-CN": "订单",
+              "zh-TW": "訂單"
+            }
+          },
+          {
+            "ref": "typed",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Code as typed",
+              "de-DE": "Code wie eingegeben",
+              "fr-FR": "Code tel que saisi",
+              "da-DK": "Kode som indtastet",
+              "cs-CZ": "Kód, jak byl zadán",
+              "ar-EG": "الرمز كما كُتب",
+              "zh-CN": "输入的代码",
+              "zh-TW": "輸入的代碼"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "code_id",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Discount code",
+              "de-DE": "Rabattcode",
+              "fr-FR": "Code de réduction",
+              "da-DK": "Rabatkode",
+              "cs-CZ": "Slevový kód",
+              "ar-EG": "رمز الخصم",
+              "zh-CN": "折扣码",
+              "zh-TW": "折扣碼"
+            },
+            "rules": {
+              "addOnLink": {
+                "addOn": "offers",
+                "table": "codes"
+              }
+            }
+          },
+          {
+            "ref": "voucher_id",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Voucher",
+              "de-DE": "Gutschein",
+              "fr-FR": "Bon",
+              "da-DK": "Værdibevis",
+              "cs-CZ": "Poukaz",
+              "ar-EG": "قسيمة",
+              "zh-CN": "代金券",
+              "zh-TW": "兌換券"
+            },
+            "rules": {
+              "addOnLink": {
+                "addOn": "offers",
+                "table": "vouchers"
+              }
+            }
+          },
+          {
+            "ref": "removed_at",
+            "type": "timestamptz",
+            "label": {
+              "en-US": "Removed",
+              "de-DE": "Entfernt",
+              "fr-FR": "Retiré",
+              "da-DK": "Fjernet",
+              "cs-CZ": "Odebráno",
+              "ar-EG": "أُزيل",
+              "zh-CN": "已移除",
+              "zh-TW": "已移除"
+            },
+            "nullable": true
+          }
+        ]
+      },
+      {
+        "ref": "payments",
+        "label": {
+          "en-US": "Gift card payment",
+          "de-DE": "Zahlung mit Geschenkkarte",
+          "fr-FR": "Paiement par carte cadeau",
+          "da-DK": "Betaling med gavekort",
+          "cs-CZ": "Platba dárkovou kartou",
+          "ar-EG": "دفعة ببطاقة هدية",
+          "zh-CN": "礼品卡付款",
+          "zh-TW": "禮品卡付款"
+        },
+        "labelPlural": {
+          "en-US": "Gift card payments",
+          "de-DE": "Zahlungen mit Geschenkkarte",
+          "fr-FR": "Paiements par carte cadeau",
+          "da-DK": "Betalinger med gavekort",
+          "cs-CZ": "Platby dárkovou kartou",
+          "ar-EG": "دفعات ببطاقات الهدايا",
+          "zh-CN": "礼品卡付款",
+          "zh-TW": "禮品卡付款"
+        },
+        "keyField": "card_last4",
+        "postings": [
+          {
+            "id": "card",
+            "into": {
+              "addOn": "offers",
+              "ledger": "value",
+              "action": "spend"
+            },
+            "needs": "gift-cards",
+            "via": "order_id",
+            "post": {
+              "on": {
+                "create": true
+              }
+            },
+            "reverse": {
+              "on": {
+                "to": [
+                  "cancelled"
+                ]
+              }
+            },
+            "map": {
+              "card": "card_id",
+              "amount": "amount",
+              "due": {
+                "parent": "due"
+              },
+              "balance_after": "card_balance_after"
+            }
+          }
+        ],
+        "columns": [
+          {
+            "ref": "id",
+            "type": "int",
+            "role": "pk"
+          },
+          {
+            "ref": "order_id",
+            "type": "fk",
+            "references": "orders",
+            "label": {
+              "en-US": "Order",
+              "de-DE": "Bestellung",
+              "fr-FR": "Commande",
+              "da-DK": "Bestilling",
+              "cs-CZ": "Objednávka",
+              "ar-EG": "الطلب",
+              "zh-CN": "订单",
+              "zh-TW": "訂單"
+            },
+            "index": true
+          },
+          {
+            "ref": "client_key",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Retry key",
+              "de-DE": "Wiederholungsschlüssel",
+              "fr-FR": "Clé de nouvel essai",
+              "da-DK": "Genforsøgsnøgle",
+              "cs-CZ": "Klíč opakování",
+              "ar-EG": "مفتاح إعادة المحاولة",
+              "zh-CN": "重试密钥",
+              "zh-TW": "重試金鑰"
+            },
+            "nullable": true,
+            "unique": true
+          },
+          {
+            "ref": "card_code",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Card code",
+              "de-DE": "Kartencode",
+              "fr-FR": "Code de la carte",
+              "da-DK": "Kortkode",
+              "cs-CZ": "Kód karty",
+              "ar-EG": "رمز البطاقة",
+              "zh-CN": "卡号代码",
+              "zh-TW": "卡片代碼"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "card_id",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Gift card",
+              "de-DE": "Geschenkkarte",
+              "fr-FR": "Carte cadeau",
+              "da-DK": "Gavekort",
+              "cs-CZ": "Dárková karta",
+              "ar-EG": "بطاقة هدية",
+              "zh-CN": "礼品卡",
+              "zh-TW": "禮品卡"
+            },
+            "rules": {
+              "addOnLink": {
+                "addOn": "offers",
+                "table": "gift_cards"
+              },
+              "lookup": {
+                "from": "card_code",
+                "table": {
+                  "addOn": "offers",
+                  "table": "gift_cards"
+                },
+                "column": "code",
+                "where": [
+                  {
+                    "column": "status",
+                    "eq": "active"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "card_last4",
+            "type": "text",
+            "maxLength": 4,
+            "label": {
+              "en-US": "Card ending",
+              "de-DE": "Karte endet auf",
+              "fr-FR": "Carte se terminant par",
+              "da-DK": "Kort ender på",
+              "cs-CZ": "Karta končící na",
+              "ar-EG": "البطاقة المنتهية بـ",
+              "zh-CN": "卡号尾号",
+              "zh-TW": "卡號末碼"
+            },
+            "nullable": true,
+            "rules": {
+              "codeLast4": {
+                "of": "card_code"
+              }
+            }
+          },
+          {
+            "ref": "amount",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid",
+              "de-DE": "Bezahlt",
+              "fr-FR": "Payé",
+              "da-DK": "Betalt",
+              "cs-CZ": "Zaplaceno",
+              "ar-EG": "مدفوع",
+              "zh-CN": "已付款",
+              "zh-TW": "已付款"
+            }
+          },
+          {
+            "ref": "card_balance_after",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Left on the card",
+              "de-DE": "Restguthaben auf der Karte",
+              "fr-FR": "Reste sur la carte",
+              "da-DK": "Tilbage på kortet",
+              "cs-CZ": "Zbývá na kartě",
+              "ar-EG": "المتبقي في البطاقة",
+              "zh-CN": "卡内余额",
+              "zh-TW": "卡內餘額"
+            }
+          },
+          {
+            "ref": "returned",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Given back",
+              "de-DE": "Zurückgegeben",
+              "fr-FR": "Rendu",
+              "da-DK": "Givet tilbage",
+              "cs-CZ": "Vráceno",
+              "ar-EG": "أُعيد",
+              "zh-CN": "已退回",
+              "zh-TW": "已退回"
+            },
+            "rules": {
+              "rollup": {
+                "from": "payment_refunds",
+                "via": "payment_id",
+                "sum": "amount"
+              }
+            }
+          },
+          {
+            "ref": "kept",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Kept",
+              "de-DE": "Behalten",
+              "fr-FR": "Conservé",
+              "da-DK": "Beholdt",
+              "cs-CZ": "Ponecháno",
+              "ar-EG": "المحتفَظ به",
+              "zh-CN": "已留存",
+              "zh-TW": "已留存"
+            },
+            "rules": {
+              "formula": {
+                "sub": [
+                  "amount",
+                  {
+                    "coalesce": [
+                      "returned",
+                      0
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "made_at",
+            "type": "timestamptz",
+            "label": {
+              "en-US": "Made",
+              "de-DE": "Erstellt",
+              "fr-FR": "Effectué",
+              "da-DK": "Foretaget",
+              "cs-CZ": "Provedeno",
+              "ar-EG": "تمّ في",
+              "zh-CN": "办理时间",
+              "zh-TW": "辦理時間"
+            },
+            "nullable": true,
+            "rules": {
+              "stamp": {
+                "set": "now",
+                "on": "create"
+              }
+            }
+          },
+          {
+            "ref": "made_by",
+            "type": "text",
+            "maxLength": 80,
+            "label": {
+              "en-US": "Made by",
+              "de-DE": "Erstellt von",
+              "fr-FR": "Effectué par",
+              "da-DK": "Foretaget af",
+              "cs-CZ": "Provedl(a)",
+              "ar-EG": "تمّ بواسطة",
+              "zh-CN": "办理人",
+              "zh-TW": "辦理人"
+            },
+            "nullable": true,
+            "rules": {
+              "stamp": {
+                "set": {
+                  "byOrigin": {
+                    "public": "customer",
+                    "staff": "user-name"
+                  }
+                },
+                "on": "create"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "ref": "payment_refunds",
+        "label": {
+          "en-US": "Money back to a gift card",
+          "de-DE": "Geld zurück auf eine Geschenkkarte",
+          "fr-FR": "Argent rendu sur une carte cadeau",
+          "da-DK": "Penge tilbage til et gavekort",
+          "cs-CZ": "Peníze vrácené na dárkovou kartu",
+          "ar-EG": "مبلغ مُعاد إلى بطاقة هدية",
+          "zh-CN": "退回礼品卡的款项",
+          "zh-TW": "退回禮品卡的款項"
+        },
+        "labelPlural": {
+          "en-US": "Money back to gift cards",
+          "de-DE": "Geld zurück auf Geschenkkarten",
+          "fr-FR": "Argent rendu sur des cartes cadeaux",
+          "da-DK": "Penge tilbage til gavekort",
+          "cs-CZ": "Peníze vrácené na dárkové karty",
+          "ar-EG": "مبالغ مُعادة إلى بطاقات الهدايا",
+          "zh-CN": "退回礼品卡的款项",
+          "zh-TW": "退回禮品卡的款項"
+        },
+        "keyField": "reason",
+        "postings": [
+          {
+            "id": "card-refund",
+            "into": {
+              "addOn": "offers",
+              "ledger": "value",
+              "action": "refund"
+            },
+            "needs": "gift-cards",
+            "post": {
+              "on": {
+                "create": true
+              }
+            },
+            "map": {
+              "amount": "amount",
+              "against_table": {
+                "value": "ordering:payments"
+              },
+              "against_row": "payment_id"
+            }
+          }
+        ],
+        "columns": [
+          {
+            "ref": "id",
+            "type": "int",
+            "role": "pk"
+          },
+          {
+            "ref": "payment_id",
+            "type": "fk",
+            "references": "payments",
+            "label": {
+              "en-US": "Gift card payment",
+              "de-DE": "Zahlung mit Geschenkkarte",
+              "fr-FR": "Paiement par carte cadeau",
+              "da-DK": "Betaling med gavekort",
+              "cs-CZ": "Platba dárkovou kartou",
+              "ar-EG": "دفعة ببطاقة هدية",
+              "zh-CN": "礼品卡付款",
+              "zh-TW": "禮品卡付款"
+            },
+            "index": true
+          },
+          {
+            "ref": "client_key",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Retry key",
+              "de-DE": "Wiederholungsschlüssel",
+              "fr-FR": "Clé de nouvel essai",
+              "da-DK": "Genforsøgsnøgle",
+              "cs-CZ": "Klíč opakování",
+              "ar-EG": "مفتاح إعادة المحاولة",
+              "zh-CN": "重试密钥",
+              "zh-TW": "重試金鑰"
+            },
+            "nullable": true,
+            "unique": true
+          },
+          {
+            "ref": "order_id",
+            "type": "fk",
+            "references": "orders",
+            "label": {
+              "en-US": "Order",
+              "de-DE": "Bestellung",
+              "fr-FR": "Commande",
+              "da-DK": "Bestilling",
+              "cs-CZ": "Objednávka",
+              "ar-EG": "الطلب",
+              "zh-CN": "订单",
+              "zh-TW": "訂單"
+            }
+          },
+          {
+            "ref": "amount",
+            "type": "decimal",
+            "scale": "currency",
+            "label": {
+              "en-US": "Amount",
+              "de-DE": "Betrag",
+              "fr-FR": "Montant",
+              "da-DK": "Beløb",
+              "cs-CZ": "Částka",
+              "ar-EG": "المبلغ",
+              "zh-CN": "金额",
+              "zh-TW": "金額"
+            },
+            "rules": {
+              "validation": {
+                "min": 0.01
+              }
+            }
+          },
+          {
+            "ref": "reason",
+            "type": "text",
+            "maxLength": 120,
+            "label": {
+              "en-US": "Reason",
+              "de-DE": "Grund",
+              "fr-FR": "Raison",
+              "da-DK": "Årsag",
+              "cs-CZ": "Důvod",
+              "ar-EG": "السبب",
+              "zh-CN": "原因",
+              "zh-TW": "原因"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "made_at",
+            "type": "timestamptz",
+            "label": {
+              "en-US": "Made",
+              "de-DE": "Erstellt",
+              "fr-FR": "Effectué",
+              "da-DK": "Foretaget",
+              "cs-CZ": "Provedeno",
+              "ar-EG": "تمّ في",
+              "zh-CN": "办理时间",
+              "zh-TW": "辦理時間"
+            },
+            "nullable": true,
+            "rules": {
+              "stamp": {
+                "set": "now",
+                "on": "create"
+              }
+            }
+          },
+          {
+            "ref": "made_by",
+            "type": "text",
+            "maxLength": 80,
+            "label": {
+              "en-US": "Made by",
+              "de-DE": "Erstellt von",
+              "fr-FR": "Effectué par",
+              "da-DK": "Foretaget af",
+              "cs-CZ": "Provedl(a)",
+              "ar-EG": "تمّ بواسطة",
+              "zh-CN": "办理人",
+              "zh-TW": "辦理人"
+            },
+            "nullable": true,
+            "rules": {
+              "stamp": {
+                "set": "user-name",
+                "on": "create"
               }
             }
           }
@@ -4166,6 +5525,10 @@
               "order-cancelled-closed",
               "order-cancelled-other",
               "order-cancelled-by-you",
+              "order-confirmation-prepaid",
+              "order-ready-prepaid",
+              "card-money-returned",
+              "card-money-kept",
               "order-receipt",
               "enquiry-received"
             ],
@@ -4271,6 +5634,46 @@
                     "ar-EG": "ألغاه الزبون",
                     "zh-CN": "顾客已取消",
                     "zh-TW": "顧客已取消"
+                  },
+                  "order-confirmation-prepaid": {
+                    "en-US": "Order confirmation (paid by gift card)",
+                    "de-DE": "Bestellbestätigung (mit Geschenkkarte bezahlt)",
+                    "fr-FR": "Confirmation de commande (payée par carte cadeau)",
+                    "da-DK": "Ordrebekræftelse (betalt med gavekort)",
+                    "cs-CZ": "Potvrzení objednávky (zaplaceno dárkovou kartou)",
+                    "ar-EG": "تأكيد الطلب (مدفوع ببطاقة هدية)",
+                    "zh-CN": "订单确认（礼品卡已付）",
+                    "zh-TW": "訂單確認（禮品卡已付）"
+                  },
+                  "order-ready-prepaid": {
+                    "en-US": "Order ready (paid by gift card)",
+                    "de-DE": "Bestellung fertig (mit Geschenkkarte bezahlt)",
+                    "fr-FR": "Commande prête (payée par carte cadeau)",
+                    "da-DK": "Bestilling klar (betalt med gavekort)",
+                    "cs-CZ": "Objednávka připravena (zaplaceno dárkovou kartou)",
+                    "ar-EG": "الطلب جاهز (مدفوع ببطاقة هدية)",
+                    "zh-CN": "订单已备好（礼品卡已付）",
+                    "zh-TW": "訂單已備妥（禮品卡已付）"
+                  },
+                  "card-money-returned": {
+                    "en-US": "Gift card money returned",
+                    "de-DE": "Geld auf die Geschenkkarte zurück",
+                    "fr-FR": "Argent rendu sur la carte cadeau",
+                    "da-DK": "Penge tilbage på gavekortet",
+                    "cs-CZ": "Peníze vráceny na dárkovou kartu",
+                    "ar-EG": "إعادة مبلغ إلى بطاقة الهدية",
+                    "zh-CN": "礼品卡退款",
+                    "zh-TW": "禮品卡退款"
+                  },
+                  "card-money-kept": {
+                    "en-US": "Gift card money kept",
+                    "de-DE": "Geld der Geschenkkarte behalten",
+                    "fr-FR": "Argent de la carte cadeau conservé",
+                    "da-DK": "Gavekortets penge beholdt",
+                    "cs-CZ": "Peníze z dárkové karty ponechány",
+                    "ar-EG": "الاحتفاظ بمبلغ بطاقة الهدية",
+                    "zh-CN": "礼品卡款项保留",
+                    "zh-TW": "禮品卡款項保留"
                   },
                   "order-receipt": {
                     "en-US": "Receipt",
@@ -7106,6 +8509,8 @@
         "table:@orders:read",
         "table:@order_items:read",
         "table:@order_item_modifiers:read",
+        "table:@order_codes:read",
+        "table:@payments:read",
         "table:@settings:read",
         "table:@hours:read",
         "table:@closures:read",
@@ -7115,6 +8520,7 @@
         "table:@orders:update",
         "table:@order_items:create",
         "table:@order_item_modifiers:create",
+        "table:@payments:create",
         "table:@slot_pauses:create",
         "table:@slot_pauses:update",
         "table:@menu_items:update",
@@ -7127,7 +8533,8 @@
             "cancel_code",
             "cancel_dish",
             "cancel_note",
-            "paid_method"
+            "paid_method",
+            "rest_paid_by"
           ],
           "writableValues": {
             "status": [
@@ -7170,8 +8577,121 @@
           "writable": [
             "available"
           ]
+        },
+        "payments": {
+          "creatable": [
+            "order_id",
+            "card_code",
+            "client_key"
+          ]
         }
-      }
+      },
+      "tables": [
+        {
+          "addOn": "offers",
+          "table": "applied",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "source_table",
+              "source_row",
+              "source_line",
+              "name",
+              "kind",
+              "amount",
+              "typed",
+              "at"
+            ]
+          }
+        },
+        {
+          "addOn": "inventory",
+          "table": "items",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "id",
+              "name",
+              "unit",
+              "decimals",
+              "active"
+            ]
+          }
+        },
+        {
+          "addOn": "inventory",
+          "table": "stock_points",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "id",
+              "item_id",
+              "place_id",
+              "on_hand",
+              "available",
+              "low",
+              "state"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "gift_cards",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "kind",
+              "label",
+              "status",
+              "balance",
+              "expires_on"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "vouchers",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "code_last4",
+              "worth",
+              "value",
+              "what",
+              "units",
+              "public_name",
+              "uses_left",
+              "uses_total",
+              "status",
+              "expires_on"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "codes",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "offer_id",
+              "active",
+              "valid_until"
+            ]
+          }
+        }
+      ]
     },
     {
       "key": "manager",
@@ -7226,6 +8746,18 @@
         "table:@order_item_modifiers:create",
         "table:@order_item_modifiers:update",
         "table:@order_item_modifiers:delete",
+        "table:@order_codes:read",
+        "table:@order_codes:create",
+        "table:@order_codes:update",
+        "table:@order_codes:delete",
+        "table:@payments:read",
+        "table:@payments:create",
+        "table:@payments:update",
+        "table:@payments:delete",
+        "table:@payment_refunds:read",
+        "table:@payment_refunds:create",
+        "table:@payment_refunds:update",
+        "table:@payment_refunds:delete",
         "table:@enquiries:read",
         "table:@enquiries:create",
         "table:@enquiries:update",
@@ -7276,12 +8808,10 @@
             "email",
             "channel",
             "note",
-            "item_count",
-            "subtotal",
             "tax_rate",
-            "tax",
-            "total",
             "paid_method",
+            "rest_paid_by",
+            "hold_until",
             "cancel_code",
             "cancel_dish",
             "cancel_note",
@@ -7312,7 +8842,113 @@
             ]
           }
         }
-      }
+      },
+      "tables": [
+        {
+          "addOn": "offers",
+          "table": "applied",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "source_table",
+              "source_row",
+              "source_line",
+              "name",
+              "kind",
+              "amount",
+              "typed",
+              "at"
+            ]
+          }
+        },
+        {
+          "addOn": "inventory",
+          "table": "items",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "id",
+              "name",
+              "unit",
+              "decimals",
+              "active"
+            ]
+          }
+        },
+        {
+          "addOn": "inventory",
+          "table": "stock_points",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "id",
+              "item_id",
+              "place_id",
+              "on_hand",
+              "available",
+              "low",
+              "state"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "gift_cards",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "kind",
+              "label",
+              "status",
+              "balance",
+              "expires_on"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "vouchers",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "code_last4",
+              "worth",
+              "value",
+              "what",
+              "units",
+              "public_name",
+              "uses_left",
+              "uses_total",
+              "status",
+              "expires_on"
+            ]
+          }
+        },
+        {
+          "addOn": "offers",
+          "table": "codes",
+          "actions": [
+            "read"
+          ],
+          "limit": {
+            "readable": [
+              "offer_id",
+              "active",
+              "valid_until"
+            ]
+          }
+        }
+      ]
     }
   ],
   "publicKeys": {
@@ -7370,9 +9006,15 @@
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -7403,6 +9045,25 @@
       }
     },
     {
+      "table": "payments",
+      "methods": [
+        "GET"
+      ],
+      "level": "verified",
+      "visibleWith": {
+        "table": "orders",
+        "via": "order_id"
+      },
+      "select": [
+        "id",
+        "order_id",
+        "amount",
+        "returned",
+        "kept",
+        "card_last4"
+      ]
+    },
+    {
       "table": "order_items",
       "methods": [
         "GET"
@@ -7423,7 +9084,8 @@
         "unit_price",
         "options_total",
         "unit_total",
-        "line_total"
+        "line_total",
+        "discount"
       ]
     },
     {
@@ -7460,6 +9122,14 @@
       "showLeft": {
         "below": 5
       }
+    },
+    {
+      "table": "menu_items",
+      "kind": "availability",
+      "methods": [
+        "GET"
+      ],
+      "words": "inventory:stock"
     },
     {
       "table": "menu_categories",
@@ -7636,9 +9306,15 @@
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -7731,7 +9407,8 @@
             "unit_price",
             "options_total",
             "unit_total",
-            "line_total"
+            "line_total",
+            "discount"
           ],
           "position": "position",
           "min": 1,
@@ -7793,6 +9470,35 @@
               ]
             }
           }
+        },
+        "order_codes": {
+          "via": "order_id",
+          "writable": [
+            "typed"
+          ],
+          "select": [
+            "id",
+            "typed"
+          ],
+          "max": 12,
+          "plainText": [
+            {
+              "column": "typed",
+              "max": 64
+            }
+          ]
+        },
+        "payments": {
+          "via": "order_id",
+          "writable": [
+            "card_code"
+          ],
+          "select": [
+            "id",
+            "amount",
+            "card_last4"
+          ],
+          "max": 1
         }
       },
       "dryRun": true,
@@ -7869,9 +9575,15 @@
         "item_count",
         "subtotal",
         "tax_rate",
+        "discount",
+        "net",
         "tax",
         "total",
+        "paid",
+        "due",
+        "to_pay",
         "paid_method",
+        "rest_paid_by",
         "cancel_code",
         "cancel_dish",
         "cancel_note",
@@ -7910,6 +9622,26 @@
       }
     },
     {
+      "table": "payments",
+      "key": "link",
+      "methods": [
+        "GET"
+      ],
+      "level": "verified",
+      "visibleWith": {
+        "table": "orders",
+        "via": "order_id"
+      },
+      "select": [
+        "id",
+        "order_id",
+        "amount",
+        "returned",
+        "kept",
+        "card_last4"
+      ]
+    },
+    {
       "table": "order_items",
       "key": "link",
       "methods": [
@@ -7931,7 +9663,8 @@
         "unit_price",
         "options_total",
         "unit_total",
-        "line_total"
+        "line_total",
+        "discount"
       ]
     },
     {
@@ -8007,7 +9740,11 @@
       "order-cancelled-other": "ordering-order-cancelled-other",
       "order-cancelled-by-you": "ordering-order-cancelled-by-you",
       "order-receipt": "ordering-order-receipt",
-      "enquiry-received": "ordering-enquiry-received"
+      "enquiry-received": "ordering-enquiry-received",
+      "order-confirmation-prepaid": "ordering-order-confirmation-prepaid",
+      "order-ready-prepaid": "ordering-order-ready-prepaid",
+      "card-money-returned": "ordering-card-money-returned",
+      "card-money-kept": "ordering-card-money-kept"
     },
     "producers": [
       {
@@ -8016,8 +9753,19 @@
         "onCreate": {
           "table": "orders",
           "where": {
-            "column": "channel",
-            "eq": "online"
+            "column": "confirm_as",
+            "eq": 1
+          }
+        }
+      },
+      {
+        "kind": "order-confirmation-prepaid",
+        "link": "order_id",
+        "onCreate": {
+          "table": "orders",
+          "where": {
+            "column": "confirm_as",
+            "eq": 2
           }
         }
       },
@@ -8044,7 +9792,45 @@
         "onChange": {
           "table": "orders",
           "column": "status",
-          "to": "ready"
+          "to": "ready",
+          "where": {
+            "column": "prepaid",
+            "eq": 0
+          }
+        },
+        "holdSeconds": 20,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "placed",
+              "confirmed",
+              "preparing",
+              "picked_up",
+              "cancelled",
+              "not_collected"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-ready-prepaid",
+        "link": "order_id",
+        "gate": {
+          "setting": {
+            "table": "settings",
+            "column": "ready_email_on"
+          }
+        },
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "ready",
+          "where": {
+            "column": "prepaid",
+            "eq": 1
+          }
         },
         "holdSeconds": 20,
         "dropWhen": [
@@ -8141,6 +9927,32 @@
         }
       },
       {
+        "kind": "card-money-returned",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "cancelled",
+          "where": {
+            "column": "card_used",
+            "eq": 1
+          }
+        }
+      },
+      {
+        "kind": "card-money-kept",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "not_collected",
+          "where": {
+            "column": "card_used",
+            "eq": 1
+          }
+        }
+      },
+      {
         "kind": "order-receipt",
         "link": "order_id",
         "gate": {
@@ -8204,6 +10016,7 @@
         "order.subtotal",
         "order.tax",
         "order.tax_rate.percent",
+        "order.to_pay",
         "order.total",
         "practice.address",
         "practice.directions",
@@ -8213,7 +10026,7 @@
       "locales": {
         "en-US": {
           "subject": "Your order #{{order.number}} is in",
-          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.total}} to pay at pickup",
+          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
           "blocks": [
             {
               "block": "email.heading",
@@ -8260,6 +10073,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8275,6 +10109,35 @@
                   {
                     "label": "Total",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gift card ending {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "To pay at pickup",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8315,7 +10178,7 @@
         },
         "de-DE": {
           "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
-          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} zahlbar bei Abholung",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.to_pay}} zahlbar bei Abholung",
           "blocks": [
             {
               "block": "email.heading",
@@ -8362,6 +10225,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8377,6 +10261,35 @@
                   {
                     "label": "Gesamt",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Geschenkkarte mit Endung {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Bei Abholung zu zahlen",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8417,7 +10330,7 @@
         },
         "fr-FR": {
           "subject": "Votre commande #{{order.number}} est enregistrée",
-          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · {{order.total}} à payer au retrait",
+          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · {{order.to_pay}} à payer au retrait",
           "blocks": [
             {
               "block": "email.heading",
@@ -8464,6 +10377,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8479,6 +10413,35 @@
                   {
                     "label": "Total",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Carte cadeau se terminant par {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "À payer au retrait",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8519,7 +10482,7 @@
         },
         "da-DK": {
           "subject": "Din bestilling #{{order.number}} er modtaget",
-          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · {{order.total}} betales ved afhentning",
+          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · {{order.to_pay}} betales ved afhentning",
           "blocks": [
             {
               "block": "email.heading",
@@ -8566,6 +10529,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8581,6 +10565,35 @@
                   {
                     "label": "I alt",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gavekort, der ender på {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Betales ved afhentning",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8621,7 +10634,7 @@
         },
         "cs-CZ": {
           "subject": "Vaše objednávka #{{order.number}} je přijata",
-          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} k úhradě při vyzvednutí",
+          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.to_pay}} k úhradě při vyzvednutí",
           "blocks": [
             {
               "block": "email.heading",
@@ -8668,6 +10681,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8683,6 +10717,35 @@
                   {
                     "label": "Celkem",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Dárková karta končící na {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "K zaplacení při vyzvednutí",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8723,7 +10786,7 @@
         },
         "ar-EG": {
           "subject": "وصلنا طلبك #{{order.number}}",
-          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · {{order.total}} تُدفع عند الاستلام",
+          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · {{order.to_pay}} تُدفع عند الاستلام",
           "blocks": [
             {
               "block": "email.heading",
@@ -8770,6 +10833,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8785,6 +10869,35 @@
                   {
                     "label": "الإجمالي",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "يُدفع عند الاستلام",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8825,7 +10938,7 @@
         },
         "zh-CN": {
           "subject": "已收到你的订单 #{{order.number}}",
-          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐时付 {{order.total}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐时付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -8872,6 +10985,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8887,6 +11021,35 @@
                   {
                     "label": "合计",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "尾号 {{row.card_last4}} 的礼品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐时支付",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -8927,7 +11090,7 @@
         },
         "zh-TW": {
           "subject": "已收到你的訂單 #{{order.number}}",
-          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐時付 {{order.total}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐時付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -8974,6 +11137,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -8989,6 +11173,35 @@
                   {
                     "label": "合計",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "末碼 {{row.card_last4}} 的禮品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐時支付",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9049,6 +11262,7 @@
         "order.subtotal",
         "order.tax",
         "order.tax_rate.percent",
+        "order.to_pay",
         "order.total",
         "practice.address",
         "practice.directions",
@@ -9058,7 +11272,7 @@
       "locales": {
         "en-US": {
           "subject": "Your order #{{order.number}} is in",
-          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.total}} to pay at pickup",
+          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · {{order.to_pay}} to pay at pickup",
           "blocks": [
             {
               "block": "email.heading",
@@ -9106,6 +11320,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9121,6 +11356,35 @@
                   {
                     "label": "Total",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gift card ending {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "To pay at pickup",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9153,7 +11417,7 @@
         },
         "de-DE": {
           "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
-          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.total}} zahlbar bei Abholung",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · {{order.to_pay}} zahlbar bei Abholung",
           "blocks": [
             {
               "block": "email.heading",
@@ -9201,6 +11465,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9216,6 +11501,35 @@
                   {
                     "label": "Gesamt",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Geschenkkarte mit Endung {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Bei Abholung zu zahlen",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9248,7 +11562,7 @@
         },
         "fr-FR": {
           "subject": "Votre commande #{{order.number}} est enregistrée",
-          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · {{order.total}} à payer au retrait",
+          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · {{order.to_pay}} à payer au retrait",
           "blocks": [
             {
               "block": "email.heading",
@@ -9296,6 +11610,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9311,6 +11646,35 @@
                   {
                     "label": "Total",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Carte cadeau se terminant par {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "À payer au retrait",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9343,7 +11707,7 @@
         },
         "da-DK": {
           "subject": "Din bestilling #{{order.number}} er modtaget",
-          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · {{order.total}} betales ved afhentning",
+          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · {{order.to_pay}} betales ved afhentning",
           "blocks": [
             {
               "block": "email.heading",
@@ -9391,6 +11755,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9406,6 +11791,35 @@
                   {
                     "label": "I alt",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gavekort, der ender på {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Betales ved afhentning",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9438,7 +11852,7 @@
         },
         "cs-CZ": {
           "subject": "Vaše objednávka #{{order.number}} je přijata",
-          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.total}} k úhradě při vyzvednutí",
+          "preheader": "Vyzvednutí: {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · {{order.to_pay}} k úhradě při vyzvednutí",
           "blocks": [
             {
               "block": "email.heading",
@@ -9486,6 +11900,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9501,6 +11936,35 @@
                   {
                     "label": "Celkem",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Dárková karta končící na {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "K zaplacení při vyzvednutí",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9533,7 +11997,7 @@
         },
         "ar-EG": {
           "subject": "وصلنا طلبك #{{order.number}}",
-          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · {{order.total}} تُدفع عند الاستلام",
+          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · {{order.to_pay}} تُدفع عند الاستلام",
           "blocks": [
             {
               "block": "email.heading",
@@ -9581,6 +12045,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9596,6 +12081,35 @@
                   {
                     "label": "الإجمالي",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "يُدفع عند الاستلام",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9628,7 +12142,7 @@
         },
         "zh-CN": {
           "subject": "已收到你的订单 #{{order.number}}",
-          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐时付 {{order.total}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐时付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -9676,6 +12190,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9691,6 +12226,35 @@
                   {
                     "label": "合计",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "尾号 {{row.card_last4}} 的礼品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐时支付",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9723,7 +12287,7 @@
         },
         "zh-TW": {
           "subject": "已收到你的訂單 #{{order.number}}",
-          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐時付 {{order.total}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 取餐時付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -9771,6 +12335,27 @@
               }
             },
             {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
               "block": "email.tax-breakdown",
               "id": "totals",
               "data": {
@@ -9786,6 +12371,35 @@
                   {
                     "label": "合計",
                     "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "末碼 {{row.card_last4}} 的禮品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐時支付",
+                    "amount": "{{order.to_pay}}"
                   }
                 ]
               }
@@ -9832,7 +12446,7 @@
       },
       "vars": [
         "order.number",
-        "order.total",
+        "order.to_pay",
         "practice.address",
         "practice.directions",
         "practice.phone"
@@ -9840,7 +12454,7 @@
       "locales": {
         "en-US": {
           "subject": "#{{order.number}} is on the shelf",
-          "preheader": "On the shelf now · {{order.total}} to pay",
+          "preheader": "On the shelf now · {{order.to_pay}} to pay",
           "blocks": [
             {
               "block": "email.heading",
@@ -9856,7 +12470,7 @@
                 "paras": [
                   "Come on in — it's waiting for you, filed by number.",
                   "{{practice.directions}}",
-                  "You'll pay {{order.total}} at the counter."
+                  "You'll pay {{order.to_pay}} at the counter."
                 ]
               }
             }
@@ -9865,7 +12479,7 @@
         },
         "de-DE": {
           "subject": "#{{order.number}} liegt im Regal",
-          "preheader": "Jetzt im Regal · {{order.total}} zu zahlen",
+          "preheader": "Jetzt im Regal · {{order.to_pay}} zu zahlen",
           "blocks": [
             {
               "block": "email.heading",
@@ -9881,7 +12495,7 @@
                 "paras": [
                   "Komm rein — sie wartet auf dich, nach Nummer abgelegt.",
                   "{{practice.directions}}",
-                  "Du zahlst {{order.total}} an der Theke."
+                  "Du zahlst {{order.to_pay}} an der Theke."
                 ]
               }
             }
@@ -9890,7 +12504,7 @@
         },
         "fr-FR": {
           "subject": "#{{order.number}} est sur l’étagère",
-          "preheader": "Sur l’étagère · {{order.total}} à payer",
+          "preheader": "Sur l’étagère · {{order.to_pay}} à payer",
           "blocks": [
             {
               "block": "email.heading",
@@ -9906,7 +12520,7 @@
                 "paras": [
                   "Entrez — elle vous attend, classée par numéro.",
                   "{{practice.directions}}",
-                  "Vous paierez {{order.total}} au comptoir."
+                  "Vous paierez {{order.to_pay}} au comptoir."
                 ]
               }
             }
@@ -9915,7 +12529,7 @@
         },
         "da-DK": {
           "subject": "#{{order.number}} står på hylden",
-          "preheader": "På hylden nu · {{order.total}} at betale",
+          "preheader": "På hylden nu · {{order.to_pay}} at betale",
           "blocks": [
             {
               "block": "email.heading",
@@ -9931,7 +12545,7 @@
                 "paras": [
                   "Kom bare ind — den venter på dig, sorteret efter nummer.",
                   "{{practice.directions}}",
-                  "Du betaler {{order.total}} ved disken."
+                  "Du betaler {{order.to_pay}} ved disken."
                 ]
               }
             }
@@ -9940,7 +12554,7 @@
         },
         "cs-CZ": {
           "subject": "#{{order.number}} je na polici",
-          "preheader": "Teď na polici · k zaplacení {{order.total}}",
+          "preheader": "Teď na polici · k zaplacení {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -9956,7 +12570,7 @@
                 "paras": [
                   "Pojďte dál — čeká na vás, seřazená podle čísla.",
                   "{{practice.directions}}",
-                  "U pultu zaplatíte {{order.total}}."
+                  "U pultu zaplatíte {{order.to_pay}}."
                 ]
               }
             }
@@ -9965,7 +12579,7 @@
         },
         "ar-EG": {
           "subject": "#{{order.number}} على الرف",
-          "preheader": "على الرف الآن · {{order.total}} للدفع",
+          "preheader": "على الرف الآن · {{order.to_pay}} للدفع",
           "blocks": [
             {
               "block": "email.heading",
@@ -9981,7 +12595,7 @@
                 "paras": [
                   "تفضّل بالدخول — إنه بانتظارك، مرتّب بالرقم.",
                   "{{practice.directions}}",
-                  "ستدفع {{order.total}} عند الكاونتر."
+                  "ستدفع {{order.to_pay}} عند الكاونتر."
                 ]
               }
             }
@@ -9990,7 +12604,7 @@
         },
         "zh-CN": {
           "subject": "#{{order.number}} 已放上取餐架",
-          "preheader": "已在取餐架上 · 应付 {{order.total}}",
+          "preheader": "已在取餐架上 · 应付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -10006,7 +12620,7 @@
                 "paras": [
                   "请进店领取——已按号码放好等你。",
                   "{{practice.directions}}",
-                  "请在柜台支付 {{order.total}}。"
+                  "请在柜台支付 {{order.to_pay}}。"
                 ]
               }
             }
@@ -10015,7 +12629,7 @@
         },
         "zh-TW": {
           "subject": "#{{order.number}} 已放上取餐架",
-          "preheader": "已在取餐架上 · 應付 {{order.total}}",
+          "preheader": "已在取餐架上 · 應付 {{order.to_pay}}",
           "blocks": [
             {
               "block": "email.heading",
@@ -10031,7 +12645,7 @@
                 "paras": [
                   "請進店領取——已按號碼放好等你。",
                   "{{practice.directions}}",
-                  "請在櫃檯支付 {{order.total}}。"
+                  "請在櫃檯支付 {{order.to_pay}}。"
                 ]
               }
             }
@@ -11678,6 +14292,1781 @@
           "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你向我們送出了大量訂單詢問。"
         }
       }
+    },
+    {
+      "key": "ordering-order-confirmation-prepaid",
+      "name": {
+        "en-US": "Order confirmation (paid by gift card)",
+        "de-DE": "Bestellbestätigung (mit Geschenkkarte bezahlt)",
+        "fr-FR": "Confirmation de commande (payée par carte cadeau)",
+        "da-DK": "Ordrebekræftelse (betalt med gavekort)",
+        "cs-CZ": "Potvrzení objednávky (zaplaceno dárkovou kartou)",
+        "ar-EG": "تأكيد الطلب (مدفوع ببطاقة هدية)",
+        "zh-CN": "订单确认（礼品卡已付）",
+        "zh-TW": "訂單確認（禮品卡已付）"
+      },
+      "vars": [
+        "manage_url",
+        "order.link_token",
+        "order.number",
+        "order.pickup_at.day_month",
+        "order.pickup_at.relative_day",
+        "order.pickup_at.time",
+        "order.subtotal",
+        "order.tax",
+        "order.tax_rate.percent",
+        "order.to_pay",
+        "order.total",
+        "practice.address",
+        "practice.directions",
+        "practice.phone",
+        "recipient.first_name"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "Your order #{{order.number}} is in",
+          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · paid by gift card",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Thanks, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Subtotal",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Tax {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "Total",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gift card ending {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "To pay at pickup",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Paid by gift card. Nothing to pay at the counter."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Follow your order",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · mit Geschenkkarte bezahlt",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Danke, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Wir haben deine Bestellung #{{order.number}} für {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} um {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Zwischensumme",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Steuer {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "Gesamt",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Geschenkkarte mit Endung {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Bei Abholung zu zahlen",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Mit Geschenkkarte bezahlt. An der Theke ist nichts mehr zu zahlen."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Bestellung verfolgen",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Votre commande #{{order.number}} est enregistrée",
+          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · payé par carte cadeau",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Merci, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Nous avons votre commande #{{order.number}} pour {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} à {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Sous-total",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Taxe {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "Total",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Carte cadeau se terminant par {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "À payer au retrait",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Payé par carte cadeau. Rien à payer au comptoir."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Suivre votre commande",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Din bestilling #{{order.number}} er modtaget",
+          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · betalt med gavekort",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Tak, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vi har din bestilling #{{order.number}} til {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} kl. {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Subtotal",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Moms {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "I alt",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Gavekort, der ender på {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Betales ved afhentning",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Betalt med gavekort. Der er intet at betale ved disken."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Følg din bestilling",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Vaše objednávka #{{order.number}} je přijata",
+          "preheader": "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · zaplaceno dárkovou kartou",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Děkujeme, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vaši objednávku #{{order.number}} máme. Vyzvednutí: {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Mezisoučet",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Daň {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "Celkem",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "Dárková karta končící na {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "K zaplacení při vyzvednutí",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Zaplaceno dárkovou kartou. U pultu už nic neplatíte."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Sledovat objednávku",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "وصلنا طلبك #{{order.number}}",
+          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · مدفوع ببطاقة هدية",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "شكرًا، {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "وصلنا طلبك #{{order.number}} للاستلام {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "المجموع الفرعي",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "الضريبة {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "الإجمالي",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "يُدفع عند الاستلام",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "مدفوع ببطاقة هدية. لا شيء يُدفع عند المنضدة."
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "تابع طلبك",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "已收到你的订单 #{{order.number}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 礼品卡已付",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "谢谢，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "已收到你的订单 #{{order.number}}，取餐时间 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。"
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "小计",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "税费 {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "合计",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "尾号 {{row.card_last4}} 的礼品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐时支付",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "已用礼品卡支付，到店无需再付款。"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "跟踪订单",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "已收到你的訂單 #{{order.number}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 禮品卡已付",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "謝謝，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "已收到你的訂單 #{{order.number}}，取餐時間 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。"
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "小計",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "稅金 {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax}}"
+                  },
+                  {
+                    "label": "合計",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10
+                },
+                "row": {
+                  "title": "末碼 {{row.card_last4}} 的禮品卡",
+                  "amount": "−{{row.kept}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "to-pay",
+              "data": {
+                "lines": [
+                  {
+                    "label": "取餐時支付",
+                    "amount": "{{order.to_pay}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "已用禮品卡支付，到店無需再付款。"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "追蹤訂單",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-ready-prepaid",
+      "name": {
+        "en-US": "Order ready (paid by gift card)",
+        "de-DE": "Bestellung fertig (mit Geschenkkarte bezahlt)",
+        "fr-FR": "Commande prête (payée par carte cadeau)",
+        "da-DK": "Bestilling klar (betalt med gavekort)",
+        "cs-CZ": "Objednávka připravena (zaplaceno dárkovou kartou)",
+        "ar-EG": "الطلب جاهز (مدفوع ببطاقة هدية)",
+        "zh-CN": "订单已备好（礼品卡已付）",
+        "zh-TW": "訂單已備妥（禮品卡已付）"
+      },
+      "vars": [
+        "order.number",
+        "practice.address",
+        "practice.directions",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "#{{order.number}} is on the shelf",
+          "preheader": "On the shelf now · nothing to pay",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} is ready."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Come on in — it's waiting for you, filed by number.",
+                  "{{practice.directions}}",
+                  "It's paid by gift card: nothing to pay at the counter."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "#{{order.number}} liegt im Regal",
+          "preheader": "Jetzt im Regal · nichts zu zahlen",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} ist fertig."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Komm rein — sie wartet auf dich, nach Nummer abgelegt.",
+                  "{{practice.directions}}",
+                  "Sie ist mit Geschenkkarte bezahlt: an der Theke ist nichts zu zahlen."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "#{{order.number}} est sur l’étagère",
+          "preheader": "Sur l’étagère maintenant · rien à payer",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} est prête."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Entrez — elle vous attend, classée par numéro.",
+                  "{{practice.directions}}",
+                  "Elle est payée par carte cadeau : rien à payer au comptoir."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "#{{order.number}} står på hylden",
+          "preheader": "På hylden nu · intet at betale",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} er klar."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Kom bare ind — den venter på dig, sorteret efter nummer.",
+                  "{{practice.directions}}",
+                  "Den er betalt med gavekort: der er intet at betale ved disken."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "#{{order.number}} je na polici",
+          "preheader": "Už je v regálu · nic k zaplacení",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} je hotová."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Pojďte dál — čeká na vás, seřazená podle čísla.",
+                  "{{practice.directions}}",
+                  "Je zaplacená dárkovou kartou: u pultu nic neplatíte."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "#{{order.number}} على الرف",
+          "preheader": "على الرف الآن · لا شيء يُدفع",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} جاهز."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "تفضّل بالدخول — إنه بانتظارك، مرتّب بالرقم.",
+                  "{{practice.directions}}",
+                  "الطلب مدفوع ببطاقة هدية: لا شيء يُدفع عند المنضدة."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "#{{order.number}} 已放上取餐架",
+          "preheader": "已放上取餐架 · 无需付款",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} 已做好。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "请进店领取——已按号码放好等你。",
+                  "{{practice.directions}}",
+                  "已用礼品卡支付：到店无需付款。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "#{{order.number}} 已放上取餐架",
+          "preheader": "已放上取餐架 · 無需付款",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} 已做好。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "請進店領取——已按號碼放好等你。",
+                  "{{practice.directions}}",
+                  "已用禮品卡支付：到店無需付款。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-card-money-returned",
+      "name": {
+        "en-US": "Gift card money returned",
+        "de-DE": "Geld auf die Geschenkkarte zurück",
+        "fr-FR": "Argent rendu sur la carte cadeau",
+        "da-DK": "Penge tilbage på gavekortet",
+        "cs-CZ": "Peníze vráceny na dárkovou kartu",
+        "ar-EG": "إعادة مبلغ إلى بطاقة الهدية",
+        "zh-CN": "礼品卡退款",
+        "zh-TW": "禮品卡退款"
+      },
+      "vars": [
+        "order.number",
+        "order.paid",
+        "practice.address",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "Your gift card got its money back",
+          "preheader": "#{{order.number}} · {{order.paid}} back on your gift card",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.paid}} went back to your gift card for order #{{order.number}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Deine Geschenkkarte hat ihr Geld zurück",
+          "preheader": "#{{order.number}} · {{order.paid}} wieder auf deiner Geschenkkarte",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.paid}} sind für die Bestellung #{{order.number}} zurück auf deine Geschenkkarte gegangen."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Votre carte cadeau a été recréditée",
+          "preheader": "#{{order.number}} · {{order.paid}} de retour sur votre carte cadeau",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.paid}} ont été recrédités sur votre carte cadeau pour la commande #{{order.number}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Dit gavekort har fået pengene tilbage",
+          "preheader": "#{{order.number}} · {{order.paid}} tilbage på dit gavekort",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.paid}} er gået tilbage til dit gavekort for bestilling #{{order.number}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Na vaši dárkovou kartu se vrátily peníze",
+          "preheader": "#{{order.number}} · {{order.paid}} zpět na vaší dárkové kartě",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Za objednávku #{{order.number}} se na vaši dárkovou kartu vrátilo {{order.paid}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "عاد المبلغ إلى بطاقة هديتك",
+          "preheader": "#{{order.number}} · عاد {{order.paid}} إلى بطاقة هديتك",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "عاد {{order.paid}} إلى بطاقة هديتك عن الطلب #{{order.number}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "款项已退回您的礼品卡",
+          "preheader": "#{{order.number}} · {{order.paid}} 已退回您的礼品卡",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "订单 #{{order.number}} 的 {{order.paid}} 已退回您的礼品卡。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "款項已退回您的禮品卡",
+          "preheader": "#{{order.number}} · {{order.paid}} 已退回您的禮品卡",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "訂單 #{{order.number}} 的 {{order.paid}} 已退回您的禮品卡。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-card-money-kept",
+      "name": {
+        "en-US": "Gift card money kept",
+        "de-DE": "Geld der Geschenkkarte behalten",
+        "fr-FR": "Argent de la carte cadeau conservé",
+        "da-DK": "Gavekortets penge beholdt",
+        "cs-CZ": "Peníze z dárkové karty ponechány",
+        "ar-EG": "الاحتفاظ بمبلغ بطاقة الهدية",
+        "zh-CN": "礼品卡款项保留",
+        "zh-TW": "禮品卡款項保留"
+      },
+      "vars": [
+        "order.number",
+        "order.paid",
+        "practice.address",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "About your order #{{order.number}}",
+          "preheader": "#{{order.number}} was not collected",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Your gift card paid {{order.paid}} for order #{{order.number}}, which was not collected.",
+                  "Ask at the counter, or call us on {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Zu deiner Bestellung #{{order.number}}",
+          "preheader": "#{{order.number}} wurde nicht abgeholt",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Deine Geschenkkarte hat {{order.paid}} für die Bestellung #{{order.number}} bezahlt, die nicht abgeholt wurde.",
+                  "Frag an der Theke nach oder ruf uns unter {{practice.phone}} an."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "À propos de votre commande #{{order.number}}",
+          "preheader": "#{{order.number}} n’a pas été retirée",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Votre carte cadeau a payé {{order.paid}} pour la commande #{{order.number}}, qui n’a pas été retirée.",
+                  "Demandez au comptoir, ou appelez-nous au {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Om din bestilling #{{order.number}}",
+          "preheader": "#{{order.number}} blev ikke afhentet",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Dit gavekort betalte {{order.paid}} for bestilling #{{order.number}}, som ikke blev afhentet.",
+                  "Spørg ved disken, eller ring til os på {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "K vaší objednávce #{{order.number}}",
+          "preheader": "#{{order.number}} nebyla vyzvednuta",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vaše dárková karta zaplatila {{order.paid}} za objednávku #{{order.number}}, která nebyla vyzvednuta.",
+                  "Zeptejte se u pultu, nebo nám zavolejte na {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "بخصوص طلبك #{{order.number}}",
+          "preheader": "#{{order.number}} لم يُستلم",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "دفعت بطاقة هديتك {{order.paid}} عن الطلب #{{order.number}} الذي لم يُستلم.",
+                  "اسأل عند المنضدة، أو اتصل بنا على {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "关于您的订单 #{{order.number}}",
+          "preheader": "#{{order.number}} 未被取走",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "您的礼品卡为订单 #{{order.number}} 支付了 {{order.paid}}，但该订单未被取走。",
+                  "请到柜台咨询，或致电 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "關於您的訂單 #{{order.number}}",
+          "preheader": "#{{order.number}} 未被取走",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "您的禮品卡為訂單 #{{order.number}} 支付了 {{order.paid}}，但該訂單未被取走。",
+                  "請到櫃檯洽詢，或致電 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
     }
   ],
   "sampleData": {
@@ -11692,6 +16081,9 @@
         "orders",
         "order_items",
         "order_item_modifiers",
+        "order_codes",
+        "payments",
+        "payment_refunds",
         "customers",
         "messages"
       ]
