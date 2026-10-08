@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { Applied, CardPayment, ClaimReply, DishState, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, StockWord, Id, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -47,6 +47,13 @@ export interface DinerPort {
   slots(date: string): Promise<SlotTime[]>;
   /** Each dish's portions on a day; `qty` asks whether that many are left. */
   dishes(date: string, qty?: number): Promise<DishState[]>;
+
+  /**
+   * Inventory's words for some dishes (at most sixty at a time): whether what
+   * each is made of is in. Empty while Inventory is not in use, and for a dish
+   * that is linked to nothing — the page then says nothing of it.
+   */
+  stock(dishIds: readonly Id[]): Promise<StockWord[]>;
 
   /** The order priced by Adminium, written nowhere. */
   quote(body: OrderBody): Promise<QuoteReply>;

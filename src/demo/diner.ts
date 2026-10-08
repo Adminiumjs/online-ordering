@@ -11,7 +11,7 @@
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
 import type { DinerPort, Menu, OrderWithLines } from "../data/ports.ts";
-import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime } from "../data/wire.ts";
+import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime, type StockWord } from "../data/wire.ts";
 import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { columnOf, LINE_NOTE_RULE, linkFreeText, ruleOf, type PlainTextColumn } from "../lib/plainText.ts";
@@ -314,6 +314,11 @@ export class DemoDiner implements DinerPort {
     }
     this.linkSession = { orderId: order.id };
     return { session: `link-${String(order.id)}`, expiresAt: this.engine.now + 30 * 60_000 };
+  }
+
+  /** The demo keeps no ingredient stock: its dishes run out by the kitchen's own portions alone. */
+  async stock(): Promise<StockWord[]> {
+    return [];
   }
 
   async cardBalance(by: { code: string } | { token: string }): Promise<{ balance: string; expiresOn: string | null } | null> {

@@ -44,6 +44,16 @@ export interface DishState {
   left?: number;
 }
 
+/**
+ * What Inventory says of a dish's ingredients, where it is in use: in, low
+ * (few left — how many only as the kitchen's owner lets it be told) or out.
+ */
+export interface StockWord {
+  id: string;
+  state: "in" | "low" | "out";
+  left?: number;
+}
+
 /** One child row of a create, and the rows below it. */
 export interface TreeRow {
   values: Record<string, unknown>;

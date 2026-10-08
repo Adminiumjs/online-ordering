@@ -20,7 +20,7 @@ import { createPublicClient, pictureUrl, PublicApiError, type HeldSession, type 
 import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
-import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime } from "./wire.ts";
+import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime, type StockWord } from "./wire.ts";
 
 /** What the door needs to start: the address, the customer key, the tables' real names and the other keys. */
 export interface DinerServed {
@@ -246,6 +246,23 @@ export class AdminiumDiner implements DinerPort {
         ...(dish.left === undefined ? {} : { left: dish.left }),
       })),
     );
+  }
+
+  stock(dishIds: readonly Id[]): Promise<StockWord[]> {
+    return answer(async () => {
+      if (dishIds.length === 0) return [];
+      try {
+        const rows = await this.customer.parentAvailability(this.refs.stock, { under: dishIds.slice(0, 60).map(String) } as never);
+        return rows.map((row) => {
+          const said = row as unknown as { id: string; state: string; left?: number | string };
+          const state: StockWord["state"] = said.state === "out" ? "out" : said.state === "low" ? "low" : "in";
+          return { id: String(said.id), state, ...(said.left === undefined ? {} : { left: Number(said.left) }) };
+        });
+      } catch {
+        // Inventory is not in use here (or cannot answer): the page says nothing of stock, and the save is what judges.
+        return [];
+      }
+    });
   }
 
   // ── placing an order ────────────────────────────────────────────────────────
