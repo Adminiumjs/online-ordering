@@ -409,7 +409,17 @@ export function owed(order: Row): number {
   return left === null || left === undefined ? Number(order["total"] ?? 0) : Number(left);
 }
 
-const cardReason = (error: unknown): string => (isApiError(error) && error.code === "POSTING_REFUSED" && typeof error.params["reason"] === "string" ? error.params["reason"] : isApiError(error) && error.code === "FEATURE_OFF" ? "add-on-unavailable" : "other");
+/** Why a card was not taken, in Adminium's word: the ledger's reason, "not valid" for a code that is no card's, or that it cannot be asked. */
+const cardReason = (error: unknown): string =>
+  !isApiError(error)
+    ? "other"
+    : error.code === "POSTING_REFUSED" && typeof error.params["reason"] === "string"
+      ? error.params["reason"]
+      : error.code === "VALIDATION_FAILED"
+        ? "not-valid"
+        : error.code === "FEATURE_OFF"
+          ? "add-on-unavailable"
+          : "other";
 
 export function setHandoffCard(draft: string): void {
   const h = get().handoff;

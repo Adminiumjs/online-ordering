@@ -288,9 +288,9 @@ export class AdminiumKitchen implements KitchenPort {
     const reply = await this.t.mutate<{ data: Row; payment?: { amount: string | number; due: string | number } | null }>(await this.path("payments", more.dryRun ? "/dry-run" : ""), "POST", {
       values: { order_id: orderId, card_code: code, ...(more.clientKey === undefined ? {} : { client_key: more.clientKey }) },
     });
-    const amount = reply.payment?.amount ?? reply.data["amount"];
-    const due = reply.payment?.due ?? null;
-    return { amount: String(amount ?? "0"), due: String(due ?? "0") };
+    // What the card took and what is then left, as Adminium said them: never worked out here.
+    if (reply.payment === undefined || reply.payment === null) throw new ApiError(409, "POSTING_REFUSED", "The card paid nothing.", { ledger: "value", reason: "not-valid" });
+    return { amount: String(reply.payment.amount), due: String(reply.payment.due) };
   }
 
   cardCheck(orderId: Id, code: string): Promise<CardPayment> {

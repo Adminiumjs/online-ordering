@@ -253,7 +253,12 @@ describe("the kitchen writes only what running the day needs", () => {
     expect(KITCHEN_CANCEL_CODES).not.toContain("self");
     expect(KITCHEN_CANCEL_CODES).not.toContain("closed");
     // Another gift card at the counter: the card's code and the order, never what it pays. Giving money back is a manager's.
-    expect(role("kitchen").limits!["payments"]).toEqual({ creatable: ["order_id", "card_code", "client_key"] });
+    // …and nobody reads a gift card's whole code back: not the kitchen, not a manager.
+    for (const key of ["kitchen", "manager"]) {
+      const reads = (role(key).limits!["payments"] as { readable: string[] }).readable;
+      expect([key, reads.includes("card_code"), reads.includes("card_last4"), reads.includes("amount")]).toEqual([key, false, true, true]);
+    }
+    expect((role("kitchen").limits!["payments"] as { creatable: string[] }).creatable).toEqual(["order_id", "card_code", "client_key"]);
     expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual([]);
   });
 

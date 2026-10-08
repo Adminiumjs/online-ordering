@@ -1587,6 +1587,19 @@ export const MANIFEST_RULES = {
           ]
         },
         "payments": {
+          "readable": [
+            "id",
+            "order_id",
+            "client_key",
+            "card_id",
+            "card_last4",
+            "amount",
+            "card_balance_after",
+            "returned",
+            "kept",
+            "made_at",
+            "made_by"
+          ],
           "creatable": [
             "order_id",
             "card_code",
@@ -1642,6 +1655,21 @@ export const MANIFEST_RULES = {
               "other"
             ]
           }
+        },
+        "payments": {
+          "readable": [
+            "id",
+            "order_id",
+            "client_key",
+            "card_id",
+            "card_last4",
+            "amount",
+            "card_balance_after",
+            "returned",
+            "kept",
+            "made_at",
+            "made_by"
+          ]
         }
       }
     }
