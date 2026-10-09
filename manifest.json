@@ -241,24 +241,42 @@
       },
       "mapping": {
         "items": {
-          "collection": {
-            "table": "order_items",
-            "via": "order_id",
-            "orderBy": "position",
-            "columns": {
-              "desc": "name",
-              "qty": "qty",
-              "rate": "unit_total",
-              "options": {
-                "list": {
-                  "table": "order_item_modifiers",
-                  "via": "order_item_id",
-                  "column": "name",
-                  "orderBy": "id"
+          "collections": [
+            {
+              "table": "order_items",
+              "via": "order_id",
+              "orderBy": "position",
+              "columns": {
+                "desc": "name",
+                "qty": "qty",
+                "rate": "unit_total",
+                "options": {
+                  "list": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id"
+                  }
                 }
               }
+            },
+            {
+              "addOn": "offers",
+              "table": "applied",
+              "match": {
+                "table": "source_table",
+                "row": "source_row"
+              },
+              "orderBy": "id",
+              "columns": {
+                "desc": "name",
+                "amount": "amount"
+              },
+              "takenOff": [
+                "amount"
+              ]
             }
-          }
+          ]
         },
         "subtotal": {
           "column": "subtotal"

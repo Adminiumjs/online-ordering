@@ -58,7 +58,7 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
       const ama = `ama.offers.${engine}@juniper-diners.dev`;
 
       beforeAll(async () => {
-        stand = await standUp(engine as Engine, PORT_BASE + index * PORTS_PER_ENGINE, `oo_offers_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}`, { addOns: ["offers"], addOnSamples: ["offers"] });
+        stand = await standUp(engine as Engine, PORT_BASE + index * PORTS_PER_ENGINE, `oo_offers_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}`, { addOns: ["offers", "invoices"], addOnSamples: ["offers"] });
         await stand.server.setClock(DEMO_START - 30_000);
       }, 400_000);
 
@@ -219,6 +219,11 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         expect([stored["status"], stored["paid_method"], stored["rest_paid_by"]]).toEqual(["picked_up", "mixed", "cash"]);
         // Handed over, the card's money stays spent.
         expect(await balanceOf(card.id)).toBe("0.00");
+        // The receipt names what came off, under the dishes.
+        const drawn = ok(await stand.staff.post<{ printUrl: string }>("/api/v1/apps/ordering/documents/render", { ref: "orders", kind: "receipt", pk: { id: carded } }), 201);
+        const page = flat(String((await stand.staff.get(drawn.printUrl)).body).replace(/<style[\s\S]*?<\/style>/g, " ").replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&"));
+        for (const words of ["Pepperoni & honey", "Two Pepperoni & honey, the cheaper one on us", "-$16.00", "$52.50"]) expect(page, `${words} in: ${page.slice(0, 1500)}`).toContain(words);
+        expect(page).not.toContain('{"');
       }, 120_000);
 
       it("cancelled: the card's money goes back, once, and so does the code's use", async () => {
