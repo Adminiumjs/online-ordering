@@ -13,7 +13,7 @@ import { useId, useRef, useState } from "react";
 
 import { Icon } from "../components/Icon.tsx";
 import { useI18n } from "../i18n/index.tsx";
-import { applyCard, applyCode, clearCardError, clearCodeError, freshQuote, removeCode, useDiner, type CardError, type CodeError } from "../state/diner.ts";
+import { applyCard, applyCode, clearCardError, clearCodeError, freshQuote, removeCode, setOfferDraft, useDiner, type CardError, type CodeError } from "../state/diner.ts";
 import { goDiner } from "../state/ui.ts";
 import { useFmt } from "../app/venue.ts";
 
@@ -146,8 +146,11 @@ export function OfferFields() {
   const fresh = useDiner(() => freshQuote());
   const [codeOpen, setCodeOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
-  const [codeDraft, setCodeDraft] = useState("");
-  const [cardDraft, setCardDraft] = useState("");
+  // Kept with the order, not here: what is typed and not applied is asked about before the order is placed.
+  const codeDraft = useDiner((s) => s.codeDraft);
+  const cardDraft = useDiner((s) => s.cardDraft);
+  const setCodeDraft = (text: string) => setOfferDraft("code", text);
+  const setCardDraft = (text: string) => setOfferDraft("card", text);
   const codeRef = useRef<HTMLInputElement | null>(null);
   const cardRef = useRef<HTMLInputElement | null>(null);
   const codeDoneRef = useRef<HTMLSpanElement | null>(null);
@@ -178,8 +181,8 @@ export function OfferFields() {
   const told = fresh?.told ?? [];
   const payment = fresh?.payment ?? null;
   // A refusal that took the code or the card off (the cart changed, it ran out) opens its field again, to say why.
-  const showCode = code === null && (codeOpen || codeError !== null);
-  const showCard = card === null && (cardOpen || cardError !== null);
+  const showCode = code === null && (codeOpen || codeError !== null || codeDraft !== "");
+  const showCard = card === null && (cardOpen || cardError !== null || cardDraft !== "");
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBlockStart: 14 }}>
       {code !== null ? (

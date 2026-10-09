@@ -124,6 +124,9 @@ interface DinerState {
   card: string | null;
   /** Which of the two is being asked about now: the totals wait for it. */
   checking: "code" | "card" | null;
+  /** What is typed in the code and the gift card fields and not applied yet: asked about before an order is placed, never dropped. */
+  codeDraft: string;
+  cardDraft: string;
   codeError: CodeError | null;
   cardError: CardError | null;
   /** The order's price moved at the save because a code no longer applies: said above the button until the diner acts. */
@@ -168,6 +171,8 @@ export const useDiner = create<DinerState>(() => ({
   code: null,
   card: null,
   checking: null,
+  codeDraft: "",
+  cardDraft: "",
   codeError: null,
   cardError: null,
   priceMoved: false,
@@ -779,7 +784,25 @@ function mintKey(): string {
  * they were shown. A lost answer keeps the retry key — pressing again lands
  * on the same order — and a busy slot is tried once more, quietly.
  */
+export function setOfferDraft(which: "code" | "card", text: string): void {
+  set(which === "code" ? { codeDraft: text } : { cardDraft: text });
+}
+
 export async function placeOrder(language: string, shownTotal?: string): Promise<Placed | null> {
+  // A code or a gift card typed and never applied is asked about first: applied, the diner sees the new total
+  // and presses again; refused, its field says why. An order is never placed at full price past a typed code.
+  if (get().data?.offers === true && !get().placing && get().clientKey === null) {
+    const typedCode = get().codeDraft.trim();
+    const typedCard = get().cardDraft.trim();
+    if (typedCode !== "" && get().code === null) {
+      if (await applyCode(typedCode)) set({ codeDraft: "", priceMoved: true });
+      return null;
+    }
+    if (typedCard !== "" && get().card === null) {
+      if (await applyCard(typedCard)) set({ cardDraft: "", priceMoved: true });
+      return null;
+    }
+  }
   const s = get();
   const quote = freshQuote();
   if (s.placing || quote === null || s.pick === null) return null;
@@ -812,7 +835,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         toPay: reply.payment !== null && reply.payment !== undefined ? Number(reply.payment.due) : Number(reply.data["to_pay"] ?? reply.data["due"] ?? reply.data["total"]),
         replayed: reply.replayed === true,
       };
-      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {}, code: null, card: null, codeError: null, cardError: null, priceMoved: false });
+      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
       // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
       void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);
