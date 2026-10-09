@@ -55,6 +55,9 @@ const KITCHEN_ADD_ON_TABLES = [
  */
 const PAYMENT_READS = TABLES.find((t) => t.ref === "payments")!.columns.map((c) => c.ref).filter((ref) => ref !== "card_code");
 
+/** What a person types of an order's line, as in 0.2.3: never what was taken off it, nor what Adminium adds up. */
+const LINE_TYPED = ["order_id", "position", "menu_item_id", "qty", "note", "name", "unit_price"];
+
 /** What an add-on's answer fills on an order: nobody's to write, whatever their role. */
 const DECIDED_ON_ORDERS: ReadonlySet<string> = new Set(["discount", "due", "customer_proved"]);
 
@@ -90,6 +93,9 @@ export const ROLES = [
         creatable: ["name", "phone", "email", "note", "pickup_at", "channel"],
         creatableValues: { channel: ["phone"] },
       },
+      // A line of a phone order: what a person says of it. What a code or an offer takes off a line is Adminium's
+      // to write, also while Offers & gift cards is away and its rule is not there to refuse it.
+      order_items: { creatable: LINE_TYPED },
       menu_items: { writable: ["available", "stock_today", "stock_on"] },
       modifiers: { writable: ["available"] },
       // The card's code and the order it pays: what the card gives is never the kitchen's to type.
@@ -116,6 +122,7 @@ export const ROLES = [
         writable: TABLES.find((t) => t.ref === "orders")!.columns.filter((c) => !DECIDED_ON_ORDERS.has(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined).map((c) => c.ref).filter((ref) => ref !== "id"),
         writableValues: { cancel_code: KITCHEN_CANCEL_CODES },
       },
+      order_items: { creatable: LINE_TYPED, writable: LINE_TYPED },
       // A gift card's whole code is typed and never read back, by a manager either.
       // …and what a card gives is Adminium's to say: a payment is made with the order and the code, nothing else.
       payments: { readable: PAYMENT_READS, creatable: ["order_id", "card_code", "client_key"] },

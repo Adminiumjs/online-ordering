@@ -14,13 +14,15 @@
  * It runs with `CONTRACT=1`; (b) needs the built add-on. Its servers take the
  * ports after `stock.contract.test.ts`'s.
  */
+import { randomBytes } from "node:crypto";
+
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { AdminiumDiner } from "../data/adminiumDiner.ts";
-import { ApiError, type OrderBody } from "../data/wire.ts";
+import { ApiError, type OrderBody, type Row } from "../data/wire.ts";
 import { DEMO_START, DEMO_ZONE } from "../demo/world.ts";
 import { instantOf, venueDay } from "../lib/venueTime.ts";
-import { ENGINES, missing, missingAddOn, ok, PORTS_PER_ENGINE, type Engine } from "./harness.ts";
+import { Caller, ENGINES, missing, missingAddOn, ok, PORTS_PER_ENGINE, type Engine } from "./harness.ts";
 import { standUp, type Stand } from "./stand.ts";
 
 const why = missing();
@@ -103,6 +105,43 @@ describe.skipIf(why !== null)(`with the add-ons away, or unable to answer${why =
         expect(await stand.rows("order_codes")).toEqual([]);
         expect(await stand.rows("payments")).toEqual([]);
       }, 120_000);
+    });
+
+    describe.skipIf(!available)(`nobody types a reduction while no add-on decides one — ${engine}`, () => {
+      let stand: Stand;
+      beforeAll(async () => {
+        stand = await standUp(engine as Engine, PORT_BASE + 100 + index * PORTS_PER_ENGINE, `oo_typed_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}`);
+        await stand.server.setClock(DEMO_START - 30_000);
+      }, 400_000);
+      afterAll(async () => {
+        await stand?.server.stop();
+      });
+
+      it("a kitchen user's phone order cannot carry a reduction, on the order or on a line, and a plain one goes through", async () => {
+        const roles = ok(await stand.staff.get<{ roles: { id: string; name: string }[] }>("/api/v1/roles")).roles;
+        const role = roles.find((one) => /kitchen/i.test(one.name))!;
+        const email = `cook.absent.${engine}@juniper-kitchen.dev`;
+        const invited = ok(await stand.staff.post<{ invite: { token: string } }>("/api/v1/users", { email, name: "Cook", roleIds: [role.id] }), 201);
+        const password = `${randomBytes(18).toString("base64url")}Aa1!`;
+        ok(await new Caller(stand.server.base, { origin: stand.server.base }).post("/api/v1/auth/password/reset", { token: invited.invite.token, newPassword: password }));
+        const cook = new Caller(stand.server.base, { origin: stand.server.base });
+        await cook.signInToScreens(email, password);
+        const dish = (await stand.rows("menu_items")).find((one) => one["name"] === "Margherita")!;
+        const schema = ok(await stand.staff.get<{ model: { relations: { id: string; from: { tableId: string; columns: string[] } }[] } }>(`/api/v1/connections/${stand.connectionId}/schema`));
+        const lines = schema.model.relations.find((relation) => relation.from.tableId === stand.ids["order_items"] && relation.from.columns.join() === "order_id")!.id;
+        const order = (values: Record<string, unknown>, line: Record<string, unknown>) =>
+          cook.post<{ data: Row }>(stand.data("orders"), { values: { name: "Phone Guest", phone: "(555) 010-2030", pickup_at: at("15:00"), channel: "phone", ...values }, children: { [lines]: [{ values: { menu_item_id: dish.id, qty: 1, ...line } }] } });
+        const before = (await stand.rows("orders")).length;
+        for (const [values, line] of [[{ discount: "5.00" }, {}], [{}, { discount: "5.00" }], [{ paid: "5.00" }, {}], [{ to_pay: "0" }, {}]] as const) {
+          const refused = await order(values, line);
+          expect([JSON.stringify([values, line]), refused.status >= 400 && refused.status < 500]).toEqual([JSON.stringify([values, line]), true]);
+        }
+        expect((await stand.rows("orders")).length).toBe(before);
+        const plain = await order({}, {});
+        expect(plain.status, JSON.stringify(plain.body).slice(0, 400)).toBe(201);
+        const stored = (await stand.rows("orders")).find((one) => one.id === (plain.body as { data: Row }).data.id)!;
+        expect([stored["discount"] ?? null, cents(stored["total"])]).toEqual([null, "14.61"]);
+      }, 240_000);
     });
 
     describe.skipIf(!available || offersWhy !== null)(`Offers & gift cards attached and switched off — ${engine}`, () => {
