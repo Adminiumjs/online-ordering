@@ -43,8 +43,8 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
   placed: a price that changed in between is shown, never charged blind.
 - With Offers & gift cards: a code and a gift card at checkout, each priced by
   Adminium and shown as it answered; and a page to check what a gift card
-  still holds. A card is taken when the kitchen confirms the order, and what
-  it took is put back when an order it paid for is cancelled.
+  still holds. A card is taken when the order is placed, and what it took
+  is put back when an order it paid for is cancelled.
 - A confirmation email with a link to follow the order, and a page that follows
   it from "waiting for the kitchen" to "ready". While the kitchen has not taken
   it, the diner can cancel it there.
