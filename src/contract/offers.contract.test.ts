@@ -112,6 +112,13 @@ describe.skipIf(why !== null)(`codes, offers and gift cards on a built Adminium$
         expect(offers.map((one) => one["name"])).toEqual(expect.arrayContaining(["Pizza pair", "Welcome 10"]));
       }, 60_000);
 
+      it("Offers & gift cards, ticked as the app was installed, has its own key for a guest's link", async () => {
+        const keys = ok(await stand.staff.get<{ keys?: Row[]; data?: Row[] }>("/api/v1/public-keys"));
+        const list = (keys.keys ?? keys.data ?? []) as Row[];
+        const said = JSON.stringify(list.map((key) => Object.fromEntries(Object.entries(key).filter(([name]) => !/secret|token|hash|value/i.test(name)))));
+        expect(list.some((key) => /offers/.test(String(key["managedBy"] ?? "")) || /offers/.test(String(key["appKey"] ?? ""))), said.slice(0, 900)).toBe(true);
+      }, 60_000);
+
       it("a guest's worked order: $64.50, Pizza pair −$16.00, tax on what is left, $52.50", async () => {
         const diner = await stand.dinerOf();
         const quote = await diner.quote(await worked(diner, { name: "Pat", email: `pat.${engine}@juniper-diners.dev` }));
