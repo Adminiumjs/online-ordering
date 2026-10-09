@@ -25,7 +25,7 @@ export const ADD_ONS_RANGE = ">=1.0.6";
  * that run out with their ingredients. Neither is needed and neither is
  * ticked: with both away the app takes orders as it always has.
  */
-export const LEDGER_ADD_ONS_RANGE = ">=1.0.9";
+export const LEDGER_ADD_ONS_RANGE = ">=1.0.10";
 
 export const ADD_ONS = {
   suggests: [

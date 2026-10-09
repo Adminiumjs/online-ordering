@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.19",
+    "minAdminiumVersion": "0.3.20",
     "engines": [
       "sqlite",
       "postgres",
@@ -113,7 +113,7 @@
       },
       {
         "key": "offers",
-        "range": ">=1.0.9",
+        "range": ">=1.0.10",
         "reason": {
           "en-US": "Take discount codes and gift cards at checkout and at the counter.",
           "de-DE": "Rabattcodes und Geschenkkarten an der Kasse und an der Theke annehmen.",
@@ -127,7 +127,7 @@
       },
       {
         "key": "inventory",
-        "range": ">=1.0.9",
+        "range": ">=1.0.10",
         "reason": {
           "en-US": "Count ingredients, so a dish runs out when what it is made of does.",
           "de-DE": "Zutaten zählen, damit ein Gericht ausverkauft ist, wenn seine Zutaten ausgehen.",

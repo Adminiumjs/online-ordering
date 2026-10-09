@@ -27,7 +27,7 @@ export const VERSION = "0.3.0";
  * row, and ingredients held for a line. Written from the version actually
  * released, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.19";
+export const MIN_ADMINIUM = "0.3.20";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
