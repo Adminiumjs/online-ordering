@@ -1574,6 +1574,17 @@ export const MANIFEST_RULES = {
             ]
           }
         },
+        "order_items": {
+          "creatable": [
+            "order_id",
+            "position",
+            "menu_item_id",
+            "qty",
+            "note",
+            "name",
+            "unit_price"
+          ]
+        },
         "menu_items": {
           "writable": [
             "available",
@@ -1655,6 +1666,26 @@ export const MANIFEST_RULES = {
               "other"
             ]
           }
+        },
+        "order_items": {
+          "creatable": [
+            "order_id",
+            "position",
+            "menu_item_id",
+            "qty",
+            "note",
+            "name",
+            "unit_price"
+          ],
+          "writable": [
+            "order_id",
+            "position",
+            "menu_item_id",
+            "qty",
+            "note",
+            "name",
+            "unit_price"
+          ]
         },
         "payments": {
           "readable": [
