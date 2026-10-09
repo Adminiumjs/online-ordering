@@ -161,6 +161,16 @@ describe.skipIf(why !== null)(`the hand-over of an order a gift card paid${why =
         const refund = await cook.post(stand.data("payment_refunds"), { values: { payment_id: read[0]!.id, order_id: id, amount: "1.00", reason: "No" } });
         expect(refund.status).toBe(403);
         expect(await balanceOf(card.id)).toBe("0.00");
+        // At the counter the cook types a card's code — once: asked first, then taken, and neither answer says the code back.
+        const counter = await cardWith("12.00");
+        const walkUp = await placed("Gus", "14:45");
+        await toShelf(walkUp);
+        const asked = await cook.post<{ data: Row; payment?: { amount: string; due: string } }>(`${stand.data("payments")}/dry-run`, { values: { order_id: walkUp, card_code: counter.code } });
+        expect(asked.status, JSON.stringify(asked.body).slice(0, 400)).toBe(200);
+        const taken = await cook.post<{ data: Row; payment?: { amount: string; due: string } }>(stand.data("payments"), { values: { order_id: walkUp, card_code: counter.code, client_key: `gus-${engine}-0123456789abcdefghijkl` } });
+        expect(taken.status, JSON.stringify(taken.body).slice(0, 400)).toBe(201);
+        expect(JSON.stringify([asked.body, taken.body])).not.toContain(counter.code);
+        expect(await balanceOf(counter.id)).toBe("0.00");
       }, 180_000);
 
       it("not collected: the money stays; a manager gives it back with a refund row, and never a cent more than the payment kept", async () => {
