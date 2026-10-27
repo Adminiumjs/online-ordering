@@ -68,6 +68,13 @@ for (const variant of VARIANTS) {
     await page.getByRole("main").getByRole("button", { name: t("cart.checkout") }).click();
     await page.getByLabel(t("co.name"), { exact: true }).fill("Kwame B.");
     await page.getByLabel(t("co.email"), { exact: true }).fill("kwame.b@mail.example");
+    // The tick for the kitchen's news: off until the diner ticks it, and its line says how to stop them.
+    const news = page.getByRole("checkbox");
+    await expect(news).toHaveCount(1);
+    await expect(news).not.toBeChecked();
+    await expect(news).toHaveAccessibleDescription(t("co.optIn.note"));
+    await news.check();
+    await expect(news).toBeChecked();
     await expect(page.getByText(t("totals.checking"))).toHaveCount(0);
     await check(page, PROJECT, "checkout", variant);
     // The pickup times are one radio group: an arrow key chooses the next free time.
