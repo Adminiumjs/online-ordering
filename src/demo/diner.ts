@@ -16,6 +16,7 @@ import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { columnOf, LINE_NOTE_RULE, linkFreeText, ruleOf, type PlainTextColumn } from "../lib/plainText.ts";
 import { DemoCards, priceDemoOrder, type DemoPriced } from "./offers.ts";
+import { YES_NO_NAMES } from "../data/columnKinds.ts";
 import { MANIFEST_RULES } from "./rules.ts";
 
 type Entry = (typeof MANIFEST_RULES.publicAccess)[number] & Record<string, unknown>;
@@ -267,9 +268,14 @@ export class DemoDiner implements DinerPort {
         applied: tree.priced.applied,
       });
     }
-    // The person the order is for, found by the address typed, or made.
+    // The person the order is for, found by the address typed, or made with the order's name and language.
     let customer = this.world.all("customers").find((c) => String(c["email"] ?? "").toLowerCase() === email);
-    if (customer === undefined) customer = this.world.insert("customers", { email, name: tree.order["name"], forgotten_at: null, created_at: new Date(this.engine.now).toISOString() });
+    if (customer === undefined) {
+      const language = tree.order["language"];
+      customer = this.world.insert("customers", { email, name: tree.order["name"], language: language === undefined || language === "" ? null : language, opt_in: false, forgotten_at: null, created_at: new Date(this.engine.now).toISOString() });
+    }
+    // The tick is the diner's yes to the kitchen's news, as Adminium keeps it (here with no consent log); unticked takes nothing back.
+    if (tree.order["opt_in"] === true) this.world.update("customers", customer.id, { opt_in: true });
     const token = mintToken();
     const { order } = this.engine.writeOrder(tree, GUEST, { customer_id: customer.id, email, link_token: token });
     this.keys.set(clientKey, order.id);
@@ -485,7 +491,8 @@ export class DemoDiner implements DinerPort {
     if (this.engine.now - this.signIn!.at > 10 * 60_000) throw new ApiError(403, "PUBLIC_CODE_STEP_UP", "Sign in again to do this.");
     const e = entry("customers", "GET");
     const forget = (e as { forget: { columns: readonly string[]; stamp: string; links?: true } }).forget;
-    this.world.update("customers", customer, { ...Object.fromEntries(forget.columns.map((c) => [c, null])), [forget.stamp]: new Date(this.engine.now).toISOString() });
+    // A yes/no is emptied to no: the newsletter taken back with the rest.
+    this.world.update("customers", customer, { ...Object.fromEntries(forget.columns.map((c) => [c, YES_NO_NAMES.has(c) ? false : null])), [forget.stamp]: new Date(this.engine.now).toISOString() });
     // Every link their orders were emailed with is made afresh, so the old ones open nothing.
     if (forget.links === true) {
       for (const order of this.world.where("orders", (o) => o["customer_id"] === customer && o["link_token"] !== null)) this.world.update("orders", order.id, { link_token: mintToken() });

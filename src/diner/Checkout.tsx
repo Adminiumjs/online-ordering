@@ -22,6 +22,7 @@ import {
   placeOrder,
   rulesOf,
   setField,
+  setOptIn,
   takeOff,
   touch,
   useDiner,
@@ -194,6 +195,16 @@ export function Checkout() {
                     </span>
                   </div>
                   <textarea id="jn-co-note" className="jn-fld" value={f.note} onChange={(e) => setField("note", e.target.value.slice(0, ORDER_NOTE_MAX))} maxLength={ORDER_NOTE_MAX} rows={2} placeholder={t("co.note.placeholder")} style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "1px solid var(--border-strong)", background: "var(--surface-2)", color: "var(--fg)", fontSize: 14.5, lineHeight: 1.5, resize: "none" }} />
+                </div>
+                {/* The newsletter's yes: the diner's own, off until they tick it. These two sentences are the wording the consent log keeps. */}
+                <div style={{ gridColumn: "1/-1", display: "flex", flexDirection: "column", gap: 4 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
+                    <input id="jn-co-opt-in" type="checkbox" checked={f.optIn} onChange={(e) => setOptIn(e.target.checked)} aria-describedby="jn-co-opt-in-msg" style={{ inlineSize: 18, blockSize: 18, margin: 0, flexShrink: 0, accentColor: "var(--accent)", cursor: "pointer" }} />
+                    <span>{t("co.optIn", { venue: venue.name })}</span>
+                  </label>
+                  <span id="jn-co-opt-in-msg" style={{ paddingInlineStart: 28, fontSize: 12, lineHeight: 1.45, color: "var(--fg-subtle)" }}>
+                    {t("co.optIn.note")}
+                  </span>
                 </div>
               </div>
             </div>

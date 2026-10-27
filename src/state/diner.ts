@@ -104,7 +104,8 @@ interface DinerState {
   drawer: boolean;
   quote: { key: string; state: "busy" | "ok" | "err"; reply: QuoteReply | null } | null;
   alerts: Record<string, LineAlert>;
-  form: { name: string; email: string; phone: string; note: string };
+  /** `optIn`: "Email me news and offers", the diner's own tick, off until they tick it. */
+  form: { name: string; email: string; phone: string; note: string; optIn: boolean };
   touched: Partial<Record<"name" | "email" | "phone", boolean>>;
   /** Details Adminium refused, by field, until the diner changes them. */
   fieldErrors: Partial<Record<"name" | "email" | "phone" | "note", FieldError>>;
@@ -157,7 +158,7 @@ export const useDiner = create<DinerState>(() => ({
   drawer: false,
   quote: null,
   alerts: {},
-  form: { name: "", email: "", phone: "", note: "" },
+  form: { name: "", email: "", phone: "", note: "", optIn: false },
   touched: {},
   placing: false,
   placeError: null,
@@ -762,10 +763,16 @@ function freshQuoteLines(): number[] {
 
 // ── checkout ────────────────────────────────────────────────────────────────
 
-export function setField(name: keyof DinerState["form"], value: string): void {
+export function setField(name: Exclude<keyof DinerState["form"], "optIn">, value: string): void {
   if (pendingRetry()) return;
   const { [name as "name"]: _was, ...fieldErrors } = get().fieldErrors;
   set({ form: { ...get().form, [name]: value }, placeError: null, fieldErrors });
+}
+
+/** The tick for the kitchen's news, given or taken off before the order goes. */
+export function setOptIn(on: boolean): void {
+  if (pendingRetry()) return;
+  set({ form: { ...get().form, optIn: on } });
 }
 
 export function touch(name: "name" | "email" | "phone"): void {
@@ -816,6 +823,8 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
     ...(f.note.trim() === "" ? {} : { note: f.note.trim() }),
     language,
     client_key: clientKey,
+    // Unticked writes nothing in Adminium's consent log: it takes back no yes the diner gave before.
+    opt_in: f.optIn,
   };
   // The total the diner was shown, exactly as Adminium wrote it (a currency may have three places).
   const body = { ...orderBody(values), expect: { total: shownTotal ?? String(quote.data["total"]) } };
@@ -835,7 +844,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         toPay: reply.payment !== null && reply.payment !== undefined ? Number(reply.payment.due) : Number(reply.data["to_pay"] ?? reply.data["due"] ?? reply.data["total"]),
         replayed: reply.replayed === true,
       };
-      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "" }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
+      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "", optIn: false }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
       // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
       void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);
