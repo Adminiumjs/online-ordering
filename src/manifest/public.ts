@@ -13,11 +13,19 @@
  * confirmation email carries — so the diner can follow it without signing
  * in, and cancel it while the kitchen has not taken it yet.
  *
+ * The tick "Email me news and offers" is the newsletter's consent, given at
+ * checkout and kept for its diner (`consent`): the diner account the address
+ * finds or makes, or the diner signed in. A box left unticked takes back no
+ * earlier yes, and a diner's own account cannot set the newsletter by hand:
+ * it is set by a tick, and cleared by an unsubscribe or by deleting their
+ * details.
+ *
  * What never leaves through these keys: who in the kitchen moved an order (the receipt Invoices &
  * Receipts draws names who handed it over, as a till receipt does), the exact portions
  * left (only "N left" below five), anyone else's order, the order's link code
  * and retry key.
  */
+import { NEWS_TICK } from "./people.ts";
 import { MENU_TABLES } from "./tables.ts";
 
 /** What a diner sees of an order: its progress, their details, what it costs. */
@@ -141,8 +149,8 @@ export const PUBLIC_ACCESS = [
     writable: ["name"],
     claim: { verify: "email-link", email: "email" },
     humanCheck: true,
-    // "Delete my details" also stops every link the diner's orders were emailed with.
-    forget: { columns: ["email", "name"], stamp: "forgotten_at", links: true },
+    // "Delete my details" also stops every link the diner's orders were emailed with, and takes back the newsletter (Adminium records the withdrawal first).
+    forget: { columns: ["email", "name", "opt_in"], stamp: "forgotten_at", links: true },
   },
   // Their own orders, newest first on the page; and the cancel while the kitchen has not taken it.
   { table: "orders", methods: ["GET", "PATCH"], level: "verified", claimedBy: { table: "customers", column: "customer_id" }, select: ORDER_SELECT, ...OWN_CANCEL },
@@ -181,12 +189,14 @@ export const PUBLIC_ACCESS = [
     humanCheck: true,
     level: "verified",
     select: PLACED_SELECT,
-    writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key"],
+    writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key", "opt_in"],
     requires: ["name", "email"],
     // The manager's switch in Hours; the kitchen's phone orders never pass here.
     requireSetting: [{ table: "settings", column: "online_on" }],
     claimedBy: { table: "customers", column: "customer_id", optional: true },
-    identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name" } },
+    // A diner met for the first time is made with the name and the language of this order.
+    identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name", language: "language" } },
+    consent: NEWS_TICK,
     shareLink: "link_token",
     // A note may hold a few digits ("2 without onions", "table 12") and runs the length its column holds.
     anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] },

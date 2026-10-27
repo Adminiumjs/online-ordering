@@ -59,8 +59,13 @@ export interface Table {
   adjust?: Record<string, unknown>;
   /** What this table hands an add-on's ledger, and when. */
   postings?: Record<string, unknown>[];
+  /** The law makes the kitchen keep these rows (an order is a sale, its money a record): an erasure leaves them as they are. */
+  keep?: { law: "tax" | "health" | "contract" | "safety" };
   columns: Column[];
 }
+
+/** The record of a sale and its money, kept for the tax years whoever asks to be forgotten. */
+const KEPT_FOR_TAX = { law: "tax" } as const;
 
 // ── column makers ───────────────────────────────────────────────────────────
 
@@ -334,12 +339,17 @@ export const TABLES: Table[] = [
       id,
       text("email", 254, "Email", { ...opt, unique: true, semantic: "email", rules: { normalize: "email", validation: { format: "email" } } }),
       text("name", 80, "Name", opt),
+      // The language of the order that made them: what the kitchen writes to them in, beyond an order of theirs.
+      language("language"),
+      // The newsletter's yes, kept in step with Adminium's consent log: set by the tick at checkout, never by the diner's own hand.
+      bool("opt_in", "News from us", false),
       at("forgotten_at", "Details deleted", opt),
       at("created_at", "First order", { ...opt, rules: stamp("now", onCreate) }),
     ],
   },
   {
     ref: "orders",
+    keep: KEPT_FOR_TAX,
     label: l("Order"),
     labelPlural: l("Orders"),
     keyField: "number",
@@ -511,10 +521,13 @@ export const TABLES: Table[] = [
       bool("link_stopped", "Link stopped", false),
       // The diner's retry key: a retried order lands on the same row.
       text("client_key", 64, "Retry key", { ...opt, unique: true }),
+      // The tick the diner gave at checkout ("Email me news and offers"): theirs, written by nobody else.
+      bool("opt_in", "News from us", false),
     ],
   },
   {
     ref: "order_items",
+    keep: KEPT_FOR_TAX,
     label: l("Order line"),
     labelPlural: l("Order lines"),
     keyField: "name",
@@ -590,6 +603,7 @@ export const TABLES: Table[] = [
   {
     // Every row is a gift card's payment: cash and card are said at the hand-over, as before.
     ref: "payments",
+    keep: KEPT_FOR_TAX,
     label: l("Gift card payment"),
     labelPlural: l("Gift card payments"),
     keyField: "card_last4",
@@ -629,6 +643,7 @@ export const TABLES: Table[] = [
   {
     // Money a manager gives back to a gift card: after an order nobody collected, or one made smaller.
     ref: "payment_refunds",
+    keep: KEPT_FOR_TAX,
     label: l("Money back to a gift card"),
     labelPlural: l("Money back to gift cards"),
     keyField: "reason",

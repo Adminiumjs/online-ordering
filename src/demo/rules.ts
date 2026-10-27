@@ -826,7 +826,8 @@ export const MANIFEST_RULES = {
       "forget": {
         "columns": [
           "email",
-          "name"
+          "name",
+          "opt_in"
         ],
         "stamp": "forgotten_at",
         "links": true
@@ -1184,7 +1185,8 @@ export const MANIFEST_RULES = {
         "language",
         "pickup_at",
         "note",
-        "client_key"
+        "client_key",
+        "opt_in"
       ],
       "requires": [
         "name",
@@ -1206,7 +1208,25 @@ export const MANIFEST_RULES = {
         "email": "email",
         "link": "customer_id",
         "fill": {
-          "name": "name"
+          "name": "name",
+          "language": "language"
+        }
+      },
+      "consent": {
+        "column": "opt_in",
+        "purpose": "newsletter",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Email me news and offers from {venue}\nEvery email has a link to stop them.",
+            "de-DE": "Schick mir Neuigkeiten und Angebote von {venue} per E-Mail\nJede E-Mail enthält einen Link, mit dem du sie abbestellen kannst.",
+            "fr-FR": "M’envoyer par e-mail les nouvelles et les offres de {venue}\nChaque e-mail contient un lien pour ne plus les recevoir.",
+            "da-DK": "Send mig nyheder og tilbud fra {venue} på mail\nHver mail har et link, så du kan stoppe dem.",
+            "cs-CZ": "Chci dostávat e-mailem novinky a nabídky od {venue}\nKaždý e-mail obsahuje odkaz, kterým je můžete odhlásit.",
+            "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
+            "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
+            "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
         }
       },
       "shareLink": "link_token",
@@ -1624,6 +1644,41 @@ export const MANIFEST_RULES = {
       "limits": {
         "orders": {
           "writable": [
+            "number_seq",
+            "number",
+            "status",
+            "pickup_at",
+            "name",
+            "phone",
+            "email",
+            "channel",
+            "note",
+            "tax_rate",
+            "paid_method",
+            "rest_paid_by",
+            "hold_until",
+            "cancel_code",
+            "cancel_dish",
+            "cancel_note",
+            "placed_at",
+            "confirmed_at",
+            "confirmed_by",
+            "preparing_at",
+            "ready_at",
+            "ready_by",
+            "picked_up_at",
+            "picked_up_by",
+            "cancelled_at",
+            "cancelled_by",
+            "not_collected_at",
+            "language",
+            "customer_id",
+            "link_token",
+            "link_expires",
+            "link_stopped",
+            "client_key"
+          ],
+          "creatable": [
             "number_seq",
             "number",
             "status",

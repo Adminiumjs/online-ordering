@@ -23,7 +23,8 @@ export const YES_NO: Readonly<Record<string, readonly string[]>> = {
   hours: ["open"],
   closures: ["active"],
   slot_pauses: ["active"],
-  orders: ["customer_proved", "link_stopped"],
+  customers: ["opt_in"],
+  orders: ["customer_proved", "link_stopped", "opt_in"],
 };
 
 /** A yes/no as a boolean: SQLite and MySQL (and an Adminium before 0.3.9 on any door) hand back 0 or 1. */

@@ -60,6 +60,12 @@ const LINE_TYPED = ["order_id", "position", "menu_item_id", "qty", "note", "name
 
 /** What an add-on's answer fills on an order: nobody's to write, whatever their role. */
 const DECIDED_ON_ORDERS: ReadonlySet<string> = new Set(["discount", "due", "customer_proved"]);
+/** What only the diner gives, on their own order: the tick for the kitchen's news. No role writes it on their behalf. */
+export const DINERS_OWN: Readonly<Record<string, readonly string[]>> = { orders: ["opt_in"] };
+/** Every column of an order a manager writes: never one Adminium works out, Offers & gift cards decides, or the diner gives. */
+const MANAGER_ORDERS = TABLES.find((t) => t.ref === "orders")!
+  .columns.filter((c) => c.ref !== "id" && !DECIDED_ON_ORDERS.has(c.ref) && !DINERS_OWN["orders"]!.includes(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined)
+  .map((c) => c.ref);
 
 export const ROLES = [
   {
@@ -119,7 +125,9 @@ export const ROLES = [
       // "Cancelled by the customer" and "not ready by closing" are the diner's and the clock's to give, never a person's here.
       orders: {
         // Every column a person writes: never one Adminium works out, or Offers & gift cards decides.
-        writable: TABLES.find((t) => t.ref === "orders")!.columns.filter((c) => !DECIDED_ON_ORDERS.has(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined).map((c) => c.ref).filter((ref) => ref !== "id"),
+        // …nor the diner's own tick, on an order the manager changes or makes.
+        writable: MANAGER_ORDERS,
+        creatable: MANAGER_ORDERS,
         writableValues: { cancel_code: KITCHEN_CANCEL_CODES },
       },
       order_items: { creatable: LINE_TYPED, writable: LINE_TYPED },

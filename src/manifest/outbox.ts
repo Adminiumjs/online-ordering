@@ -29,6 +29,11 @@
  *   card-money-kept            an order nobody collected that a gift card had
  *                              paid: the money stayed, ask at the counter.
  *
+ * Every kind is service mail: each is about the diner's own order, its
+ * money or their own enquiry. A cancellation's "call us if you'd like to
+ * order again" is said about the order that was; offers go out as
+ * Adminium's campaigns, which the do-not-email list stops.
+ *
  * The ready and receipt emails wait twenty seconds first, so the kitchen's
  * Undo takes them back before they go; one taken back so does not stop the
  * next. The log is the dedupe: a kind already queued or sent for the same row
@@ -107,6 +112,8 @@ export const OUTBOX = {
   // An order's own link opens its page on the diner's side; its code rides the fragment.
   pages: { manage: "/o", booking: "/" },
   kinds: Object.fromEntries(KINDS.map((kind) => [kind, `ordering-${kind}`])),
+  // Every email is about a diner's own order or enquiry: none is stopped by the do-not-email list.
+  classes: Object.fromEntries(KINDS.map((kind) => [kind, "service"])),
   producers: [
     // One decided column says which confirmation: an online order (1), or one a gift card paid in full (2).
     { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 1 } } },

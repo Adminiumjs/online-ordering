@@ -14,20 +14,23 @@ import { DOCUMENTS } from "./documents.ts";
 import { emailTemplates } from "./emails.ts";
 import { KINDS, OUTBOX } from "./outbox.ts";
 import { NAV_GROUPS, pages } from "./pages.ts";
+import { PEOPLE } from "./people.ts";
 import { PUBLIC_ACCESS, PUBLIC_KEYS } from "./public.ts";
 import { ROLES } from "./roles.ts";
 import { TABLES } from "./tables.ts";
 
-/** This release: codes, gift cards and ingredients, on 0.2.x's tables with three more beside them. */
-export const VERSION = "0.3.0";
+/** This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables. */
+export const VERSION = "0.3.1";
 
 /**
  * The Adminium release that first reads everything below: an add-on asked
  * what a code or an offer takes off inside the save, a gift card paying a
- * row, and ingredients held for a line. Written from the version actually
- * released, never guessed.
+ * row, and ingredients held for a line; and (0.3.38) the kitchen's diners,
+ * each email's class, the tables the law keeps and the checkout's tick kept
+ * in the consent log. Written from the version actually released, never
+ * guessed.
  */
-export const MIN_ADMINIUM = "0.3.20";
+export const MIN_ADMINIUM = "0.3.38";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
@@ -88,6 +91,7 @@ export function buildManifest(): Record<string, unknown> {
     publicKeys: PUBLIC_KEYS,
     publicAccess: PUBLIC_ACCESS,
     outbox: OUTBOX,
+    people: PEOPLE,
     emailTemplates: emailTemplates(KINDS),
     // Over a menu shared with Point of Sale that already holds real dishes,
     // the sample's menu and every order of it are left out.

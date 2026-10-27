@@ -138,6 +138,7 @@ export const WORDS: Record<string, Translation> = {
   "New": { "de-DE": "Neu", "fr-FR": "Nouvelle", "da-DK": "Ny", "cs-CZ": "Nová", "ar-EG": "جديد", "zh-CN": "新", "zh-TW": "新" },
   "New enquiries": { "de-DE": "Neue Anfragen", "fr-FR": "Nouvelles demandes", "da-DK": "Nye forespørgsler", "cs-CZ": "Nové poptávky", "ar-EG": "استفسارات جديدة", "zh-CN": "新的咨询", "zh-TW": "新的詢問" },
   "New enquiry": { "de-DE": "Neue Anfrage", "fr-FR": "Nouvelle demande", "da-DK": "Ny forespørgsel", "cs-CZ": "Nová poptávka", "ar-EG": "استفسار جديد", "zh-CN": "新咨询", "zh-TW": "新詢問" },
+  "News from us": { "de-DE": "Neuigkeiten von uns", "fr-FR": "Nos nouvelles", "da-DK": "Nyheder fra os", "cs-CZ": "Novinky od nás", "ar-EG": "أخبار منا", "zh-CN": "我们的消息", "zh-TW": "我們的消息" },
   "Next on the board": { "de-DE": "Als Nächstes auf dem Board", "fr-FR": "Prochaines au tableau", "da-DK": "Næste på tavlen", "cs-CZ": "Další na tabuli", "ar-EG": "التالي على اللوحة", "zh-CN": "看板上的下一单", "zh-TW": "看板上的下一單" },
   "No longer needed": { "de-DE": "Nicht mehr nötig", "fr-FR": "Plus nécessaire", "da-DK": "Ikke længere nødvendig", "cs-CZ": "Už není potřeba", "ar-EG": "لم يعد مطلوبًا", "zh-CN": "已无需发送", "zh-TW": "已無需寄送" },
   "No new enquiries": { "de-DE": "Keine neuen Anfragen", "fr-FR": "Aucune nouvelle demande", "da-DK": "Ingen nye forespørgsler", "cs-CZ": "Žádné nové poptávky", "ar-EG": "لا توجد استفسارات جديدة", "zh-CN": "没有新的咨询", "zh-TW": "沒有新的詢問" },

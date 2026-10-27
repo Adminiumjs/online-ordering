@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "key": "ordering",
   "name": "Online Ordering",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": {
     "id": "adminium",
     "name": "Adminium",
@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.20",
+    "minAdminiumVersion": "0.3.38",
     "engines": [
       "sqlite",
       "postgres",
@@ -2033,6 +2033,75 @@
             "nullable": true
           },
           {
+            "ref": "language",
+            "type": "text",
+            "maxLength": 16,
+            "nullable": true,
+            "label": {
+              "en-US": "Language",
+              "de-DE": "Sprache",
+              "fr-FR": "Langue",
+              "da-DK": "Sprog",
+              "cs-CZ": "Jazyk",
+              "ar-EG": "اللغة",
+              "zh-CN": "语言",
+              "zh-TW": "語言"
+            },
+            "rules": {
+              "options": {
+                "values": [
+                  {
+                    "value": "en-US",
+                    "label": "English"
+                  },
+                  {
+                    "value": "de-DE",
+                    "label": "Deutsch"
+                  },
+                  {
+                    "value": "fr-FR",
+                    "label": "Français"
+                  },
+                  {
+                    "value": "da-DK",
+                    "label": "Dansk"
+                  },
+                  {
+                    "value": "cs-CZ",
+                    "label": "Čeština"
+                  },
+                  {
+                    "value": "ar-EG",
+                    "label": "العربية"
+                  },
+                  {
+                    "value": "zh-CN",
+                    "label": "简体中文"
+                  },
+                  {
+                    "value": "zh-TW",
+                    "label": "繁體中文"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "opt_in",
+            "type": "bool",
+            "default": false,
+            "label": {
+              "en-US": "News from us",
+              "de-DE": "Neuigkeiten von uns",
+              "fr-FR": "Nos nouvelles",
+              "da-DK": "Nyheder fra os",
+              "cs-CZ": "Novinky od nás",
+              "ar-EG": "أخبار منا",
+              "zh-CN": "我们的消息",
+              "zh-TW": "我們的消息"
+            }
+          },
+          {
             "ref": "forgotten_at",
             "type": "timestamptz",
             "label": {
@@ -2072,6 +2141,9 @@
       },
       {
         "ref": "orders",
+        "keep": {
+          "law": "tax"
+        },
         "label": {
           "en-US": "Order",
           "de-DE": "Bestellung",
@@ -4158,11 +4230,29 @@
             },
             "nullable": true,
             "unique": true
+          },
+          {
+            "ref": "opt_in",
+            "type": "bool",
+            "default": false,
+            "label": {
+              "en-US": "News from us",
+              "de-DE": "Neuigkeiten von uns",
+              "fr-FR": "Nos nouvelles",
+              "da-DK": "Nyheder fra os",
+              "cs-CZ": "Novinky od nás",
+              "ar-EG": "أخبار منا",
+              "zh-CN": "我们的消息",
+              "zh-TW": "我們的消息"
+            }
           }
         ]
       },
       {
         "ref": "order_items",
+        "keep": {
+          "law": "tax"
+        },
         "label": {
           "en-US": "Order line",
           "de-DE": "Bestellposition",
@@ -4736,6 +4826,9 @@
       },
       {
         "ref": "payments",
+        "keep": {
+          "law": "tax"
+        },
         "label": {
           "en-US": "Gift card payment",
           "de-DE": "Zahlung mit Geschenkkarte",
@@ -5037,6 +5130,9 @@
       },
       {
         "ref": "payment_refunds",
+        "keep": {
+          "law": "tax"
+        },
         "label": {
           "en-US": "Money back to a gift card",
           "de-DE": "Geld zurück auf eine Geschenkkarte",
@@ -8977,6 +9073,41 @@
             "link_stopped",
             "client_key"
           ],
+          "creatable": [
+            "number_seq",
+            "number",
+            "status",
+            "pickup_at",
+            "name",
+            "phone",
+            "email",
+            "channel",
+            "note",
+            "tax_rate",
+            "paid_method",
+            "rest_paid_by",
+            "hold_until",
+            "cancel_code",
+            "cancel_dish",
+            "cancel_note",
+            "placed_at",
+            "confirmed_at",
+            "confirmed_by",
+            "preparing_at",
+            "ready_at",
+            "ready_by",
+            "picked_up_at",
+            "picked_up_by",
+            "cancelled_at",
+            "cancelled_by",
+            "not_collected_at",
+            "language",
+            "customer_id",
+            "link_token",
+            "link_expires",
+            "link_stopped",
+            "client_key"
+          ],
           "writableValues": {
             "cancel_code": [
               "ran_out",
@@ -9160,7 +9291,8 @@
       "forget": {
         "columns": [
           "email",
-          "name"
+          "name",
+          "opt_in"
         ],
         "stamp": "forgotten_at",
         "links": true
@@ -9518,7 +9650,8 @@
         "language",
         "pickup_at",
         "note",
-        "client_key"
+        "client_key",
+        "opt_in"
       ],
       "requires": [
         "name",
@@ -9540,7 +9673,25 @@
         "email": "email",
         "link": "customer_id",
         "fill": {
-          "name": "name"
+          "name": "name",
+          "language": "language"
+        }
+      },
+      "consent": {
+        "column": "opt_in",
+        "purpose": "newsletter",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Email me news and offers from {venue}\nEvery email has a link to stop them.",
+            "de-DE": "Schick mir Neuigkeiten und Angebote von {venue} per E-Mail\nJede E-Mail enthält einen Link, mit dem du sie abbestellen kannst.",
+            "fr-FR": "M’envoyer par e-mail les nouvelles et les offres de {venue}\nChaque e-mail contient un lien pour ne plus les recevoir.",
+            "da-DK": "Send mig nyheder og tilbud fra {venue} på mail\nHver mail har et link, så du kan stoppe dem.",
+            "cs-CZ": "Chci dostávat e-mailem novinky a nabídky od {venue}\nKaždý e-mail obsahuje odkaz, kterým je můžete odhlásit.",
+            "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
+            "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
+            "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
         }
       },
       "shareLink": "link_token",
@@ -9924,6 +10075,23 @@
       "card-money-returned": "ordering-card-money-returned",
       "card-money-kept": "ordering-card-money-kept"
     },
+    "classes": {
+      "order-confirmation": "service",
+      "order-confirmation-phone": "service",
+      "order-ready": "service",
+      "order-cancelled-ran-out": "service",
+      "order-cancelled-too-busy": "service",
+      "order-cancelled-customer-asked": "service",
+      "order-cancelled-closed": "service",
+      "order-cancelled-other": "service",
+      "order-cancelled-by-you": "service",
+      "order-receipt": "service",
+      "enquiry-received": "service",
+      "order-confirmation-prepaid": "service",
+      "order-ready-prepaid": "service",
+      "card-money-returned": "service",
+      "card-money-kept": "service"
+    },
     "producers": [
       {
         "kind": "order-confirmation",
@@ -10171,6 +10339,55 @@
       }
     ]
   },
+  "people": [
+    {
+      "table": "customers",
+      "kind": "people",
+      "email": "email",
+      "name": "name",
+      "firstName": "firstWordOfName",
+      "language": "language",
+      "consent": {
+        "column": "opt_in",
+        "purpose": "newsletter"
+      },
+      "copies": [
+        {
+          "table": "orders",
+          "column": "name",
+          "holds": "name",
+          "via": "customer_id"
+        },
+        {
+          "table": "orders",
+          "column": "email",
+          "holds": "email",
+          "via": "customer_id"
+        },
+        {
+          "table": "orders",
+          "column": "phone",
+          "holds": "phone",
+          "via": "customer_id"
+        },
+        {
+          "table": "enquiries",
+          "column": "name",
+          "holds": "name"
+        },
+        {
+          "table": "enquiries",
+          "column": "email",
+          "holds": "email"
+        },
+        {
+          "table": "enquiries",
+          "column": "phone",
+          "holds": "phone"
+        }
+      ]
+    }
+  ],
   "emailTemplates": [
     {
       "key": "ordering-order-confirmation",
