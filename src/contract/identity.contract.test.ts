@@ -111,6 +111,10 @@ describe.skipIf(why !== null)(`a diner's own orders on a built Adminium${why ===
         const token = fragmentIn(mail.text, "/o");
         expect(token).not.toBe("");
         first = { id: placed.data.id, token, total: String(placed.data["total"]) };
+        // The diner the address made: named, in the language the order was placed in, and no yes to the news.
+        const order = (await stand.rows("orders")).find((o) => o.id === placed.data.id)!;
+        const her = (await stand.rows("customers")).find((c) => c.id === order["customer_id"])!;
+        expect([her["email"], her["name"], her["language"], her["opt_in"] === true || her["opt_in"] === 1]).toEqual([ama, "Ama", "en-US", false]);
       }, 240_000);
 
       let ama1: AdminiumDiner;
@@ -155,6 +159,8 @@ describe.skipIf(why !== null)(`a diner's own orders on a built Adminium${why ===
         // Addressed to her through her own row, in the order's language.
         const mail = await stand.mailTo(ama, before);
         expect(mail.subject).toBe(EMAIL_TRANSLATIONS["fr-FR"]["order-confirmation"].subject.replace("{{order.number}}", String(placed.data["number"])));
+        // Her own row keeps the language of the order that made her.
+        expect((await stand.rows("customers")).find((c) => c["email"] === ama)!["language"]).toBe("en-US");
       }, 120_000);
 
       it("follows an order by the link its confirmation carries", async () => {
