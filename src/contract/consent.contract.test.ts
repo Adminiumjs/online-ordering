@@ -178,6 +178,8 @@ describe.skipIf(why !== null)(`the tick for the kitchen's news on a built Admini
         omarOrder = (await placeAs(omarTab.diner, { name: "Omar Saleh", email: omar, pickup_at: at("14:00") })).order;
         const linkSession = omarTab.session("link");
         expect(linkSession).toBeTruthy();
+        // His two orders' confirmations in his mailbox first: the next email to him is the sign-in's, and its code the one read.
+        await stand.mailsTo(omar, 0, 2);
         const before = await stand.mailCount();
         await omarTab.diner.requestSignIn(omar, "en-US");
         await omarTab.diner.verifyCode(omar, codeIn((await stand.mailTo(omar, before)).text));
