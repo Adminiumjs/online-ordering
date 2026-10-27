@@ -17,7 +17,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.20** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.38** or later, on SQLite, Postgres or MySQL.
 - Nothing else. Four add-ons are offered at install, and the app is whole
   without any of them:
   - **Offers & gift cards** — diners type a code at checkout, automatic offers
@@ -80,6 +80,17 @@ add it later from the app's settings.
 Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
 and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
+
+**Moving from 0.3.0.** 0.3.1 updates a 0.3.0 install in place: update
+Adminium to 0.3.38 first, then the app. The update adds a diner's language
+and their yes to the kitchen's news (no for everyone already there), and the
+tick an order was placed with. Nothing is dropped, renamed or rewritten, and
+nothing is written in the consent log: no diner of 0.3.0 was ever asked. From
+0.3.1 the checkout asks "Email me news and offers", unticked; a tick is kept
+in Adminium's consent log for the diner, and every email the kitchen sends
+about an order or an enquiry is service mail, which the do-not-email list
+never stops. The update asks you to allow one new thing on the order page:
+that tick.
 
 **Moving from 0.2.x.** 0.3.0 updates a 0.2.x install in place: update
 Adminium to 0.3.20 first, then the app. Every order, dish, slot and customer
