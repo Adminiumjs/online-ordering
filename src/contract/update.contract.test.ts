@@ -1,40 +1,45 @@
 /**
- * ONLINE ORDERING'S UPDATE CONTRACT: THE RELEASED 0.2.3, UPDATED IN PLACE.
+ * ONLINE ORDERING'S UPDATE CONTRACT: THE RELEASED 0.3.0, UPDATED IN PLACE.
  *
  * On SQLite, Postgres and MySQL, along the path a kitchen takes:
  *
- *   1. install the RELEASED 0.2.3 — the published package's own bytes
+ *   1. install the RELEASED 0.3.0 — the published package's own bytes
  *      (`CONTRACT_FROM_TARBALL`), refused unless they hash to what
  *      RELEASES.json recorded — on the Adminium it was released for
- *      (`CONTRACT_FROM_ADMINIUM`, 0.3.9);
+ *      (`CONTRACT_FROM_ADMINIUM`, 0.3.20);
  *   2. its own sample, added at the demo's moment (11:40);
- *   3. a kitchen at work in 0.2.3, through 0.2.3's own doors: one order walked
+ *   3. a kitchen at work in 0.3.0, through 0.3.0's own doors: one order walked
  *      to the shelf and left there, one handed over for cash;
  *   4. ADMINIUM UPGRADED IN PLACE: that Adminium stopped, and the one this
  *      build needs (`ADMINIUM_REPO`) started on the same data directory,
- *      secret and database — the app still 0.2.3, and nothing in its tables
+ *      secret and database — the app still 0.3.0, and nothing in its tables
  *      moved by the upgrade;
- *   5. every table of the app read straight from the database (each value as
+ *   5. ENGINE FIRST: a diner's address put on the do-not-email list, and
+ *      0.3.0's confirmation of an order placed online still reaches them
+ *      (an app that says no class is read as service mail);
+ *   6. every table of the app read straight from the database (each value as
  *      the engine spells it, each column as the engine declares it) and over
  *      HTTP: the snapshot;
- *   6. THIS build uploaded: the plan is exactly three new tables (a typed
- *      code, a gift card's payment, money given back to a card), the new
- *      columns of an order and of a line, and the new values of two lists —
- *      nothing dropped, renamed or rewritten — and it applies;
- *   7. every row that was there is unchanged, byte for byte: every order's
- *      tax and total are the cents 0.2.3 stored; every column declaration too;
- *      the new tables exist and are empty; the new columns are empty on the
- *      rows that were there;
- *   8. ONE WRITE ON AN OLD ROW: the order left on the shelf under 0.2.3 is
- *      handed over for cash, exactly as a 0.2.3 kitchen screen sends it, and
+ *   7. THIS build uploaded: the plan is exactly the new columns of a diner
+ *      (their language, the newsletter's yes) and of an order (the tick it
+ *      was placed with) — nothing dropped, renamed or rewritten — and it
+ *      applies;
+ *   8. every row that was there is unchanged, byte for byte: every order's
+ *      tax and total are the cents 0.3.0 stored; every column declaration
+ *      too; the new columns hold what a row that was there holds: no
+ *      language, and no to the news; nothing written in the consent log;
+ *   9. THE APP NEXT: the confirmation still reaches the diner on the
+ *      do-not-email list (every kind is service mail);
+ *  10. ONE WRITE ON AN OLD ROW: the order left on the shelf under 0.3.0 is
+ *      handed over for cash, exactly as a 0.3.0 kitchen screen sends it, and
  *      its money is what it was;
- *   9. THE SAMPLE ON UPDATE: the update adds no sample rows; removing the
+ *  11. THE SAMPLE ON UPDATE: the update adds no sample rows; removing the
  *      sample afterwards keeps what the kitchen itself moved.
  *
  * It runs twice on each engine: as above, and once more with Offers & gift
  * cards and Inventory installed BEFORE the update and connected by it. Then
  * the same must hold — connecting an add-on writes nothing into the kitchen's
- * rows — and an order placed under 0.2.3 takes a gift card at the counter.
+ * rows.
  *
  * It runs where the plain contract runs, with the published package of the
  * release it updates and a built checkout of the Adminium that release was
@@ -47,7 +52,9 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { AdminiumDiner } from "../data/adminiumDiner.ts";
 import { DEMO_CURRENCY, DEMO_START, DEMO_ZONE } from "../demo/world.ts";
+import { instantOf, venueDay } from "../lib/venueTime.ts";
 import { TABLES } from "../manifest/tables.ts";
 import { addOnBundle, appBundle, boot, Caller, ENGINES, FROM_ADMINIUM, missing, missingAddOn, ok, PORTS_PER_ENGINE, rawTables, releasedBundle, releasedMissing, until, type Engine, type RawTable, type Server } from "./harness.ts";
 
@@ -60,23 +67,23 @@ const PORT_BASE = Number(process.env["CONTRACT_UPDATE_PORT_BASE"] ?? Number(proc
 const ADMIN = { email: process.env["E2E_ADMIN_EMAIL"] ?? "e2e@adminium.local", password: process.env["E2E_ADMIN_PASSWORD"] ?? "adminium-e2e-password" };
 const PREFIX = "ordering_";
 
-/** What 0.3.0 adds to 0.2.3's tables, from the manifest: the update's plan must be exactly this. */
-const NEW_TABLES = ["order_codes", "payments", "payment_refunds"];
+/** What 0.3.1 adds to 0.3.0's tables, from the manifest: the update's plan must be exactly this. */
+const NEW_TABLES: string[] = [];
 const NEW_COLUMNS: Record<string, string[]> = {
-  orders: ["card_used", "confirm_as", "customer_proved", "discount", "due", "hold_until", "method_ok", "net", "paid", "prepaid", "rest_paid_by", "to_pay"],
-  order_items: ["category_id", "discount"],
+  customers: ["language", "opt_in"],
+  orders: ["opt_in"],
 };
-const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {
-  orders: { paid_method: ["gift_card", "mixed"] },
-  messages: { kind: ["order-confirmation-prepaid", "order-ready-prepaid", "card-money-returned", "card-money-kept"] },
-};
+const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {};
+/** A no as each engine spells a yes/no column's value read straight from the database. */
+const NO = ["0", "false", "f"];
+const TODAY = venueDay(DEMO_START, DEMO_ZONE);
 
 const yesNoColumns = (ref: string): string[] => (TABLES.find((t) => t.ref === ref)?.columns ?? []).filter((c) => c.type === "bool").map((c) => c.ref);
 const realNow = () => performance.timeOrigin + performance.now();
 
 const released = why === null ? releasedBundle() : null;
-const FROM = released?.version ?? "0.2.3";
-const TO = why === null ? appBundle().version : "0.3.0";
+const FROM = released?.version ?? "0.3.0";
+const TO = why === null ? appBundle().version : "0.3.1";
 const addOnsWhy = missingAddOn("offers") ?? missingAddOn("inventory");
 
 const RUNS = [
@@ -97,7 +104,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
         let before: Record<string, RawTable> = {};
         let beforeHttp: Record<string, Row[]> = {};
         let sampleBefore = { loaded: false, total: 0 };
-        /** What the kitchen did in 0.2.3: the rows the later steps come back to. */
+        /** What the kitchen did in 0.3.0: the rows the later steps come back to. */
         const made = { shelf: 0, handed: 0 };
         const startedAt = realNow();
         const kitchen = mkdtempSync(join(tmpdir(), `oo-update-${run.id}-${engine}-`));
@@ -140,6 +147,36 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
         };
         /** The money of an order, as Adminium keeps it. */
         const money = (order: Row) => [Number(order["subtotal"]), Number(order["tax"]), Number(order["total"])];
+        /** A diner on the do-not-email list, who orders online before the update and after it. */
+        const stopped = `stop.${run.id}.${engine}@juniper-diners.dev`;
+        /**
+         * An order placed on the order page, through the public API as the installed version's page sends it (no
+         * tick: 0.3.0 has none); its confirmation once the outbox is done with it, and the email if one went.
+         */
+        const orderOnline = async (email: string, time: string) => {
+          const served = ok(await new Caller(server.base).get<{ publishableKey: string; publicKeys?: Record<string, string>; tables?: Record<string, string> }>("/apps/ordering/customer/surface-config.json"));
+          const originFetch: typeof fetch = (input, init) => {
+            const headers = new Headers(init?.headers);
+            headers.set("origin", server.base);
+            return fetch(input, { ...init, headers });
+          };
+          const diner = new AdminiumDiner(
+            { baseUrl: server.base, publishableKey: served.publishableKey, ...(served.tables === undefined ? {} : { tables: served.tables }), ...(served.publicKeys === undefined ? {} : { publicKeys: served.publicKeys }) },
+            { fetch: originFetch, storage: null },
+          );
+          const menu = await diner.menu();
+          const body = {
+            values: { name: "Vera", email, language: "en-US", pickup_at: new Date(instantOf(TODAY, time, DEMO_ZONE)).toISOString() },
+            children: { order_items: [{ values: { menu_item_id: menu.items.find((d) => d["name"] === "Lemonade")!.id, qty: 1 } }] },
+          };
+          const quote = await diner.quote(body);
+          const sinkBefore = ((await (await fetch(`${server.sink}/messages`)).json()) as unknown[]).length;
+          const made = await diner.place({ ...body, expect: { total: String(quote.data["total"]) } }, `${run.id}-${engine}-${time}-0123456789abcdef`.replace(/[^A-Za-z0-9-]/g, ""));
+          const message = await until(async () => (await rows("messages")).find((m) => m["order_id"] === made.data.id && m["kind"] === "order-confirmation" && m["status"] !== "queued"), `the confirmation to ${email}`, 150_000);
+          const status = `${String(message["status"])}${message["skip_reason"] ? `: ${String(message["skip_reason"])}` : ""}${message["error"] ? `: ${String(message["error"])}` : ""}`;
+          const mail = message["status"] === "sent" ? await until(async () => ((await (await fetch(`${server.sink}/messages`)).json()) as { to: string[]; subject: string }[]).slice(sinkBefore).find((m) => m.to.includes(email)), `the mail to ${email}`, 60_000) : undefined;
+          return { status, subject: mail?.subject ?? null, number: String(made.data["number"]) };
+        };
 
         beforeAll(async () => {
           server = await boot(engine as Engine, port, DEMO_START - 60_000, { database, adminium: FROM_ADMINIUM, keep: kitchen });
@@ -153,7 +190,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           rmSync(join(tmpdir(), `adminium-e2e-source-sqlite-${String(port)}.db`), { force: true });
         });
 
-        // ── 0.2.3, released, at work ──────────────────────────────────────────
+        // ── 0.3.0, released, at work ──────────────────────────────────────────
 
         it(`installs the RELEASED ${FROM} — the published package, byte for byte — on the Adminium it was released for`, async () => {
           const app = released!;
@@ -208,6 +245,16 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           expect(await raw()).toEqual(rawUnder);
         }, 300_000);
 
+        it(`still sends ${FROM}'s confirmation to a diner on the do-not-email list: an app that says no class sends service mail`, async () => {
+          // Where emailed links point, and the order page open: what a kitchen had set up before.
+          ok(await staff.put("/api/v1/settings/email", { publicOrigin: server.base }));
+          ok(await staff.put("/api/v1/public-api", { enabled: true }));
+          const added = ok(await staff.post<{ data: { added: number } }>("/api/v1/consent/stop-list", { addresses: [stopped] })).data;
+          expect(added.added).toBe(1);
+          const sent = await orderOnline(stopped, "19:00");
+          expect(sent).toEqual({ status: "sent", subject: expect.stringContaining(sent.number), number: sent.number });
+        }, 300_000);
+
         it.skipIf(!run.addOns)("installs Offers & gift cards and Inventory beside the kitchen, and writes nothing into the kitchen's rows", async () => {
           const rawUnder = await raw();
           for (const key of ["inventory", "offers"]) {
@@ -247,7 +294,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           addOns?: { key: string; need: string; action: string | null }[];
         };
 
-        it(`plans the update to ${TO}: three new tables, the new columns and the new values, nothing dropped, renamed or rewritten`, async () => {
+        it(`plans the update to ${TO}: a diner's and an order's new columns, nothing dropped, renamed or rewritten`, async () => {
           const app = appBundle();
           await upload("apps", app);
           plan = ok(await staff.post<{ plan: typeof plan }>("/api/v1/apps/plan", { key: app.key, version: app.version, connectionId })).plan;
@@ -278,7 +325,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
         it(`updates in place to ${TO}, as planned`, async () => {
           const reply = await staff.post<{ from: string; to: string; app: { version: string; schema?: { created: string[] }; rules?: { skipped: unknown[] } } }>("/api/v1/apps/ordering/update", {
             planChecksum: plan.checksum,
-            // What the new version lets a diner's page do (a code, a gift card, their payments) is the operator's to allow.
+            // What the new version lets a diner's page do (the tick for the kitchen's news) is the operator's to allow.
             publicAccess: true,
             // The kitchen that set the add-ons up first connects them as it updates.
             ...(run.addOns ? { addOns: ["inventory", "offers"].map((key) => ({ key, version: addOnBundle(key).version })) } : {}),
@@ -294,7 +341,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           expect(Object.keys(staffConfig.addOns ?? {}).sort()).toEqual(run.addOns ? ["inventory", "offers"] : []);
         }, 240_000);
 
-        it("keeps every row that was there, byte for byte — every order's tax and total the cents it stored — and every column as it was", async () => {
+        it("keeps every row that was there, byte for byte — every order's tax and total the cents it stored — and every column as it was; the new ones hold no language and a no", async () => {
           const after = await raw();
           const added: Record<string, string[]> = {};
           const redeclared: string[] = [];
@@ -312,8 +359,12 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
             expect([name, now!.rows.length]).toEqual([name, was.rows.length]);
             const kept = now!.rows.map((found) => Object.fromEntries(Object.keys(was.columns).map((c) => [c, found[c]])));
             expect(kept, `the rows of ${name}`).toEqual(was.rows);
-            // A column the update adds holds nothing on a row that was there.
-            for (const column of added[name]!) expect([name, column, now!.rows.filter((found) => found[column] !== null).length]).toEqual([name, column, 0]);
+            // A column the update adds holds, on a row that was there: no to the news (its default), and no language; nothing else.
+            for (const column of added[name]!) {
+              const values = [...new Set(now!.rows.map((found) => found[column] ?? null))];
+              if (column === "opt_in") expect([name, column, values.filter((v) => !NO.includes(String(v)))]).toEqual([name, column, []]);
+              else expect([name, column, values]).toEqual([name, column, now!.rows.length === 0 ? [] : [null]]);
+            }
           }
           console.info(`[redeclared, ${engine}${run.title}] ${JSON.stringify(redeclared)}`);
           expect(redeclared).toEqual([]);
@@ -336,6 +387,20 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           }
         }, 120_000);
 
+        it("writes nothing in the consent log for a diner who was there: no yes was ever given", async () => {
+          const diners = await rows("customers");
+          expect(diners.length).toBeGreaterThan(10);
+          for (const diner of diners.slice(0, 5)) {
+            const panel = ok(await staff.post<{ data: { declared: boolean; history: unknown[] } }>("/api/v1/consent/panel", { connectionId, table: tableIds[`${PREFIX}customers`]!, recordId: String(diner.id) })).data;
+            expect([diner.id, panel.declared, panel.history]).toEqual([diner.id, true, []]);
+          }
+        }, 60_000);
+
+        it(`still sends the confirmation to the diner on the do-not-email list, now that ${TO} says every email is service mail`, async () => {
+          const sent = await orderOnline(stopped, "19:15");
+          expect(sent).toEqual({ status: "sent", subject: expect.stringContaining(sent.number), number: sent.number });
+        }, 300_000);
+
         // ── one write on an old row ───────────────────────────────────────────
 
         it(`hands over, for cash, the order left on the shelf under ${FROM}: as a ${FROM} screen sends it, and its money is what it was`, async () => {
@@ -345,7 +410,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
           expect([now["status"], now["paid_method"]]).toEqual(["picked_up", "cash"]);
           expect(money(now)).toEqual(money(was));
           // Nothing was paid by gift card, so cash agrees; what it owed at the counter was its total. The figures an
-          // email tests are worked out at the move, though the order was placed before they existed.
+          // email tests are worked out at the move, whenever the order was placed.
           expect([Number(now["method_ok"]), Number(now["to_pay"]), now["prepaid"], now["card_used"]].map(Number)).toEqual([1, Number(was["total"]), 0, 0]);
         }, 120_000);
 
