@@ -16,6 +16,7 @@ import { sources } from "../data/sources.ts";
 import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
 import { addDays, instantOf, venueDay, venueMinutes, type Day } from "../lib/venueTime.ts";
 import { hoursOn, offeredSlots, type Slot } from "../lib/day.ts";
+import { mountKey } from "../lib/mountKey.ts";
 
 export interface CartLine {
   /** One line per dish, options and note: the same three merge into one line. */
@@ -134,7 +135,8 @@ interface DinerState {
   priceMoved: boolean;
 }
 
-const CART_KEY = "online-ordering-cart";
+/** Per install: a later install's page keeps its own cart (`lib/mountKey.ts`); the bare mount keeps the old key. */
+const CART_KEY = mountKey("online-ordering-cart");
 
 function storedCart(): CartLine[] {
   try {

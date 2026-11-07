@@ -17,6 +17,7 @@
  */
 import { createPublicClient, pictureUrl, PublicApiError, type HeldSession, type PublicClient, type PublicConfig as ClientConfig } from "@adminiumjs/public-client";
 
+import { mountKey } from "../lib/mountKey.ts";
 import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
@@ -111,7 +112,8 @@ export class AdminiumDiner implements DinerPort {
   // ── the tab's sessions ──────────────────────────────────────────────────────
 
   private slot(name: string): string {
-    return `ordering.session.${name}`;
+    // Per install, as the cart is: a later install's claim is not this one's.
+    return mountKey(`ordering.session.${name}`);
   }
   private kept(name: string): Kept | null {
     try {

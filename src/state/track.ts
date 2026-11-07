@@ -14,6 +14,7 @@ import { create } from "zustand";
 import type { OrderWithLines } from "../data/ports.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
+import { mountKey } from "../lib/mountKey.ts";
 
 export type TrackState = "idle" | "loading" | "ok" | "expired" | "error";
 
@@ -45,7 +46,8 @@ export const useTrack = create<TrackStore>(() => ({
   source: "link",
 }));
 
-const LAST_LINK = "online-ordering-last-order";
+/** Per install, as the cart is (`lib/mountKey.ts`). */
+const LAST_LINK = mountKey("online-ordering-last-order");
 const FINAL = ["picked_up", "cancelled", "not_collected"];
 
 /** The link this device keeps for "Track an order". */
