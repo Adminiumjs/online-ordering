@@ -115,6 +115,7 @@ export async function standUp(engine: Engine, port: number, database: string, op
     const transport = createSessionTransport({
       tableOfRef: cfg.tables,
       connectionId: cfg.connectionId ?? undefined,
+      installId: cfg.installId,
       staff: { csrfToken: cfg.csrfToken, timezone: cfg.timezone, timezoneSource: cfg.timezoneSource, serverTimezone: cfg.serverTimezone, currency: cfg.currency },
       fetchImpl: staff.fetchAs(),
     });
