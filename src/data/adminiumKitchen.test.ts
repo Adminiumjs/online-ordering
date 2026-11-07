@@ -14,6 +14,7 @@ const REL = { lines: "rel-lines", options: "rel-options" };
 
 const config = (over: Partial<StaffConfig> = {}): StaffConfig => ({
   connectionId: CONN,
+  installId: null,
   appName: null,
   tables: { orders: "ordering_orders", order_items: "ordering_order_items", order_item_modifiers: "ordering_order_item_modifiers", slot_pauses: "ordering_slot_pauses", menu_items: "ordering_menu_items" },
   settings: {},
