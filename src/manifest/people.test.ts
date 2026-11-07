@@ -54,7 +54,8 @@ describe("the kitchen's diners", () => {
         ],
       },
     ]);
-    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.38");
+    // 0.3.38 first read the diners; the floor has since moved on (0.3.49, installs per database).
+    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.49");
   });
 
   it("have one address: the outbox's, the one they sign in with, and the one the checkout finds them by", () => {

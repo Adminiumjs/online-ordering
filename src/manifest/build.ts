@@ -19,18 +19,22 @@ import { PUBLIC_ACCESS, PUBLIC_KEYS } from "./public.ts";
 import { ROLES } from "./roles.ts";
 import { TABLES } from "./tables.ts";
 
-/** This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables. */
-export const VERSION = "0.3.1";
+/**
+ * This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables (0.3.1);
+ * and one install per database, each install's screens saying which they are (0.3.2). No table changes.
+ */
+export const VERSION = "0.3.2";
 
 /**
  * The Adminium release that first reads everything below: an add-on asked
  * what a code or an offer takes off inside the save, a gift card paying a
  * row, and ingredients held for a line; and (0.3.38) the kitchen's diners,
  * each email's class, the tables the law keeps and the checkout's tick kept
- * in the consent log. Written from the version actually released, never
- * guessed.
+ * in the consent log; and (0.3.49) the app installed once per database, its
+ * screens naming their install on every call. Written from the version
+ * actually released, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.38";
+export const MIN_ADMINIUM = "0.3.49";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
@@ -79,8 +83,8 @@ export function buildManifest(): Record<string, unknown> {
     },
     capabilities: ["realtime", "email-delivery"],
     frontends: [
-      { side: "staff", kind: "spa", entry: "index.html", env: ENV, placement: "external", routes: STAFF_ROUTES },
-      { side: "customer", kind: "spa", entry: "index.html", env: ENV, routes: CUSTOMER_ROUTES },
+      { side: "staff", kind: "spa", entry: "index.html", env: ENV, placement: "external", instances: true, routes: STAFF_ROUTES },
+      { side: "customer", kind: "spa", entry: "index.html", env: ENV, instances: true, routes: CUSTOMER_ROUTES },
     ],
     addOns: ADD_ONS,
     documents: DOCUMENTS,

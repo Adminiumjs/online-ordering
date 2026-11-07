@@ -1,7 +1,7 @@
 {
   "name": "online-ordering",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.3.2",
   "type": "module",
   "description": "Online Ordering — an open-source order-ahead example app for Adminium.",
   "license": "AGPL-3.0-only",

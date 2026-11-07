@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "key": "ordering",
   "name": "Online Ordering",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": {
     "id": "adminium",
     "name": "Adminium",
@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.38",
+    "minAdminiumVersion": "0.3.49",
     "engines": [
       "sqlite",
       "postgres",
@@ -49,6 +49,7 @@
         }
       },
       "placement": "external",
+      "instances": true,
       "routes": {
         "kitchen": "/"
       }
@@ -67,6 +68,7 @@
           "example": "adm_pub_..."
         }
       },
+      "instances": true,
       "routes": {
         "home": "/",
         "menu": "/menu",

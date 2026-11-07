@@ -17,7 +17,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.38** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.49** or later, on SQLite, Postgres or MySQL.
 - Nothing else. Four add-ons are offered at install, and the app is whole
   without any of them:
   - **Offers & gift cards** — diners type a code at checkout, automatic offers
@@ -80,6 +80,13 @@ add it later from the app's settings.
 Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
 and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
+
+**Moving from 0.3.1.** 0.3.2 changes no table and updates a 0.3.1 install in
+place: update Adminium to 0.3.49 first, then the app. A kitchen may then
+install the app once per database: each install's screens open at their own
+address (`/apps/ordering/<name>/staff/`) and say which install they are on
+every call, and each install's order page keeps its own cart. Carts diners
+already hold on the first install's page are kept.
 
 **Moving from 0.3.0.** 0.3.1 updates a 0.3.0 install in place: update
 Adminium to 0.3.38 first, then the app. The update adds a diner's language
