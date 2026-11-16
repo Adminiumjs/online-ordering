@@ -2196,7 +2196,17 @@ export const MANIFEST_RULES = {
           "column": "confirm_as",
           "eq": 3
         }
-      }
+      },
+      "holdSeconds": 5,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "cancelled"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
     },
     {
       "kind": "order-confirmation",
@@ -2209,7 +2219,17 @@ export const MANIFEST_RULES = {
           "column": "confirm_as",
           "eq": 1
         }
-      }
+      },
+      "holdSeconds": 5,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "cancelled"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
     },
     {
       "kind": "order-ready",

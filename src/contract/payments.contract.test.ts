@@ -254,7 +254,8 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
       it("arrives with the orders' payable switched off, and is switched on and off again in one place", async () => {
         type Apps = { data: { apps: { appKey: string; connectionId: string; enabled: boolean; tables: { tableName: string; valid: boolean }[] }[] } };
         const listed = () => staff.get<Apps>("/api/v1/payments/apps").then((reply) => ok(reply).data.apps.filter((a) => a.appKey === "ordering"));
-        expect((await listed()).map((a) => [a.connectionId, a.enabled, a.tables])).toEqual([[connectionId, false, [{ tableName: `${PREFIX}orders`, valid: true }]]]);
+        // The table by its real name (a schema may stand before it, as on SQLite's `main.`).
+        expect((await listed()).map((a) => [a.connectionId, a.enabled, a.tables.map((t) => [t.tableName.replace(/^.*\./, ""), t.valid])])).toEqual([[connectionId, false, [[`${PREFIX}orders`, true]]]]);
         expect(ok(await staff.post<{ data: { changed: number } }>("/api/v1/payments/apps/switch", { connectionId, appKey: "ordering", enabled: true })).data.changed).toBe(1);
         expect((await listed()).map((a) => a.enabled)).toEqual([true]);
         ok(await staff.post("/api/v1/payments/apps/switch", { connectionId, appKey: "ordering", enabled: false }));
@@ -317,7 +318,7 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
         const total = String((await order(id))["total"]);
         // Nobody but a payment fills an online payment's reference.
         const forged = await staff.post(data("payments"), { values: { order_id: id, method: "online", amount: total, payment_ref: "pi_forged" } });
-        expect([forged.status, (forged.body as { code?: string }).code]).toEqual([403, "TABLE_FORBIDDEN"]);
+        expect([forged.status, forged.code]).toEqual([403, "TABLE_FORBIDDEN"]);
         // The money taken online, as the payment writes it (the workspace's admin stands in for the service here).
         const paid = ok(await staff.post<{ data: Row }>(data("payments"), { values: { order_id: id, method: "online", amount: total, provider: "Stripe" } }), 201).data;
         const now = await order(id);

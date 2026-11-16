@@ -111,6 +111,9 @@ const notWhilePaying = {
   ],
 };
 
+/** The confirmation of an order that waited for its payment: dropped only if it is cancelled meanwhile. */
+const afterPaying = { holdSeconds: 5, dropWhen: [{ column: "status", in: ["cancelled"], reason: "no-longer-needed" }] };
+
 /**
  * A message that waits a few seconds, so an Undo made at once takes it back
  * before the diner hears of a move that did not stand.
@@ -158,8 +161,9 @@ export const OUTBOX = {
     { kind: "order-confirmation-phone", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "phone" } } },
     // An order that waited for its payment: confirmed as paid when the payment makes it new, or as today when the diner
     // chose to pay at pickup after all.
-    { kind: "order-confirmation-paid", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 3 }) },
-    { kind: "order-confirmation", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 1 }) },
+    // Each waits a few seconds: a confirmation dropped while the order waited for its payment does not then stop it.
+    { kind: "order-confirmation-paid", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 3 }), ...afterPaying },
+    { kind: "order-confirmation", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 1 }), ...afterPaying },
     // "You'll pay … at the counter", or "nothing to pay": one email, by whether a gift card, or a payment online, paid it all.
     ...([["order-ready", 0], ["order-ready-prepaid", 1], ["order-ready-paid", 2]] as const).map(([kind, paidAs]) => ({
       kind,
