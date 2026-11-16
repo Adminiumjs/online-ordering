@@ -67,13 +67,35 @@ const PORT_BASE = Number(process.env["CONTRACT_UPDATE_PORT_BASE"] ?? Number(proc
 const ADMIN = { email: process.env["E2E_ADMIN_EMAIL"] ?? "e2e@adminium.local", password: process.env["E2E_ADMIN_PASSWORD"] ?? "adminium-e2e-password" };
 const PREFIX = "ordering_";
 
-/** What 0.3.1 adds to 0.3.0's tables, from the manifest: the update's plan must be exactly this. */
+/**
+ * What this build adds to 0.3.0's tables, from the manifest: a diner's language and the newsletter's yes, the
+ * tick an order was placed with (0.3.1); and what paying online needs (0.3.3) — the kitchen's two payment
+ * settings, an order's online money, a payment's online reference and service, a refund's state — with the
+ * values four lists gain. The update's plan must be exactly this.
+ */
 const NEW_TABLES: string[] = [];
 const NEW_COLUMNS: Record<string, string[]> = {
   customers: ["language", "opt_in"],
-  orders: ["opt_in"],
+  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "opt_in", "paid_as"],
+  settings: ["auto_refund", "pay_hold_minutes"],
+  payments: ["method", "paid_at", "payment_ref", "provider", "refunded_elsewhere"],
+  payment_refunds: ["automatic", "counted", "method", "provider_ref", "refund_state"],
 };
-const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {};
+const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {
+  orders: { status: ["paying"], paid_method: ["online"], cancel_code: ["unpaid"] },
+  messages: { kind: ["order-confirmation-paid", "order-ready-paid", "order-cancelled-paid", "order-cancelled-paid-by-you", "order-refunded"] },
+};
+/**
+ * The new columns an update fills on the rows already there: a setting's literal default, a payment's and a
+ * refund's way (a gift card's: every one before online payments was), and what Adminium works out over them.
+ * The rest of the new columns hold nothing on a row that was there (`opt_in` a no).
+ */
+const FILLED: Record<string, string[]> = {
+  settings: ["auto_refund", "pay_hold_minutes"],
+  orders: ["card_paid", "online_used", "paid_as"],
+  payments: ["method"],
+  payment_refunds: ["automatic", "counted", "method"],
+};
 /** A no as each engine spells a yes/no column's value read straight from the database. */
 const NO = ["0", "false", "f"];
 const TODAY = venueDay(DEMO_START, DEMO_ZONE);
@@ -327,6 +349,9 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
             planChecksum: plan.checksum,
             // What the new version lets a diner's page do (the tick for the kitchen's news) is the operator's to allow.
             publicAccess: true,
+            // …and the order page's doors for paying online, and the manager's right to give back what a diner paid.
+            publicWider: true,
+            roleGrants: true,
             // The kitchen that set the add-ons up first connects them as it updates.
             ...(run.addOns ? { addOns: ["inventory", "offers"].map((key) => ({ key, version: addOnBundle(key).version })) } : {}),
           });
@@ -360,7 +385,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
             const kept = now!.rows.map((found) => Object.fromEntries(Object.keys(was.columns).map((c) => [c, found[c]])));
             expect(kept, `the rows of ${name}`).toEqual(was.rows);
             // A column the update adds holds, on a row that was there: no to the news (its default), and no language; nothing else.
-            for (const column of added[name]!) {
+            for (const column of added[name]!.filter((c) => !(FILLED[name.slice(PREFIX.length)] ?? []).includes(c))) {
               const values = [...new Set(now!.rows.map((found) => found[column] ?? null))];
               if (column === "opt_in") expect([name, column, values.filter((v) => !NO.includes(String(v)))]).toEqual([name, column, []]);
               else expect([name, column, values]).toEqual([name, column, now!.rows.length === 0 ? [] : [null]]);
