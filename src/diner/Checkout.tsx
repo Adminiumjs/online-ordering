@@ -187,7 +187,8 @@ export function Checkout() {
     const placed = await placeOrder(locale);
     if (placed !== null) await followPlaced(placed);
   };
-  if (s.cart.length === 0 && !s.placing) {
+  // While it hands the diner to the pay page the cart is already empty: the hand-off still shows.
+  if (s.cart.length === 0 && !s.placing && !taking) {
     return (
       <div className="jn-view jk-shell">
         <div style={{ paddingBlock: "clamp(24px,4vw,42px) clamp(34px,5vw,62px)" }}>

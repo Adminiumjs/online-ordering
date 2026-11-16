@@ -455,7 +455,8 @@ function Tracking({ order }: { order: OrderWithLines }) {
                   big: false,
                   off: true,
                 })),
-                ...((order.payments ?? []).length > 0 ? [{ key: "due", label: t("offers.toPay"), value: fmt.money(toPay), big: false, off: false }] : []),
+                // What is left for the counter: said unless it was all paid online, which the card beside says.
+                ...((order.payments ?? []).length > 0 && !paidOnline ? [{ key: "due", label: t("offers.toPay"), value: fmt.money(toPay), big: false, off: false }] : []),
               ].map((r) => (
                 <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 10, ...(r.big ? { paddingBlockStart: 10, borderBlockStart: "1px solid var(--border)" } : {}) }}>
                   <span style={{ fontSize: r.big ? 17 : 13.5, fontWeight: r.big ? 800 : 600, color: r.big ? "var(--fg)" : r.off ? "var(--pos)" : "var(--fg-muted)" }}>
