@@ -38,7 +38,7 @@ import {
   type Placed,
 } from "../state/diner.ts";
 import { sources } from "../data/sources.ts";
-import { goPay, openTrack, showWithoutLink } from "../state/track.ts";
+import { goPay, openTrack, showWithoutLink, useTrack } from "../state/track.ts";
 import { goDiner, toast } from "../state/ui.ts";
 import { useFmt, useVenue } from "../app/venue.ts";
 import { Bdi } from "../components/Bdi.tsx";
@@ -77,6 +77,14 @@ export async function followPlaced(placed: Placed): Promise<void> {
       window.location.hash = placed.token ?? "";
       goDiner("track");
     }
+    return;
+  }
+  // Placed to pay now, and the kitchen could not take the payment just then: its page offers to try again, or to pay at pickup.
+  if (placed.payUrl === null && placed.token !== null) {
+    window.location.hash = placed.token;
+    goDiner("track");
+    await openTrack(placed.token);
+    useTrack.setState({ pay: "refused" });
     return;
   }
   if (placed.token !== null) {
