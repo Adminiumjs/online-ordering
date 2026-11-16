@@ -18,7 +18,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.60** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.61** or later, on SQLite, Postgres or MySQL.
 - Nothing else. Four add-ons are offered at install, and the app is whole
   without any of them:
   - **Offers & gift cards** — diners type a code at checkout, automatic offers
@@ -121,7 +121,7 @@ and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
 
 **Moving from 0.3.2.** 0.3.3 adds paying online and updates a 0.3.2 install
-in place: update Adminium to 0.3.60 first, then the app. The update adds
+in place: update Adminium to 0.3.61 first, then the app. The update adds
 columns and keeps every row: the settings' two payment settings, an order's
 online money and the state it waits for its payment in, a payment's online
 reference and service, a refund's state. Every gift card payment and refund
