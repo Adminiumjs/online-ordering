@@ -510,10 +510,12 @@ export const TABLES: Table[] = [
       // What gift cards and online payments have paid and still hold, and what is left to collect at the counter.
       money("paid", "Paid", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
       amount("due", "Left to pay"),
-      // Of that, what was paid online: ever taken, still held, and given back.
-      money("online_taken", "Paid online", { rollup: { from: "payments", via: "order_id", sum: "amount", where: { column: "method", eq: "online" } } }),
-      money("online_paid", "Paid online, kept", { rollup: { from: "payments", via: "order_id", sum: "kept", where: { column: "method", eq: "online" } } }),
-      money("online_refunded", "Refunded online", { rollup: { from: "payments", via: "order_id", sum: "returned", where: { column: "method", eq: "online" } } }),
+      // Of that, what was paid online: ever taken, still held, and given back. A payment made online names no gift card's code
+      // (a gift card's always does), and that is how these tell one from the other: the payment's way to pay may be empty
+      // on a row from before online payments, and a total must never lose a row to that.
+      money("online_taken", "Paid online", { rollup: { from: "payments", via: "order_id", sum: "amount", unlessSet: "card_code" } }),
+      money("online_paid", "Paid online, kept", { rollup: { from: "payments", via: "order_id", sum: "kept", unlessSet: "card_code" } }),
+      money("online_refunded", "Refunded online", { rollup: { from: "payments", via: "order_id", sum: "returned", unlessSet: "card_code" } }),
       // And what gift cards paid and still hold: the rest of it.
       money("card_paid", "Paid by gift card", { formula: atEachMove({ max: [0, CARDS] }) }),
       // What to collect, whatever the order's age: an order from before gift cards has nothing paid by one, and owes its total.

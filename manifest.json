@@ -3214,10 +3214,7 @@
                 "from": "payments",
                 "via": "order_id",
                 "sum": "amount",
-                "where": {
-                  "column": "method",
-                  "eq": "online"
-                }
+                "unlessSet": "card_code"
               }
             }
           },
@@ -3241,10 +3238,7 @@
                 "from": "payments",
                 "via": "order_id",
                 "sum": "kept",
-                "where": {
-                  "column": "method",
-                  "eq": "online"
-                }
+                "unlessSet": "card_code"
               }
             }
           },
@@ -3268,10 +3262,7 @@
                 "from": "payments",
                 "via": "order_id",
                 "sum": "returned",
-                "where": {
-                  "column": "method",
-                  "eq": "online"
-                }
+                "unlessSet": "card_code"
               }
             }
           },
