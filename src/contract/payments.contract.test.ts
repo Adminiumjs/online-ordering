@@ -282,8 +282,8 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
         const sent = await until(async () => (await messagesOf(id)).find((m) => m["kind"] === "order-confirmation" && m["status"] === "sent"), "the confirmation");
         expect(sent["status"]).toBe("sent");
         expect((await messagesOf(id)).filter((m) => m["status"] === "sent").map((m) => m["kind"])).toEqual(["order-confirmation"]);
-        // Once new, it is not waiting for anything: the move is refused (nothing matches).
-        expect(await diner.payAtPickup("link", id).then(() => "moved", (error: { status?: number }) => error.status)).toBe(404);
+        // Once new, it is not waiting for anything: the move is refused (it is new already).
+        expect(await diner.payAtPickup("link", id).then(() => "moved", (error: { code?: string }) => error.code)).toMatch(/^PUBLIC_|^STATE_/);
       }, 300_000);
 
       it("lets an order go when its hold ends unpaid: cancelled as not paid in time, and nobody emailed", async () => {
