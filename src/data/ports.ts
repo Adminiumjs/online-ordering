@@ -31,6 +31,16 @@ export interface OrderWithLines {
   payments?: Row[];
   /** The reductions it was saved with, by name, where the door tells them (one order read by its diner). */
   applied?: Applied[];
+  /** What went back of its payments, oldest first: to a gift card, or online (the kitchen's door only). */
+  refunds?: Row[];
+}
+
+/** Whether the kitchen takes payments, and whether this person may give money back. */
+export interface KitchenPayments {
+  /** Switched on for the app in Adminium's Payments: the screens show the payment parts. */
+  on: boolean;
+  /** May give back what a diner paid online. */
+  refund: boolean;
 }
 
 /** How an order was paid at the hand-over: one way, a gift card and the rest another way, or all of it online before. */
@@ -73,6 +83,11 @@ export interface DinerPort {
   payLink(door: OrderDoor, id: Id): Promise<string>;
   /** An order waiting for its payment, made new to be paid at pickup instead. */
   payAtPickup(door: OrderDoor, id: Id): Promise<Row>;
+  /**
+   * The demo's pay page (the website's demo only): a moment's hand-off that
+   * pays the order at once. A real door has none, and goes to `payUrl`.
+   */
+  demoPay?(id: Id): void;
 
   /** Opens the order behind its own link (the code in the link's fragment). */
   openLink(token: string): Promise<ClaimReply>;
@@ -168,6 +183,17 @@ export interface KitchenPort {
 
   /** Whether a hand-over sends a receipt: Invoices & receipts installed with its receipts on. */
   receipts(): Promise<boolean>;
+
+  /** Whether the kitchen takes payments, and whether this person may refund. A door that cannot say: off. */
+  payments(): Promise<KitchenPayments>;
+  /**
+   * Money paid online given back: a refund row of the kitchen's own, which
+   * Adminium sends back through the service the payment came by. `clientKey`
+   * makes a retry the same refund.
+   */
+  refund(payment: { id: Id; orderId: Id }, amount: string, reason: string, clientKey: string): Promise<Row>;
+  /** A manager's: whether a paid order cancelled in time is refunded by itself. */
+  setAutoRefund(on: boolean): Promise<Row>;
 
   /** Whether the menu is another app's too (the till's): switching a dish off hides it there as well. */
   menuShared(): Promise<boolean>;

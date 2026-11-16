@@ -23,6 +23,8 @@ export interface Venue {
   phone: string | null;
   photos: { hero: string | null; street: string | null; closed: string | null; store: string | null };
   taxRate: number;
+  /** A paid order cancelled in time is refunded by itself (the kitchen's switch; on when it is not said). */
+  autoRefund: boolean;
 }
 
 const text = (value: unknown): string | null => (typeof value === "string" && value.trim() !== "" ? value.trim() : null);
@@ -44,6 +46,7 @@ export function venueOf(settings: Record<string, unknown> | null | undefined): V
     phone: text(s["phone"]),
     photos: { hero: text(s["photo_hero"]), street: text(s["photo_street"]), closed: text(s["photo_closed"]), store: text(s["photo_store"]) },
     taxRate: Number(s["tax_rate"] ?? 0),
+    autoRefund: s["auto_refund"] !== false && s["auto_refund"] !== 0,
   };
 }
 

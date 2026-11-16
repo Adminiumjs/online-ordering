@@ -16,6 +16,7 @@ import {
   choosePickDay,
   freshQuote,
   openSheet,
+  paysNow,
   removeCard,
   removeCode,
   removeLine,
@@ -315,6 +316,8 @@ export function Totals({ gap, removable = false }: { gap: number; removable?: bo
   const rate = fresh?.data["tax_rate"] ?? settingsRate ?? 0;
   const applied = fresh?.applied ?? [];
   const payment = fresh?.payment ?? null;
+  // Paid online now, what the card leaves is left to pay there; else it is for the counter, as always.
+  const payNow = useDiner(() => paysNow());
   /** After "Remove" the link it was is gone: the field's own opener takes the focus. */
   const remove = (what: "code" | "card") => {
     if (what === "code") removeCode();
@@ -377,7 +380,7 @@ export function Totals({ gap, removable = false }: { gap: number; removable?: bo
             <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 13.5, fontWeight: 600, color: "var(--pos)", whiteSpace: "nowrap" }}>−{fmt.money(payment.amount)}</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--fg)" }}>{t("offers.toPay")}</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: "var(--fg)" }}>{payNow ? t("pay.leftToPay") : t("offers.toPay")}</span>
             <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(payment.due)}</span>
           </div>
         </>
