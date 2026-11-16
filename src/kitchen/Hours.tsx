@@ -13,7 +13,7 @@ import { useI18n, type TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { hoursOn, lastPickup } from "../lib/day.ts";
 import { addDays, hhmm, minutesOf, venueMinutes, weekdayOf, WEEKDAY_KEYS, type Day } from "../lib/venueTime.ts";
-import { BOARD, addClosure, dayOf, isManager, kToday, num, setClosure, setHours, setOnline, useKitchen } from "../state/kitchen.ts";
+import { BOARD, addClosure, dayOf, isManager, kToday, num, setAutoRefund, setClosure, setHours, setOnline, useKitchen } from "../state/kitchen.ts";
 import { toast } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 
@@ -54,6 +54,7 @@ export function Hours() {
   const manager = isManager();
   const today = kToday(now);
   const online = k.settings?.["online_on"] !== false;
+  const autoRefund = k.settings?.["auto_refund"] !== false && k.settings?.["auto_refund"] !== 0;
   const slot = num(k.settings?.["slot_minutes"], 15);
   const name = (i: number) => fmt.weekday(addDays(A_MONDAY, i));
   const todayIndex = WEEKDAY_KEYS.indexOf(weekdayOf(today));
@@ -104,6 +105,24 @@ export function Hours() {
           />
         </div>
       </Section>
+
+      {/* Only while the kitchen takes payments: managers change it, everyone in the kitchen sees it. */}
+      {k.payments.on && (
+        <Section id="jn-kh-payments" title={t("kpay.hours.title")}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBlockStart: 14 }}>
+            <span style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
+              <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.022em" }}>{t("kpay.hours.auto")}</span>
+              <span style={{ fontSize: 13, lineHeight: 1.55, color: "var(--fg-muted)" }}>{t("kpay.hours.autoHint")}</span>
+            </span>
+            <Switch
+              on={autoRefund}
+              label={t("kpay.hours.auto")}
+              disabled={!manager}
+              onToggle={() => void setAutoRefund(!autoRefund).then((ok) => toast(ok ? (autoRefund ? t("kpay.hours.off") : t("kpay.hours.on")) : t("kitchen.hours.saveFailed"), ok ? "ok" : "warn"))}
+            />
+          </div>
+        </Section>
+      )}
 
       <Section id="jn-kh-week" title={t("kitchen.hours.week")}>
         <div style={{ display: "flex", flexDirection: "column", marginBlockStart: 8 }}>
