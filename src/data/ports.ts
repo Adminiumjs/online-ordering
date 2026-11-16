@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OnlinePayments, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OnlinePayments, OrderBody, OrderReply, PaymentState, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -83,6 +83,8 @@ export interface DinerPort {
   payLink(door: OrderDoor, id: Id): Promise<string>;
   /** An order waiting for its payment, made new to be paid at pickup instead. */
   payAtPickup(door: OrderDoor, id: Id): Promise<Row>;
+  /** Where the order's newest online payment stands; null when Adminium could not say. */
+  paymentState(door: OrderDoor, id: Id): Promise<PaymentState | null>;
   /**
    * The demo's pay page (the website's demo only): a moment's hand-off that
    * pays the order at once. A real door has none, and goes to `payUrl`.

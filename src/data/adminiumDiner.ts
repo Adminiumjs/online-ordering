@@ -22,7 +22,7 @@ import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
 import type { OrderDoor } from "./ports.ts";
-import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime, type StockWord } from "./wire.ts";
+import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type PaymentState, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime, type StockWord } from "./wire.ts";
 
 /** What the door needs to start: the address, the customer key, the tables' real names and the other keys. */
 export interface DinerServed {
@@ -328,6 +328,16 @@ export class AdminiumDiner implements DinerPort {
       const { client, ref } = this.door(door);
       return (await client.payments.start(ref, String(id))).payUrl;
     });
+  }
+
+  async paymentState(door: OrderDoor, id: Id): Promise<PaymentState | null> {
+    try {
+      const { client, ref } = this.door(door);
+      return (await client.payments.state(ref, String(id))).state;
+    } catch {
+      // No answer (the connection, a limit): the page says what it last knew, and asks again.
+      return null;
+    }
   }
 
   payAtPickup(door: OrderDoor, id: Id): Promise<Row> {

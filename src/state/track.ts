@@ -13,9 +13,11 @@
  * tab, and keeps a note for the tab of the order it sent there. The pay page
  * sends them back to the order page's own address (no code rides back, so a
  * forwarded pay link never opens the order); the note says which order to
- * open. Back, the page checks for a few seconds whether the payment made the
- * order new; still waiting after that, it says the payment didn't finish —
- * the order is held a few minutes more, to pay again or to pay at pickup.
+ * open. Back, the page asks Adminium where the payment stands: paid (the
+ * order is new), still open at the service ("Checking your payment…", asked
+ * again), or didn't finish — then the order is held a few minutes more, to pay
+ * again or to pay at pickup. Paying at pickup instead is refused on the page
+ * while a payment is open or paid, so money on its way is not overtaken.
  */
 import { create } from "zustand";
 
@@ -32,7 +34,7 @@ export type TrackState = "idle" | "loading" | "ok" | "expired" | "error";
  * and the payment didn't finish, leaving for the pay page, or a step that
  * could not be taken (the pay page would not open, or the order moved).
  */
-export type PayState = "idle" | "checking" | "failed" | "going" | "refused";
+export type PayState = "idle" | "checking" | "failed" | "going" | "refused" | "busy";
 
 interface TrackStore {
   state: TrackState;
@@ -119,9 +121,11 @@ export async function openTrack(token: string, first = false): Promise<void> {
 
 /** Per install, for the tab: the order this tab last sent to the pay page. */
 const SENT_KEY = mountKey("online-ordering-paying");
-/** How long, back from the pay page, the page waits for the payment to make the order new before it says it didn't finish. */
-export const CHECK_MS = 15_000;
+/** How often, back from the pay page, Adminium is asked where the payment stands; and how long a state nobody can read is waited for. */
 const CHECK_EVERY_MS = 2_000;
+export const UNANSWERED_MS = 15_000;
+/** A page still open at the service is asked about this long, then the order's page offers Pay now again (the same page). */
+const OPEN_MS = 120_000;
 
 interface Sent {
   token: string | null;
@@ -167,7 +171,12 @@ export async function resumeFromPay(): Promise<boolean> {
   return true;
 }
 
-/** Opened again after the pay page: check for a few seconds whether the payment made the order new. */
+/**
+ * Opened again after the pay page: Adminium says where the payment stands.
+ * Paid: the order is read again, new. Open (or the bank confirming): checking,
+ * and asked again. Didn't finish, ran out, or none started: it didn't finish.
+ * A state nobody can read is waited for a little, then taken as not finished.
+ */
 function checkReturned(): void {
   const { order } = useTrack.getState();
   const sent = readSent();
@@ -179,6 +188,9 @@ function checkReturned(): void {
   useTrack.setState({ pay: "checking" });
   const started = Date.now();
   const tick = async (): Promise<void> => {
+    const { source } = useTrack.getState();
+    const state = await sources().diner.paymentState(source, sent.id);
+    // Paid or not, the order as it now stands says the rest (a payment made it new).
     await readTrack();
     const now = useTrack.getState().order;
     if (now === null || now.order.id !== sent.id) return;
@@ -187,13 +199,19 @@ function checkReturned(): void {
       useTrack.setState({ pay: "idle" });
       return;
     }
-    if (Date.now() - started >= CHECK_MS) {
+    const waited = Date.now() - started;
+    if (state === "failed" || state === "expired" || state === "none" || (state === null && waited >= UNANSWERED_MS)) {
       useTrack.setState({ pay: "failed" });
+      return;
+    }
+    // Open at the service, confirming, or paid and not yet written: asked again, up to a while.
+    if (waited >= OPEN_MS) {
+      useTrack.setState({ pay: "idle" });
       return;
     }
     setTimeout(() => void tick(), CHECK_EVERY_MS);
   };
-  setTimeout(() => void tick(), CHECK_EVERY_MS);
+  void tick();
 }
 
 /**
@@ -232,20 +250,31 @@ export async function payTracked(): Promise<void> {
   }
 }
 
-/** "Pay when you pick up instead": the order made new, unpaid, as any order paid at pickup. */
-export async function payAtPickupTracked(): Promise<boolean> {
+/**
+ * "Pay when you pick up instead": the order made new, unpaid, as any order
+ * paid at pickup. Refused here while a payment is open at the service or
+ * paid: money on its way would land on an order that no longer waits for it.
+ * (Adminium itself does not hold the move back; the page does.)
+ */
+export async function payAtPickupTracked(): Promise<"moved" | "busy" | "failed"> {
   const { order, source } = useTrack.getState();
-  if (order === null) return false;
+  if (order === null) return "failed";
   useTrack.setState({ switching: true });
   try {
+    const state = await sources().diner.paymentState(source, order.order.id);
+    if (state === "open" || state === "confirming" || state === "paid") {
+      useTrack.setState({ pay: "busy" });
+      await readTrack();
+      return "busy";
+    }
     await sources().diner.payAtPickup(source, order.order.id);
     keepSent(null);
     await readTrack();
     useTrack.setState({ pay: "idle" });
-    return true;
+    return "moved";
   } catch {
     await readTrack();
-    return useTrack.getState().order?.order["status"] === "placed";
+    return useTrack.getState().order?.order["status"] === "placed" ? "moved" : "failed";
   } finally {
     useTrack.setState({ switching: false });
   }

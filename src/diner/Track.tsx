@@ -523,11 +523,12 @@ function Paying({ order }: { order: OrderWithLines }) {
   const pay = useTrack((s) => s.pay);
   const switching = useTrack((s) => s.switching);
   const time = fmt.time(String(order.order["pickup_at"]));
-  const failed = pay === "failed" || pay === "refused";
+  const failed = pay === "failed" || pay === "refused" || pay === "busy";
   const busy = pay === "going" || switching;
   const instead = async () => {
-    const ok = await payAtPickupTracked();
-    toast(ok ? t("pay.instead.done") : t("pay.instead.failed"), ok ? "ok" : "warn");
+    const result = await payAtPickupTracked();
+    // Refused while a payment is open or paid: the line under the buttons says why.
+    if (result !== "busy") toast(result === "moved" ? t("pay.instead.done") : t("pay.instead.failed"), result === "moved" ? "ok" : "warn");
   };
   if (pay === "checking") {
     return (
@@ -562,7 +563,13 @@ function Paying({ order }: { order: OrderWithLines }) {
           </button>
         )}
       </div>
-      <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{t("pay.now.sub")}</span>
+      {pay === "busy" ? (
+        <span role="status" style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: "var(--warn)" }}>
+          {t("pay.instead.busy")}
+        </span>
+      ) : (
+        <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{t("pay.now.sub")}</span>
+      )}
     </div>
   );
 }

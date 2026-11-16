@@ -15,7 +15,7 @@
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
 import type { DinerPort, Menu, OrderDoor, OrderWithLines } from "../data/ports.ts";
-import { ApiError, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime, type StockWord } from "../data/wire.ts";
+import { ApiError, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type PaymentState, type OrderReply, type QuoteReply, type Row, type SlotTime, type StockWord } from "../data/wire.ts";
 import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { columnOf, LINE_NOTE_RULE, linkFreeText, ruleOf, type PlainTextColumn } from "../lib/plainText.ts";
@@ -335,6 +335,13 @@ export class DemoDiner implements DinerPort {
     const order = this.reached(door, id);
     if (order["status"] !== "paying" || !this.payOnline) throw new ApiError(409, "PUBLIC_PAY_REFUSED", "This order cannot be paid now.", { reason: order["status"] !== "paying" ? "not-now" : "off" });
     return DEMO_PAY_URL;
+  }
+
+  /** The demo's payments land at once: an order paid online is paid, one still waiting started none. */
+  async paymentState(door: OrderDoor, id: Id): Promise<PaymentState | null> {
+    await this.wait(this.latency.read);
+    const order = this.reached(door, id);
+    return this.world.where("payments", (p) => p["order_id"] === order.id && p["method"] === "online").length > 0 ? "paid" : "none";
   }
 
   async payAtPickup(door: OrderDoor, id: Id): Promise<Row> {

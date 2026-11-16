@@ -273,6 +273,8 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
         const made = await placeOrder(diner, "Kwame", true);
         expect([made.data["status"], made.payUrl]).toEqual(["paying", null]);
         const id = made.data.id;
+        // Where its payment stands, as the page asks back from the pay page: none was started.
+        expect(await diner.paymentState("link", id)).toBe("none");
         // Its confirmation waits, and is dropped: an order waiting for its payment is not confirmed.
         const dropped = await until(async () => (await messagesOf(id)).find((m) => m["kind"] === "order-confirmation" && m["status"] !== "queued"), "the held confirmation");
         expect([dropped["status"], dropped["skip_reason"]]).toEqual(["skipped", "no-longer-needed"]);

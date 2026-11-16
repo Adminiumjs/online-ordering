@@ -527,7 +527,10 @@ describe("paying online, as the demo plays it", () => {
     demo.world.now += 10_000;
     demo.engine.sendDue();
     expect(kinds(id)).toEqual([]);
+    // Back from the pay page, the page asks where the payment stands: none started yet, then paid.
+    expect(await demo.diner.paymentState("link", id)).toBe("none");
     demo.diner.demoPay!(id);
+    expect(await demo.diner.paymentState("link", id)).toBe("paid");
     const paid = (await demo.diner.linkedOrder()).order;
     expect([paid["status"], Number(paid["online_paid"]), Number(paid["to_pay"])]).toEqual(["placed", Number(paid["total"]), 0]);
     expect(kinds(id)).toEqual(["order-confirmation-paid"]);
