@@ -323,3 +323,47 @@ describe("the Overview's links", () => {
     expect(hrefs.map((h) => /^\/p\/([^?]+)/.exec(h)?.[1]).filter((ref) => ref === undefined || !refs.has(ref))).toEqual([]);
   });
 });
+
+describe("paying online, as the manifest asks Adminium", () => {
+  type Payable = Record<string, unknown> & { payments: Record<string, unknown>; refunds: Record<string, unknown>; refundOn: Record<string, unknown> };
+  const payable = () => ((manifest as Json)["payments"] as { payables: Payable[] }).payables;
+
+  it("makes an order payable only while it waits for its payment, by ways that settle at once, and the payment makes it new", () => {
+    expect(payable().map((p) => p["table"])).toEqual(["orders"]);
+    const p = payable()[0]!;
+    expect([p["payableWhen"], p["status"], p["instantOnly"], p["receipt"], p["returnTo"]]).toEqual([
+      [{ column: "status", eq: "paying" }],
+      { column: "status", paid: "placed", from: ["paying"] },
+      true,
+      "app",
+      "/o",
+    ]);
+    // Gift cards and online payments in one table, so "paid" stays one figure with one cap.
+    expect([p.payments["table"], p.payments["link"], p.payments["method"], p.payments["reference"]]).toEqual(["payments", "order_id", { column: "method", values: { "*": "online" } }, "payment_ref"]);
+    expect(rules("orders", "paid")["rollup"]).toMatchObject({ from: "payments", sum: "kept", balance: { column: "due", of: "total" }, cap: true });
+  });
+
+  it("keeps refunds as rows of its own, sends back only the online ones, and posts to a gift card only a gift card's", () => {
+    const p = payable()[0]!;
+    expect(p.refunds).toMatchObject({ model: "rows", table: "payment_refunds", payment: "payment_id", when: [{ column: "method", eq: "online" }], auto: { values: { method: "online", automatic: true } } });
+    const postings = (ref: string) => (manifest.requiredSchema.tables.find((t) => t.ref === ref) as unknown as { postings: Json[] }).postings;
+    expect(postings("payments").map((x) => x["only"])).toEqual([{ column: "method", eq: "gift_card" }]);
+    expect(postings("payment_refunds").map((x) => x["only"])).toEqual([{ column: "method", eq: "gift_card" }]);
+    // A payment before online payments was a gift card's, and every refund before them went back to a card.
+    for (const ref of ["payments", "payment_refunds"]) expect(column(ref, "method")["default"]).toBe("gift_card");
+  });
+
+  it("refunds a free cancel by itself only for the diner, the clock or someone who may refund, behind the kitchen's switch; never 'not collected'", () => {
+    const p = payable()[0]!;
+    expect(p.refundOn).toEqual({
+      moves: [{ from: ["placed", "confirmed", "preparing", "ready"], to: "cancelled", by: ["customer", "system", "refund-right"] }],
+      switch: { table: "settings", column: "auto_refund" },
+    });
+    expect(role("manager").permissions).toContain("payments:@:refund");
+  });
+
+  it("holds an order waiting for its payment against its slot and its portions, as any order still wanted", () => {
+    const tables = manifest.requiredSchema.tables as unknown as { ref: string; capacity?: { countWhere: { values: string[] } } }[];
+    for (const ref of ["orders", "order_items"]) expect(tables.find((t) => t.ref === ref)!.capacity!.countWhere.values).toContain("paying");
+  });
+});

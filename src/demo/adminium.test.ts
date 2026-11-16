@@ -508,3 +508,77 @@ describe("a gift card on a cancelled order", () => {
     expect([Number(payment!["kept"]), Number(payment!["returned"])]).toEqual([0, took]);
   });
 });
+
+describe("paying online, as the demo plays it", () => {
+  /** Kwame's order placed to pay now, with its own link opened. */
+  async function placedToPay(key = "pay"): Promise<number> {
+    const made = await demo.diner.place(kwame({ pickup_at: at("12:30") }), `${key}-0123456789abcdef-pay`, { payNow: true });
+    expect([made.data["status"], made.payUrl]).toEqual(["paying", "demo:pay"]);
+    await demo.diner.openLink(made.link!.token);
+    return made.data.id;
+  }
+  const kinds = (id: number) => demo.world.where("messages", (m) => m["order_id"] === id && m["status"] !== "skipped").map((m) => m["kind"]);
+
+  it("holds the slot while the diner pays, keeps it off the board, and makes it new and paid once the payment is in", async () => {
+    const before = (await demo.kitchen.slotCounts(TODAY)).find((s) => s.time === "12:30")!.taken;
+    const id = await placedToPay();
+    expect((await demo.kitchen.slotCounts(TODAY)).find((s) => s.time === "12:30")!.taken).toBe(before + 1);
+    // No confirmation for an order still waiting for its payment.
+    demo.world.now += 10_000;
+    demo.engine.sendDue();
+    expect(kinds(id)).toEqual([]);
+    demo.diner.demoPay!(id);
+    const paid = (await demo.diner.linkedOrder()).order;
+    expect([paid["status"], Number(paid["online_paid"]), Number(paid["to_pay"])]).toEqual(["placed", Number(paid["total"]), 0]);
+    expect(kinds(id)).toEqual(["order-confirmation-paid"]);
+    const row = demo.world.where("payments", (p) => p["order_id"] === id);
+    expect(row.map((p) => [p["method"], p["provider"]])).toEqual([["online", "Stripe"]]);
+  });
+
+  it("lets the diner pay at pickup instead while it waits, and confirms it as any order paid at pickup", async () => {
+    const id = await placedToPay("instead");
+    const placed = await demo.diner.payAtPickup("link", id);
+    expect([placed["status"], placed["cancel_code"]]).toEqual(["placed", null]);
+    demo.world.now += 10_000;
+    demo.engine.sendDue();
+    expect(kinds(id)).toEqual(["order-confirmation"]);
+    // Once new it waits for nothing: the move is not there to make.
+    await expect(demo.diner.payAtPickup("link", id)).rejects.toMatchObject({ status: 404 });
+  });
+
+  it("cancels it as not paid in time once the kitchen's hold ends, and tells nobody", async () => {
+    const id = await placedToPay("lapse");
+    demo.advanceTo(demo.world.now + 11 * 60_000);
+    const gone = demo.world.get("orders", id)!;
+    expect([gone["status"], gone["cancel_code"]]).toEqual(["cancelled", "unpaid"]);
+    expect(kinds(id)).toEqual([]);
+  });
+
+  it("refunds the diner's own cancel of a paid order by itself, or leaves it owed with the switch off", async () => {
+    const id = await placedToPay("auto");
+    demo.diner.demoPay!(id);
+    await demo.diner.cancelLinked(id);
+    const back = demo.world.where("payment_refunds", (r) => r["order_id"] === id);
+    expect(back.map((r) => [r["method"], r["automatic"], r["refund_state"]])).toEqual([["online", true, "done"]]);
+    expect(Number(demo.world.get("orders", id)!["online_paid"])).toBe(0);
+
+    await demo.kitchen.setAutoRefund(false);
+    const owed = await placedToPay("owed");
+    demo.diner.demoPay!(owed);
+    await demo.diner.cancelLinked(owed);
+    expect(demo.world.where("payment_refunds", (r) => r["order_id"] === owed)).toEqual([]);
+    expect(Number(demo.world.get("orders", owed)!["online_paid"])).toBeGreaterThan(0);
+  });
+
+  it("lets someone who may refund give money back from the ticket, once for a retried press", async () => {
+    const id = await placedToPay("refund");
+    demo.diner.demoPay!(id);
+    const payment = demo.world.where("payments", (p) => p["order_id"] === id)[0]!;
+    const first = await demo.kitchen.refund({ id: payment.id, orderId: id }, "2.00", "A drink was missing", "refund-key-0123456789abcdef");
+    const again = await demo.kitchen.refund({ id: payment.id, orderId: id }, "2.00", "A drink was missing", "refund-key-0123456789abcdef");
+    expect(again.id).toBe(first.id);
+    expect(Number(demo.world.get("orders", id)!["online_refunded"])).toBe(2);
+    demo.kitchen.paymentsOn = { on: true, refund: false };
+    await expect(demo.kitchen.refund({ id: payment.id, orderId: id }, "1.00", "Again", "refund-key-other-0123456789")).rejects.toMatchObject({ code: "PAYMENT_REFUND_NOT_ALLOWED" });
+  });
+});
