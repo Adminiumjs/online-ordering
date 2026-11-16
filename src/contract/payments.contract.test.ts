@@ -165,7 +165,7 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
       };
 
       beforeAll(async () => {
-        server = await boot(engine as Engine, port, DEMO_START);
+        server = await boot(engine as Engine, port, DEMO_START, { database: `oo_payments_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}` });
         staff = new Caller(server.base, { origin: server.base });
         await staff.signIn(ADMIN.email, ADMIN.password);
         const connections = ok(await staff.get<{ connections: { id: string; name: string }[] }>("/api/v1/connections"));
