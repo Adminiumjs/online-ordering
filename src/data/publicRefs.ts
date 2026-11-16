@@ -31,6 +31,8 @@ export const PUBLIC_REFS = {
   stock: ["menu_items", "_availability"],
   // Placing an order with its lines and options, priced by Adminium; a large-order enquiry.
   place: ["orders", "_verified_2"],
+  // The same order placed to pay now: made waiting for its payment, the link to pay it in the reply.
+  placeToPay: ["orders", "_verified_3"],
   enquire: ["enquiries", ""],
   // A signed-in diner: their account and their own orders.
   account: ["customers", "_claimed"],

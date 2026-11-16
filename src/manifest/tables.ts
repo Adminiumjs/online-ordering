@@ -17,6 +17,14 @@
  *     carries its reason; at closing, a ready order not collected is marked so,
  *     and half an hour later one never finished is cancelled; a step taken by
  *     mistake is taken back within a minute, emptying its stamps;
+ *   - an order the diner pays for online as they place it waits for that
+ *     payment (`paying`): its slot and its portions are held for a few
+ *     minutes, the kitchen does not see it yet, and the payment makes it new.
+ *     Left unpaid past the kitchen's hold it is cancelled, as not paid in time
+ *     — never while a payment for it is still on its way;
+ *   - one table of payments holds both what gift cards paid and what was paid
+ *     online, so "paid" is one figure with one cap; and one table of refunds
+ *     holds what went back to a card and what went back online;
  *   - a finished order is locked, with its lines.
  *
  * The four menu tables are Point of Sale's `menu@1`, column for column (the
@@ -139,10 +147,21 @@ function link(ref: string, addOn: string, table: string, label: string, rules: R
  * at exactly such a move.
  */
 const atEachMove = (formula: unknown) => ({ if: [{ isNull: "status" }, formula, formula] });
-/** What gift cards paid of an order and still hold, nothing when none did; and whether that is all of it, or part. */
-const CARDS_PAID = { coalesce: ["paid", 0] };
-const PAID_IN_FULL = { and: [{ gt: [CARDS_PAID, 0] }, { gte: [CARDS_PAID, { coalesce: ["total", 0] }] }] };
-const PAID_IN_PART = { and: [{ gt: [CARDS_PAID, 0] }, { lt: [CARDS_PAID, { coalesce: ["total", 0] }] }] };
+/**
+ * What was paid of an order before the counter and is still held — by gift
+ * cards and online together, nothing when nothing was — and whether that is
+ * all of it, or part. What was paid online is apart (`online_paid`), so what
+ * gift cards paid is the rest. An order from before online payments has no
+ * `online_paid`: everything it holds was a card's.
+ */
+const PAID = { coalesce: ["paid", 0] };
+const ONLINE = { coalesce: ["online_paid", 0] };
+const CARDS = { sub: [PAID, ONLINE] };
+const PAID_IN_FULL = { and: [{ gt: [PAID, 0] }, { gte: [PAID, { coalesce: ["total", 0] }] }] };
+const PAID_IN_PART = { and: [{ gt: [PAID, 0] }, { lt: [PAID, { coalesce: ["total", 0] }] }] };
+/** Paid in full before the counter, gift cards alone; and paid in full with something of it online. */
+const CARDS_IN_FULL = { and: [PAID_IN_FULL, { lte: [ONLINE, 0] }] };
+const ONLINE_IN_FULL = { and: [PAID_IN_FULL, { gt: [ONLINE, 0] }] };
 const stamp = (set: unknown, on: unknown) => ({ stamp: { set, on } });
 const onCreate = "create";
 const onStatus = (...values: string[]) => ({ column: "status", values });
@@ -177,17 +196,21 @@ function language(ref: string): Column {
   };
 }
 
-export const STATUSES = ["placed", "confirmed", "preparing", "ready", "picked_up", "cancelled", "not_collected"] as const;
+export const STATUSES = ["paying", "placed", "confirmed", "preparing", "ready", "picked_up", "cancelled", "not_collected"] as const;
 
-/** The orders a pickup slot and a dish's portions count: every one still wanted, or handed over. */
+/** The orders the kitchen's figures count: every one still wanted, or handed over. */
 export const COUNTED = ["placed", "confirmed", "preparing", "ready", "picked_up"];
+
+/** What a pickup slot and a dish's portions hold: those, and an order its diner is paying for online. */
+export const HELD = ["paying", ...COUNTED];
 
 /**
  * Why an order was cancelled. The kitchen picks one of the first four and
  * `closed` is written at closing; `self` is written by the diner's own cancel
- * online and is never offered to the kitchen.
+ * online and is never offered to the kitchen; `unpaid` is written when an
+ * order paid for online was not paid in time.
  */
-export const CANCEL_CODES = ["ran_out", "too_busy", "customer_asked", "closed", "other", "self"] as const;
+export const CANCEL_CODES = ["ran_out", "too_busy", "customer_asked", "closed", "other", "self", "unpaid"] as const;
 export const KITCHEN_CANCEL_CODES = ["ran_out", "too_busy", "customer_asked", "other"];
 
 /** The kitchen's hours: one row per weekday, the order the slot rule reads them in. */
@@ -238,6 +261,11 @@ const EMAIL_KINDS: Record<string, string> = {
   "card-money-kept": "Gift card money kept",
   "order-receipt": "Receipt",
   "enquiry-received": "Large order enquiry received",
+  "order-confirmation-paid": "Order confirmation (paid online)",
+  "order-ready-paid": "Order ready (paid online)",
+  "order-cancelled-paid": "Cancelled after paying online",
+  "order-cancelled-paid-by-you": "Cancelled by the customer after paying online",
+  "order-refunded": "Money paid online refunded",
 };
 
 const menuItems = posTable("menu_items");
@@ -282,6 +310,10 @@ export const TABLES: Table[] = [
       bool("online_on", "Taking online orders", true),
       bool("ready_email_on", "Email when an order is ready", true),
       bool("receipt_email_on", "Email a receipt at pickup", true),
+      // Paying online, once the kitchen takes payments: how long an order waits for its payment, its
+      // slot held, and whether a paid order the diner or the kitchen cancels is refunded by itself.
+      int("pay_hold_minutes", "Minutes an order waits for its payment", { default: 10, rules: { validation: { min: 3, max: 30 } } }),
+      bool("auto_refund", "Refund free cancellations automatically", true),
       int("first_order_number", "First order number", { default: 1001, rules: { validation: { min: 1 } } }),
     ],
   },
@@ -359,7 +391,7 @@ export const TABLES: Table[] = [
       amount: 1,
       perSlot: setting("slot_capacity"),
       slotMinutes: setting("slot_minutes"),
-      countWhere: { column: "status", values: COUNTED },
+      countWhere: { column: "status", values: HELD },
       hours: { table: "hours", weekday: "weekday", open: "open", opens: "opens", closes: "closes" },
       closures: { table: "closures", from: "from_date", to: "to_date", active: "active" },
       pauses: { table: "slot_pauses", slot: "slot_at", active: "active" },
@@ -386,7 +418,7 @@ export const TABLES: Table[] = [
       order: {
         discount: "discount",
         // Who is buying: a signed-in diner only. An earlier order counts unless it was cancelled or never collected.
-        customer: { link: "customer_id", address: "email", proved: "customer_proved", counts: { column: "status", in: COUNTED } },
+        customer: { link: "customer_id", address: "email", proved: "customer_proved", counts: { column: "status", in: HELD } },
       },
       codes: { table: "order_codes", via: "order_id", typed: "typed", code: "code_id", voucher: "voucher_id", removed: "removed_at" },
       uses: "uses",
@@ -400,9 +432,14 @@ export const TABLES: Table[] = [
     states: {
       column: "status",
       initial: "placed",
+      // An order the diner pays for as they place it starts waiting for that payment.
+      starts: ["paying"],
       // "#2113 is already ready — 11:34, Sam": a second screen's tap is refused, naming the first.
       strict: true,
       moves: {
+        // The payment makes it new; so does the diner choosing to pay at pickup after all (never with a cancel's reason on it).
+        // Not paid in time, Adminium cancels it.
+        paying: [{ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }] } }, cancel()],
         // No roles on this cancel: the diner's own link makes it too, and holds none.
         placed: ["confirmed", cancel()],
         confirmed: ["preparing", cancel(), undo("placed", "confirmed_at")],
@@ -425,10 +462,12 @@ export const TABLES: Table[] = [
         order_items: { via: "order_id", lock: true },
         // A code is typed when the order is placed, and at no other time.
         order_codes: { via: "order_id", lock: true },
-        // A gift card may pay until the order is handed over.
-        payments: { via: "order_id", createIn: ["placed", "confirmed", "preparing", "ready"] },
+        // A gift card may pay until the order is handed over; and a payment made online lands while the order waits for it.
+        payments: { via: "order_id", createIn: ["paying", "placed", "confirmed", "preparing", "ready"] },
       },
       timed: [
+        // Not paid in time: cancelled, its slot, its portions and any gift card's money let go. Never while a payment is landing.
+        { from: "paying", to: "cancelled", at: { column: "placed_at", plus: { minutes: setting("pay_hold_minutes") } }, set: { cancel_code: "unpaid" }, waitsForPayment: true },
         { from: "ready", to: "not_collected", at: closing() },
         // Half an hour after closing, what was never finished is cancelled, and the diner told why.
         ...["placed", "confirmed", "preparing"].map((from) => ({ from, to: "cancelled", at: closing(30), set: { cancel_code: "closed" } })),
@@ -439,6 +478,7 @@ export const TABLES: Table[] = [
       int("number_seq", "Number (running)", { ...opt, rules: { sequence: { gapless: true, startSetting: setting("first_order_number") } } }),
       text("number", 16, "Number", { ...opt, unique: true, rules: { format: { from: "number_seq" } } }),
       choice("status", "Status", {
+        paying: "Paying online",
         placed: "New",
         confirmed: "Confirmed",
         preparing: "Preparing",
@@ -448,7 +488,7 @@ export const TABLES: Table[] = [
         not_collected: "Not collected",
       }, {
         default: "placed",
-        tones: { placed: "info", confirmed: "accent", preparing: "warn", ready: "pos", picked_up: "neutral", cancelled: "danger", not_collected: "danger" },
+        tones: { paying: "neutral", placed: "info", confirmed: "accent", preparing: "warn", ready: "pos", picked_up: "neutral", cancelled: "danger", not_collected: "danger" },
       }),
       at("pickup_at", "Pickup", { rules: { venueLocal: true } }),
       text("name", 80, "Name", { semantic: "name" }),
@@ -467,24 +507,45 @@ export const TABLES: Table[] = [
       // Tax follows the reduction. An order from before these columns has no `net`, and keeps its cents.
       money("tax", "Tax", { formula: { round: { div: [{ mul: [{ coalesce: ["net", "subtotal"] }, { coalesce: ["tax_rate", 0] }] }, 100] } } }),
       money("total", "Total", { formula: { add: [{ coalesce: ["net", "subtotal"] }, { coalesce: ["tax", 0] }] } }),
-      // What gift cards have paid and still hold, and what is left to collect at the counter.
-      money("paid", "Paid by gift card", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
-      amount("due", "Left after gift cards"),
+      // What gift cards and online payments have paid and still hold, and what is left to collect at the counter.
+      money("paid", "Paid", { rollup: { from: "payments", via: "order_id", sum: "kept", balance: { column: "due", of: "total" }, cap: true } }),
+      amount("due", "Left to pay"),
+      // Of that, what was paid online: ever taken, still held, and given back.
+      money("online_taken", "Paid online", { rollup: { from: "payments", via: "order_id", sum: "amount", where: { column: "method", eq: "online" } } }),
+      money("online_paid", "Paid online, kept", { rollup: { from: "payments", via: "order_id", sum: "kept", where: { column: "method", eq: "online" } } }),
+      money("online_refunded", "Refunded online", { rollup: { from: "payments", via: "order_id", sum: "returned", where: { column: "method", eq: "online" } } }),
+      // And what gift cards paid and still hold: the rest of it.
+      money("card_paid", "Paid by gift card", { formula: atEachMove({ max: [0, CARDS] }) }),
       // What to collect, whatever the order's age: an order from before gift cards has nothing paid by one, and owes its total.
       // (Worked out from the total and what cards paid, as `due` is: a formula is not worked out again when a balance settles.)
       money("to_pay", "To pay at the counter", { formula: atEachMove({ max: [0, { sub: ["total", { coalesce: ["paid", 0] }] }] }) }),
-      choice("paid_method", "Paid by", { cash: "Cash", card: "Card", gift_card: "Gift card", mixed: "Gift card and more" }, opt),
+      choice("paid_method", "Paid by", { cash: "Cash", card: "Card", gift_card: "Gift card", mixed: "Gift card and more", online: "Online" }, opt),
       // With a gift card paying part: how the rest was paid.
       choice("rest_paid_by", "The rest paid by", { cash: "Cash", card: "Card" }, opt),
-      // Whether "Paid by" agrees with what gift cards paid: the hand-over is refused when it does not.
-      // (These read the total and what cards paid, never `due`: a formula is not worked out again when a balance settles.)
+      // Whether "Paid by" agrees with what was paid before the counter: the hand-over is refused when it does not.
+      // (These read the total and what was paid, never `due`: a formula is not worked out again when a balance settles.)
       flag("method_ok", "Paid-by agrees", {
-        if: [{ eq: ["paid_method", "gift_card"] }, { if: [PAID_IN_FULL, 1, 0] }, { if: [{ eq: ["paid_method", "mixed"] }, { if: [PAID_IN_PART, 1, 0] }, { if: [{ lte: [CARDS_PAID, 0] }, 1, 0] }] }],
+        if: [
+          { eq: ["paid_method", "gift_card"] },
+          { if: [CARDS_IN_FULL, 1, 0] },
+          {
+            if: [
+              { eq: ["paid_method", "online"] },
+              { if: [ONLINE_IN_FULL, 1, 0] },
+              { if: [{ eq: ["paid_method", "mixed"] }, { if: [PAID_IN_PART, 1, 0] }, { if: [{ lte: [PAID, 0] }, 1, 0] }] },
+            ],
+          },
+        ],
       }),
-      flag("prepaid", "Paid in full by gift card", atEachMove({ if: [PAID_IN_FULL, 1, 0] })),
-      flag("card_used", "A gift card paid", atEachMove({ if: [{ gt: [CARDS_PAID, 0] }, 1, 0] })),
-      // Which confirmation an order gets: 0 a phone order, 1 an online order, 2 an online order a gift card paid in full.
-      flag("confirm_as", "Confirmation kind", { if: [{ eq: ["channel", "phone"] }, 0, { if: [PAID_IN_FULL, 2, 1] }] }),
+      flag("prepaid", "Paid in full by gift card", atEachMove({ if: [CARDS_IN_FULL, 1, 0] })),
+      flag("card_used", "A gift card paid", atEachMove({ if: [{ gt: [CARDS, 0] }, 1, 0] })),
+      // Whether anything was ever paid online for it: what a cancellation's email says goes back.
+      flag("online_used", "Paid online", atEachMove({ if: [{ gt: [{ coalesce: ["online_taken", 0] }, 0] }, 1, 0] })),
+      // What was paid before the counter: 0 something is left to pay there, 1 gift cards paid it all, 2 it was paid online.
+      flag("paid_as", "Paid before pickup", atEachMove({ if: [ONLINE_IN_FULL, 2, { if: [CARDS_IN_FULL, 1, 0] }] })),
+      // Which confirmation an order gets: 0 a phone order, 1 an online order, 2 an online order a gift card paid in full,
+      // 3 an online order paid online.
+      flag("confirm_as", "Confirmation kind", { if: [{ eq: ["channel", "phone"] }, 0, { if: [ONLINE_IN_FULL, 3, { if: [CARDS_IN_FULL, 2, 1] }] }] }),
       // Whether the diner was signed in when a code asked who they are: Offers & gift cards is told, and it is kept.
       { ref: "customer_proved", type: "bool", nullable: true, label: l("Signed in when ordering") },
       // Until when ingredients held for this order stay held, should nothing else let them go: a day after pickup.
@@ -496,6 +557,7 @@ export const TABLES: Table[] = [
         closed: "Not ready by closing",
         other: "Other",
         self: "Cancelled online by the customer",
+        unpaid: "Not paid in time",
       }, opt),
       text("cancel_dish", 80, "What ran out", opt),
       text("cancel_note", 160, "Cancel note", opt),
@@ -537,7 +599,7 @@ export const TABLES: Table[] = [
       size: { column: "stock_today", onDay: "stock_on" },
       amount: "qty",
       day: { column: "pickup_at", via: "order_id" },
-      countWhere: { column: "status", values: COUNTED, via: "order_id" },
+      countWhere: { column: "status", values: HELD, via: "order_id" },
     },
     columns: [
       id,
@@ -565,7 +627,7 @@ export const TABLES: Table[] = [
         via: "order_id",
         reserve: { on: { create: true } },
         post: { on: { to: ["preparing"] } },
-        reverse: { on: { to: ["cancelled"], from: ["placed", "confirmed"] } },
+        reverse: { on: { to: ["cancelled"], from: ["paying", "placed", "confirmed"] } },
         heldUntil: { parent: "hold_until" },
         map: { what: "menu_item_id", quantity: "qty" },
       },
@@ -601,14 +663,15 @@ export const TABLES: Table[] = [
     ],
   },
   {
-    // Every row is a gift card's payment: cash and card are said at the hand-over, as before.
+    // What was paid of an order before the counter: a gift card's payment, or a payment made online.
+    // Cash and card at the counter are said at the hand-over, as before.
     ref: "payments",
     keep: KEPT_FOR_TAX,
-    label: l("Gift card payment"),
-    labelPlural: l("Gift card payments"),
+    label: l("Payment"),
+    labelPlural: l("Payments"),
     keyField: "card_last4",
     postings: [
-      // The card pays when the row is made, and gets its money back when the order is cancelled.
+      // The card pays when the row is made, and gets its money back when the order is cancelled. A payment made online is no card's.
       {
         id: "card",
         into: { addOn: "offers", ledger: "value", action: "spend" },
@@ -617,35 +680,44 @@ export const TABLES: Table[] = [
         post: { on: { create: true } },
         reverse: { on: { to: ["cancelled"] } },
         map: { card: "card_id", amount: "amount", due: { parent: "due" }, balance_after: "card_balance_after" },
+        only: { column: "method", eq: "gift_card" },
       },
     ],
     columns: [
       id,
       fk("order_id", "orders", "Order", { index: true }),
+      // A gift card's, or online: Adminium writes `online`, with its reference and the service, and nobody else does.
+      // Every payment before online payments was a gift card's.
+      choice("method", "Paid by", { gift_card: "Gift card", online: "Online" }, { default: "gift_card" }),
       // The kitchen's sheet makes this, so a save sent twice is one payment.
       text("client_key", 64, "Retry key", { ...opt, unique: true }),
-      // The whole code, as typed: read by no page and no role.
-      text("card_code", 64, "Card code", opt),
+      // The whole code, as typed: read by no page and no role. A gift card's payment always names one.
+      text("card_code", 64, "Card code", { ...opt, rules: { requiredWhen: { column: "method", in: ["gift_card"] } } }),
       link("card_id", "offers", "gift_cards", "Gift card", {
         lookup: { from: "card_code", table: { addOn: "offers", table: "gift_cards" }, column: "code", where: [{ column: "status", eq: "active" }] },
-        // Every row here is a card's payment: one that names no card (Offers & gift cards is away, so nothing was looked up) is not saved.
-        required: true,
       }),
       text("card_last4", 4, "Card ending", { ...opt, rules: { codeLast4: { of: "card_code" } } }),
       amount("amount", "Paid"),
       amount("card_balance_after", "Left on the card"),
-      money("returned", "Given back", { rollup: { from: "payment_refunds", via: "payment_id", sum: "amount" } }),
-      money("kept", "Kept", { formula: { sub: ["amount", { coalesce: ["returned", 0] }] } }),
+      // What went back of it: refunds the kitchen made, and money Adminium says went back another way (at the service, a dispute lost).
+      money("returned", "Given back", { rollup: { from: "payment_refunds", via: "payment_id", sum: "counted" } }),
+      amount("refunded_elsewhere", "Given back at the service"),
+      money("kept", "Kept", { formula: { sub: ["amount", { add: [{ coalesce: ["returned", 0] }, { coalesce: ["refunded_elsewhere", 0] }] }] } }),
       at("made_at", "Made", { ...opt, rules: stamp("now", onCreate) }),
       text("made_by", 80, "Made by", { ...opt, rules: stamp({ byOrigin: { public: "customer", staff: "user-name" } }, onCreate) }),
+      // A payment made online: when, its reference (written once, by Adminium), and the service it went through.
+      at("paid_at", "Paid at", opt),
+      text("payment_ref", 64, "Online payment reference", { ...opt, unique: true }),
+      text("provider", 40, "Paid through", opt),
     ],
   },
   {
-    // Money a manager gives back to a gift card: after an order nobody collected, or one made smaller.
+    // Money given back: to a gift card (after an order nobody collected, or one made smaller), or of a payment made
+    // online — Adminium sends that back through the service it came by, and stamps the row with where it stands.
     ref: "payment_refunds",
     keep: KEPT_FOR_TAX,
-    label: l("Money back to a gift card"),
-    labelPlural: l("Money back to gift cards"),
+    label: l("Refund"),
+    labelPlural: l("Refunds"),
     keyField: "reason",
     postings: [
       {
@@ -654,17 +726,29 @@ export const TABLES: Table[] = [
         needs: "gift-cards",
         post: { on: { create: true } },
         map: { amount: "amount", against_table: { value: "ordering:payments" }, against_row: "payment_id" },
+        only: { column: "method", eq: "gift_card" },
       },
     ],
     columns: [
       id,
-      { ref: "payment_id", type: "fk", references: "payments", label: l("Gift card payment"), index: true },
+      { ref: "payment_id", type: "fk", references: "payments", label: l("Payment"), index: true },
       text("client_key", 64, "Retry key", { ...opt, unique: true }),
-      fk("order_id", "orders", "Order"),
+      // The order of the payment it gives back, whoever writes it (Adminium's own refund of a cancellation names only the payment).
+      fk("order_id", "orders", "Order", { rules: { copy: { via: "payment_id", from: "order_id", mode: "always" } } }),
+      // Back to a gift card, or online: said by whoever writes it, as the payment it gives back was made. Every refund before
+      // online payments went back to a card.
+      choice("method", "Given back", { gift_card: "To the gift card", online: "Online" }, { default: "gift_card" }),
       { ref: "amount", type: "decimal", scale: "currency", label: l("Amount"), rules: { validation: { min: 0.01 } } },
       text("reason", 120, "Reason", opt),
       at("made_at", "Made", { ...opt, rules: stamp("now", onCreate) }),
       text("made_by", 80, "Made by", { ...opt, rules: stamp("user-name", onCreate) }),
+      // Made by Adminium itself, for a paid order cancelled by its diner or by someone who may refund.
+      bool("automatic", "Refunded automatically", false),
+      // Where an online refund stands, and the service's reference for it: written by Adminium alone.
+      choice("refund_state", "Refund", { asked: "Asked", pending: "On its way", done: "Refunded", "not-sent": "Not sent" }, opt),
+      text("provider_ref", 255, "Refund reference", opt),
+      // What the refund counts for in what the payment kept: nothing, once the service would not send it.
+      money("counted", "Counted", { formula: { if: [{ eq: ["refund_state", "not-sent"] }, 0, "amount"] } }),
     ],
   },
   {

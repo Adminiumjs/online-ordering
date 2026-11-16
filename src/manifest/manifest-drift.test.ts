@@ -121,11 +121,23 @@ describe("a diner reads nothing of anyone else's, and nothing the kitchen keeps"
 
 describe("the diner's writes are the few the page needs", () => {
   const post = () => manifest.publicAccess.find((e) => e.table === "orders" && e.methods.includes("POST"))!;
+  const posts = () => manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("POST"));
 
   it("places an order only while the kitchen takes online orders — the switch binds the diner, never the kitchen's phone orders", () => {
-    expect(post()["requireSetting"]).toEqual([{ table: "settings", column: "online_on" }]);
-    const others = manifest.publicAccess.filter((e) => e !== post() && e["requireSetting"] !== undefined);
+    // Placed to pay at pickup, or to pay now: the same switch on both.
+    expect(posts()).toHaveLength(2);
+    for (const entry of posts()) expect(entry["requireSetting"]).toEqual([{ table: "settings", column: "online_on" }]);
+    const others = manifest.publicAccess.filter((e) => !posts().includes(e) && e["requireSetting"] !== undefined);
     expect(others).toEqual([]);
+  });
+
+  it("places an order to pay now as the same order, made waiting for its payment, with the link to pay it in the reply", () => {
+    const [atPickup, now] = posts() as unknown as [Json, Json];
+    const { defaults, pay, ...same } = now;
+    expect([defaults, pay]).toEqual([{ status: "paying" }, true]);
+    expect(same).toEqual(atPickup);
+    // The second entry comes after every older one, so each older entry keeps its name.
+    expect(manifest.publicAccess.at(-1)).toBe(now);
   });
 
   it("caps what nobody signed in for may send, and keeps what a stranger types plain text", () => {
@@ -134,13 +146,18 @@ describe("the diner's writes are the few the page needs", () => {
     expect((enquiry["anonymous"] as Json)["plainText"]).toEqual(["name", { column: "notes", digits: 4, max: 200 }]);
   });
 
-  it("lets a diner cancel their own order only to cancelled, only while it is new, and marks the reason as theirs", () => {
-    for (const entry of manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("PATCH"))) {
-      expect(entry["writable"]).toEqual(["status"]);
-      expect(entry["writableValues"]).toEqual({ status: ["cancelled"] });
-      expect(entry["writableWhen"]).toEqual({ status: ["placed"] });
-      expect(entry["defaults"]).toEqual({ cancel_code: "self" });
+  it("lets a diner cancel their own order while it is new, as theirs — or pay at pickup instead of online, while it waits for its payment", () => {
+    const patches = manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("PATCH"));
+    expect(patches).toHaveLength(2);
+    for (const entry of patches) {
+      expect(entry["writable"]).toEqual(["status", "cancel_code"]);
+      expect(entry["writableValues"]).toEqual({ status: ["cancelled", "placed"], cancel_code: ["self"] });
+      expect(entry["writableWhen"]).toEqual({ status: ["placed", "paying"] });
+      expect(entry["defaults"]).toBeUndefined();
     }
+    // The move to new from waiting for a payment never carries a cancel's reason; new → new is refused (strict).
+    expect(states().moves["paying"]).toContainEqual({ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }] } });
+    expect(states()["strict"]).toBe(true);
   });
 });
 
@@ -152,7 +169,20 @@ describe("the order's life is Adminium's", () => {
     expect(states()["children"]).toEqual({
       order_items: { via: "order_id", lock: true },
       order_codes: { via: "order_id", lock: true },
-      payments: { via: "order_id", createIn: ["placed", "confirmed", "preparing", "ready"] },
+      // …and a payment made online lands while the order waits for it.
+      payments: { via: "order_id", createIn: ["paying", "placed", "confirmed", "preparing", "ready"] },
+    });
+  });
+
+  it("holds an order paid for online a few minutes, and cancels it unpaid — never while its payment lands", () => {
+    expect(states()["starts"]).toEqual(["paying"]);
+    expect(states()["initial"]).toBe("placed");
+    expect(states()["timed"]).toContainEqual({
+      from: "paying",
+      to: "cancelled",
+      at: { column: "placed_at", plus: { minutes: { table: "settings", column: "pay_hold_minutes" } } },
+      set: { cancel_code: "unpaid" },
+      waitsForPayment: true,
     });
   });
 
@@ -259,7 +289,10 @@ describe("the kitchen writes only what running the day needs", () => {
       expect([key, reads.includes("card_code"), reads.includes("card_last4"), reads.includes("amount")]).toEqual([key, false, true, true]);
     }
     expect((role("kitchen").limits!["payments"] as { creatable: string[] }).creatable).toEqual(["order_id", "card_code", "client_key"]);
-    expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual([]);
+    // The kitchen sees what went back of an order, and gives nothing back itself.
+    expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual(["table:@payment_refunds:read"]);
+    expect(role("kitchen").permissions).not.toContain("payments:@:refund");
+    expect(role("manager").permissions).toContain("payments:@:refund");
   });
 
   it("switches dishes and options and sets portions, and never touches the settings, hours, closures or customers", () => {

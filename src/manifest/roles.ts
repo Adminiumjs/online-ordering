@@ -10,7 +10,8 @@
  *             the closures or the customers;
  *   manager   everything: the dashboard section, the settings, the hours and
  *             closures, whether online orders are taken, the enquiries, the
- *             menu, the customers, the emails.
+ *             menu, the customers, the emails; and giving back what a diner
+ *             paid online.
  *
  * A one-person kitchen is simply the workspace's admin.
  *
@@ -26,7 +27,7 @@ const view = (page: string) => `page:@${page}:view`;
 const pii = (table: string) => `table:@${table}:read_pii`;
 
 /** What the kitchen reads to run the day. */
-const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "payments", "settings", "hours", "closures", "slot_pauses"];
+const KITCHEN_READS = [...MENU_TABLES, "orders", "order_items", "order_item_modifiers", "payments", "payment_refunds", "settings", "hours", "closures", "slot_pauses"];
 
 /**
  * What a desk role reads of the add-ons' own tables, column by column. A code
@@ -54,6 +55,9 @@ const KITCHEN_ADD_ON_TABLES = [
  * typed once, looked up by Adminium, and shown again by no screen.
  */
 const PAYMENT_READS = TABLES.find((t) => t.ref === "payments")!.columns.map((c) => c.ref).filter((ref) => ref !== "card_code");
+
+/** What a person writes of a refund: the payment, how much, back to a card or online, why. Never where it stands, nor "automatically". */
+const REFUND_WRITTEN = ["payment_id", "order_id", "client_key", "method", "amount", "reason"];
 
 /** What a person types of an order's line, as in 0.2.3: never what was taken off it, nor what Adminium adds up. */
 const LINE_TYPED = ["order_id", "position", "menu_item_id", "qty", "note", "name", "unit_price"];
@@ -120,6 +124,8 @@ export const ROLES = [
       ),
       ...PAGE_REFS.flatMap((page) => [view(page), `page:@${page}:edit`]),
       ...["orders", "customers", "enquiries", "messages"].map(pii),
+      // Gives back what diners paid online for the kitchen's own orders (the install review shows it, and may untick it).
+      "payments:@:refund",
     ],
     limits: {
       // "Cancelled by the customer" and "not ready by closing" are the diner's and the clock's to give, never a person's here.
@@ -134,6 +140,8 @@ export const ROLES = [
       // A gift card's whole code is typed and never read back, by a manager either.
       // …and what a card gives is Adminium's to say: a payment is made with the order and the code, nothing else.
       payments: { readable: PAYMENT_READS, creatable: ["order_id", "card_code", "client_key"] },
+      // A refund says what it gives back, of which payment, how and why: where it stands is Adminium's to write.
+      payment_refunds: { creatable: REFUND_WRITTEN, writable: ["reason"] },
     },
     tables: [APPLIED_READ, ...KITCHEN_ADD_ON_TABLES],
   },

@@ -27,7 +27,21 @@
  *   card-money-returned        a cancelled order a gift card had paid: the
  *                              money is back on the card;
  *   card-money-kept            an order nobody collected that a gift card had
- *                              paid: the money stayed, ask at the counter.
+ *                              paid: the money stayed, ask at the counter;
+ *   order-confirmation-paid    an order paid online as it was placed: the
+ *   order-ready-paid           same two emails, saying it was paid online —
+ *                              the confirmation is the diner's receipt of the
+ *                              payment, so Adminium sends none;
+ *   order-cancelled-paid       an order paid online, cancelled: why, and that
+ *   order-cancelled-paid-by-you the money goes back (the diner's own cancel
+ *                              has its own words);
+ *   order-refunded             money paid online given back: once for each
+ *                              amount given back of the order.
+ *
+ * An order waiting for its payment hears nothing: its confirmation goes when
+ * the payment makes it new, or when the diner chooses to pay at pickup after
+ * all. One not paid in time is cancelled without an email — the diner was on
+ * its page — and a gift card it held gets its money back without one either.
  *
  * Every kind is service mail: each is about the diner's own order, its
  * money or their own enquiry. A cancellation's "call us if you'd like to
@@ -58,6 +72,11 @@ export const KINDS = [
   "order-ready-prepaid",
   "card-money-returned",
   "card-money-kept",
+  "order-confirmation-paid",
+  "order-ready-paid",
+  "order-cancelled-paid",
+  "order-cancelled-paid-by-you",
+  "order-refunded",
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
@@ -74,6 +93,23 @@ const CANCELLED: Record<string, Kind> = {
 const onOrder = (column: string, to: string, where?: Record<string, unknown>) => ({
   onChange: { table: "orders", column, to, ...(where === undefined ? {} : { where }) },
 });
+
+/**
+ * A message that waits a few seconds, so an order paid online gets its own
+ * words instead (`dropWhen`), and one still waiting for its payment gets none.
+ */
+const unlessPaidOnline = (...more: Record<string, unknown>[]) => ({
+  holdSeconds: 5,
+  dropWhen: [{ column: "online_used", eq: 1, reason: "no-longer-needed" }, ...more],
+});
+/** An order still waiting for its payment, or let go unpaid, is not confirmed — and one paid online at once gets the paid confirmation. */
+const notWhilePaying = {
+  holdSeconds: 5,
+  dropWhen: [
+    { column: "status", in: ["paying", "cancelled"], reason: "no-longer-needed" },
+    { column: "online_used", eq: 1, reason: "no-longer-needed" },
+  ],
+};
 
 /**
  * A message that waits a few seconds, so an Undo made at once takes it back
@@ -115,21 +151,36 @@ export const OUTBOX = {
   // Every email is about a diner's own order or enquiry: none is stopped by the do-not-email list.
   classes: Object.fromEntries(KINDS.map((kind) => [kind, "service"])),
   producers: [
-    // One decided column says which confirmation: an online order (1), or one a gift card paid in full (2).
-    { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 1 } } },
-    { kind: "order-confirmation-prepaid", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 2 } } },
+    // One decided column says which confirmation: an online order (1), one a gift card paid in full (2), one paid online (3).
+    // Each once for the order (the log): an order made new again by an Undo is not confirmed twice.
+    { kind: "order-confirmation", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 1 } }, ...notWhilePaying },
+    { kind: "order-confirmation-prepaid", link: "order_id", onCreate: { table: "orders", where: { column: "confirm_as", eq: 2 } }, ...notWhilePaying },
     { kind: "order-confirmation-phone", link: "order_id", onCreate: { table: "orders", where: { column: "channel", eq: "phone" } } },
-    // "You'll pay … at the counter", or "nothing to pay": one email, by whether a gift card paid it all.
-    ...([["order-ready", 0], ["order-ready-prepaid", 1]] as const).map(([kind, prepaid]) => ({
+    // An order that waited for its payment: confirmed as paid when the payment makes it new, or as today when the diner
+    // chose to pay at pickup after all.
+    { kind: "order-confirmation-paid", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 3 }) },
+    { kind: "order-confirmation", link: "order_id", ...onOrder("status", "placed", { column: "confirm_as", eq: 1 }) },
+    // "You'll pay … at the counter", or "nothing to pay": one email, by whether a gift card, or a payment online, paid it all.
+    ...([["order-ready", 0], ["order-ready-prepaid", 1], ["order-ready-paid", 2]] as const).map(([kind, paidAs]) => ({
       kind,
       link: "order_id",
       gate: { setting: { table: "settings", column: "ready_email_on" } },
-      ...onOrder("status", "ready", { column: "prepaid", eq: prepaid }),
+      ...onOrder("status", "ready", { column: "paid_as", eq: paidAs }),
       ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
     })),
-    ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }) })),
+    // Why it was cancelled, one email per reason — or, for an order paid online, the one that says its money goes back.
+    ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }), ...unlessPaidOnline() })),
+    { kind: "order-cancelled-paid", link: "order_id", ...onOrder("status", "cancelled", { column: "online_used", eq: 1 }), holdSeconds: 5, dropWhen: [{ column: "cancel_code", eq: "self", reason: "no-longer-needed" }] },
+    { kind: "order-cancelled-paid-by-you", link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: "self" }), holdSeconds: 5, dropWhen: [{ column: "online_used", eq: 0, reason: "no-longer-needed" }] },
     // A cancelled order a gift card paid: the money went back to the card. One nobody collected: it stayed, and the counter can give it back.
-    { kind: "card-money-returned", link: "order_id", ...onOrder("status", "cancelled", { column: "card_used", eq: 1 }) },
+    // An order not paid in time says nothing: the diner saw it go.
+    {
+      kind: "card-money-returned",
+      link: "order_id",
+      ...onOrder("status", "cancelled", { column: "card_used", eq: 1 }),
+      holdSeconds: 5,
+      dropWhen: [{ column: "cancel_code", eq: "unpaid", reason: "no-longer-needed" }],
+    },
     { kind: "card-money-kept", link: "order_id", ...onOrder("status", "not_collected", { column: "card_used", eq: 1 }) },
     // Drawn by Invoices & Receipts: without it attached, or with the switch off, no receipt is queued at all.
     // One per hand-over (its stamp), not one per order: a hand-over taken back and made again is receipted again.
@@ -142,5 +193,13 @@ export const OUTBOX = {
       ...heldWhileUndone(["ready"]),
     },
     { kind: "enquiry-received", link: "enquiry_id", onCreate: { table: "enquiries" }, recipient: { column: "email", name: "name", language: "language" } },
+    // Money paid online given back, by the kitchen or by itself: one email for each amount the order has had back.
+    {
+      kind: "order-refunded",
+      link: "order_id",
+      onCreate: { table: "payment_refunds", via: "order_id", where: { column: "method", eq: "online" } },
+      repeatBy: "online_refunded",
+      holdSeconds: 5,
+    },
   ],
 };

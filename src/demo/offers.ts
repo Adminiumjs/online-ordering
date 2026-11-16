@@ -27,7 +27,21 @@ const bare = (code: string) => code.toUpperCase().replace(/[^0-9A-Z]/g, "");
 
 export interface DemoPriced {
   /** The order's own columns, as the manifest's formulas leave them. */
-  figures: { discount: number; net: number; tax: number; total: number; paid: number | null; due: number; to_pay: number; prepaid: number; card_used: number; confirm_as: number };
+  figures: {
+    discount: number;
+    net: number;
+    tax: number;
+    total: number;
+    paid: number | null;
+    due: number;
+    to_pay: number;
+    prepaid: number;
+    card_used: number;
+    confirm_as: number;
+    card_paid: number;
+    online_used: number;
+    paid_as: number;
+  };
   /** Each line's share of the reductions, in the lines' order. */
   lineDiscounts: number[];
   applied: Applied[];
@@ -108,7 +122,8 @@ export function priceDemoOrder(
   const due = cents(total - (paid ?? 0));
   const full = (paid ?? 0) > 0 && (paid ?? 0) >= total;
   return {
-    figures: { discount, net, tax, total, paid, due, to_pay: due, prepaid: full ? 1 : 0, card_used: (paid ?? 0) > 0 ? 1 : 0, confirm_as: ctx.phone === true ? 0 : full ? 2 : 1 },
+    // Nothing is paid online as an order is placed: that comes with its payment (`DemoDiner.demoPay`).
+    figures: { discount, net, tax, total, paid, due, to_pay: due, prepaid: full ? 1 : 0, card_used: (paid ?? 0) > 0 ? 1 : 0, confirm_as: ctx.phone === true ? 0 : full ? 2 : 1, card_paid: paid ?? 0, online_used: 0, paid_as: full ? 1 : 0 },
     lineDiscounts,
     applied,
     told: [],

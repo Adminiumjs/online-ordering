@@ -13,6 +13,11 @@
  * confirmation email carries — so the diner can follow it without signing
  * in, and cancel it while the kitchen has not taken it yet.
  *
+ * Paying online (once the kitchen takes payments): a second way to place the
+ * same order, made waiting for its payment, whose reply carries the link to
+ * pay it. While it waits, the diner may choose to pay at pickup after all,
+ * which makes it new as any other order.
+ *
  * The tick "Email me news and offers" is the newsletter's consent, given at
  * checkout and kept for its diner (`consent`): the diner account the address
  * finds or makes, or the diner signed in. A box left unticked takes back no
@@ -50,6 +55,10 @@ export const ORDER_SELECT = [
   "paid",
   "due",
   "to_pay",
+  // What was paid online: taken, still held, given back. Never the payment's reference or the service's own words.
+  "online_taken",
+  "online_paid",
+  "online_refunded",
   "paid_method",
   "rest_paid_by",
   "cancel_code",
@@ -114,19 +123,26 @@ export const SETTINGS_SELECT = [
   "prep_minutes",
   "max_items",
   "online_on",
+  // Whether a paid order cancelled in time is refunded by itself: what the cancel sheet says goes back.
+  "auto_refund",
 ];
 const VENUE_PHOTOS = ["photo_hero", "photo_street", "photo_closed", "photo_store"];
 
-/** The diner's cancel: only to cancelled, only while the kitchen has not taken it, and the reason is theirs. */
-const OWN_CANCEL = {
-  writable: ["status"],
-  writableValues: { status: ["cancelled"] },
-  writableWhen: { status: ["placed"] },
-  defaults: { cancel_code: "self" },
+/**
+ * The diner's own moves: the cancel, only while the kitchen has not taken it
+ * and with their own reason (`self`, which the cancel always says); and, on
+ * an order waiting for its payment, "pay when you pick up instead", which
+ * makes it new unpaid. A cancel's reason never rides on that move (the
+ * table's own move refuses it).
+ */
+const OWN_MOVES = {
+  writable: ["status", "cancel_code"],
+  writableValues: { status: ["cancelled", "placed"], cancel_code: ["self"] },
+  writableWhen: { status: ["placed", "paying"] },
 };
 
-/** What a diner sees of a gift card's payment: what it paid and kept, and the card's last four. Never the code, never what is left on it. */
-export const PAYMENT_SELECT = ["id", "order_id", "amount", "returned", "kept", "card_last4"];
+/** What a diner sees of a payment: how it was made, what it paid and kept, and a gift card's last four. Never the code, never what is left on it, never a reference. */
+export const PAYMENT_SELECT = ["id", "order_id", "method", "amount", "returned", "kept", "card_last4"];
 
 /** An order's lines, each line's options and its gift card payments, read where the order is. */
 function linesOf(key?: string) {
@@ -137,6 +153,58 @@ function linesOf(key?: string) {
     { table: "order_item_modifiers", ...keyed, methods: ["GET"], level: "verified", visibleWith: { table: "order_items", via: "order_item_id" }, select: OPTION_SELECT },
   ];
 }
+
+/** Placing an order with its lines and options in one write, priced by Adminium and checked against the price the diner saw. */
+const PLACE = {
+  table: "orders",
+  methods: ["POST"],
+  humanCheck: true,
+  level: "verified",
+  select: PLACED_SELECT,
+  writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key", "opt_in"],
+  requires: ["name", "email"],
+  // The manager's switch in Hours; the kitchen's phone orders never pass here.
+  requireSetting: [{ table: "settings", column: "online_on" }],
+  claimedBy: { table: "customers", column: "customer_id", optional: true },
+  // A diner met for the first time is made with the name and the language of this order.
+  identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name", language: "language" } },
+  consent: NEWS_TICK,
+  shareLink: "link_token",
+  // A note may hold a few digits ("2 without onions", "table 12") and runs the length its column holds.
+  anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] },
+  // A signed-in diner holds at most three orders still to pick up: the caps above are for strangers.
+  // An order waiting for its payment counts too.
+  maxOpen: { column: "status", values: ["paying", "placed", "confirmed", "preparing", "ready"], n: 3, upcoming: "pickup_at" },
+  children: {
+    order_items: {
+      via: "order_id",
+      writable: ["menu_item_id", "qty", "note"],
+      select: LINE_SELECT.filter((c) => c !== "order_id"),
+      position: "position",
+      min: 1,
+      max: 20,
+      plainText: [{ column: "note", digits: 4, max: 80 }],
+      sumMax: { column: "qty", max: { table: "settings", column: "max_items" } },
+      children: {
+        order_item_modifiers: {
+          via: "order_item_id",
+          writable: ["modifier_id"],
+          select: OPTION_SELECT.filter((c) => c !== "order_item_id"),
+          max: 20,
+          agrees: [{ column: "modifier_id", path: ["group_id", "item_id"], eq: { parent: "menu_item_id" } }],
+          counts: [{ by: ["modifier_id", "group_id"], every: { column: "item_id", eq: { parent: "menu_item_id" } }, min: "min", max: "max" }],
+        },
+      },
+    },
+    // A code is typed when the order is placed; Adminium finds what it is, and the page never names one.
+    order_codes: { via: "order_id", writable: ["typed"], select: ["id", "typed"], max: 12 },
+    // One gift card, by its code: what it pays is the card's and the order's to say.
+    payments: { via: "order_id", writable: ["card_code"], select: ["id", "amount", "card_last4"], max: 1 },
+  },
+  dryRun: true,
+  expect: "total",
+  clientKey: "client_key",
+};
 
 export const PUBLIC_KEYS = { link: {} };
 
@@ -153,7 +221,7 @@ export const PUBLIC_ACCESS = [
     forget: { columns: ["email", "name", "opt_in"], stamp: "forgotten_at", links: true },
   },
   // Their own orders, newest first on the page; and the cancel while the kitchen has not taken it.
-  { table: "orders", methods: ["GET", "PATCH"], level: "verified", claimedBy: { table: "customers", column: "customer_id" }, select: ORDER_SELECT, ...OWN_CANCEL },
+  { table: "orders", methods: ["GET", "PATCH"], level: "verified", claimedBy: { table: "customers", column: "customer_id" }, select: ORDER_SELECT, ...OWN_MOVES },
   ...linesOf(),
 
   // Whether a pickup slot is still free, and a dish still has portions ("3 left" only below five).
@@ -183,55 +251,7 @@ export const PUBLIC_ACCESS = [
   { table: "settings", methods: ["GET"], select: SETTINGS_SELECT, pictures: VENUE_PHOTOS },
 
   // ── placing an order ─────────────────────────────────────────────────────────
-  {
-    table: "orders",
-    methods: ["POST"],
-    humanCheck: true,
-    level: "verified",
-    select: PLACED_SELECT,
-    writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key", "opt_in"],
-    requires: ["name", "email"],
-    // The manager's switch in Hours; the kitchen's phone orders never pass here.
-    requireSetting: [{ table: "settings", column: "online_on" }],
-    claimedBy: { table: "customers", column: "customer_id", optional: true },
-    // A diner met for the first time is made with the name and the language of this order.
-    identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name", language: "language" } },
-    consent: NEWS_TICK,
-    shareLink: "link_token",
-    // A note may hold a few digits ("2 without onions", "table 12") and runs the length its column holds.
-    anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] },
-    // A signed-in diner holds at most three orders still to pick up: the caps above are for strangers.
-    maxOpen: { column: "status", values: ["placed", "confirmed", "preparing", "ready"], n: 3, upcoming: "pickup_at" },
-    children: {
-      order_items: {
-        via: "order_id",
-        writable: ["menu_item_id", "qty", "note"],
-        select: LINE_SELECT.filter((c) => c !== "order_id"),
-        position: "position",
-        min: 1,
-        max: 20,
-        plainText: [{ column: "note", digits: 4, max: 80 }],
-        sumMax: { column: "qty", max: { table: "settings", column: "max_items" } },
-        children: {
-          order_item_modifiers: {
-            via: "order_item_id",
-            writable: ["modifier_id"],
-            select: OPTION_SELECT.filter((c) => c !== "order_item_id"),
-            max: 20,
-            agrees: [{ column: "modifier_id", path: ["group_id", "item_id"], eq: { parent: "menu_item_id" } }],
-            counts: [{ by: ["modifier_id", "group_id"], every: { column: "item_id", eq: { parent: "menu_item_id" } }, min: "min", max: "max" }],
-          },
-        },
-      },
-      // A code is typed when the order is placed; Adminium finds what it is, and the page never names one.
-      order_codes: { via: "order_id", writable: ["typed"], select: ["id", "typed"], max: 12 },
-      // One gift card, by its code: what it pays is the card's and the order's to say.
-      payments: { via: "order_id", writable: ["card_code"], select: ["id", "amount", "card_last4"], max: 1 },
-    },
-    dryRun: true,
-    expect: "total",
-    clientKey: "client_key",
-  },
+  PLACE,
 
   // ── a large order: an enquiry the kitchen calls back about ──────────────────
   {
@@ -252,7 +272,12 @@ export const PUBLIC_ACCESS = [
     methods: ["GET", "PATCH"],
     select: ORDER_SELECT,
     claim: { by: "token", column: "link_token", expires: "link_expires", stopped: "link_stopped", own: true, address: "email" },
-    ...OWN_CANCEL,
+    ...OWN_MOVES,
   },
   ...linesOf("link"),
+
+  // ── paying online (after every older entry, so each one keeps its name) ──────
+  // The same order, placed to be paid now: made waiting for its payment, its slot held,
+  // and the reply carries the link to pay it. The payment makes it new.
+  { ...PLACE, defaults: { status: "paying" }, pay: true },
 ];

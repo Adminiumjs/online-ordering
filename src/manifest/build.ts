@@ -14,6 +14,7 @@ import { DOCUMENTS } from "./documents.ts";
 import { emailTemplates } from "./emails.ts";
 import { KINDS, OUTBOX } from "./outbox.ts";
 import { NAV_GROUPS, pages } from "./pages.ts";
+import { PAYMENTS } from "./payments.ts";
 import { PEOPLE } from "./people.ts";
 import { PUBLIC_ACCESS, PUBLIC_KEYS } from "./public.ts";
 import { ROLES } from "./roles.ts";
@@ -21,9 +22,10 @@ import { TABLES } from "./tables.ts";
 
 /**
  * This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables (0.3.1);
- * and one install per database, each install's screens saying which they are (0.3.2). No table changes.
+ * and one install per database, each install's screens saying which they are (0.3.2); and orders paid for online at
+ * checkout, with an order waiting for its payment, refunds sent back online, and the emails saying what was paid (0.3.3).
  */
-export const VERSION = "0.3.2";
+export const VERSION = "0.3.3";
 
 /**
  * The Adminium release that first reads everything below: an add-on asked
@@ -31,10 +33,13 @@ export const VERSION = "0.3.2";
  * row, and ingredients held for a line; and (0.3.38) the kitchen's diners,
  * each email's class, the tables the law keeps and the checkout's tick kept
  * in the consent log; and (0.3.49) the app installed once per database, its
- * screens naming their install on every call. Written from the version
- * actually released, never guessed.
+ * screens naming their install on every call; and (0.3.60) an order paid for
+ * online — the state it waits for its payment in, its timed cancel held back
+ * while a payment lands, refunds sent back for the kitchen's own refund rows,
+ * and the refund right a role holds. Written from the version actually
+ * released, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.49";
+export const MIN_ADMINIUM = "0.3.60";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
@@ -70,7 +75,7 @@ export function buildManifest(): Record<string, unknown> {
     description: {
       key: "mft.ordering.desc",
       fallback:
-        "A pickup kitchen's order page and its kitchen screens: diners order and pay at pickup, the kitchen confirms, cooks and hands over — every price, slot and status decided by your own database.",
+        "A pickup kitchen's order page and its kitchen screens: diners order and pay at pickup or online, the kitchen confirms, cooks and hands over — every price, slot and status decided by your own database.",
     },
     categories: ["hospitality"],
     compatibility: {
@@ -97,6 +102,7 @@ export function buildManifest(): Record<string, unknown> {
     outbox: OUTBOX,
     people: PEOPLE,
     emailTemplates: emailTemplates(KINDS),
+    payments: PAYMENTS,
     // Over a menu shared with Point of Sale that already holds real dishes,
     // the sample's menu and every order of it are left out.
     sampleData: {
