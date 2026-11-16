@@ -231,10 +231,14 @@ describe("the order's own link", () => {
     const { id, token } = await placed();
     await demo.diner.openLink(token);
     expect((await demo.diner.linkedOrder()).order["number"]).toBe("2118");
+    // The confirmation waits a few seconds (an order waiting for its payment gets none); then it goes.
+    demo.world.now += 10_000;
+    demo.engine.sendDue();
     const cancelled = await demo.diner.cancelLinked(id);
     expect([cancelled["status"], cancelled["cancel_code"]]).toEqual(["cancelled", "self"]);
     expect(demo.world.get("orders", id)!["cancelled_by"]).toBe("customer");
-    expect(demo.world.where("messages", (m) => m["order_id"] === id).map((m) => m["kind"])).toEqual(["order-confirmation", "order-cancelled-by-you"]);
+    // The paid order's own cancel email waits, and is dropped: nothing was paid online.
+    expect(demo.world.where("messages", (m) => m["order_id"] === id && m["status"] !== "skipped").map((m) => m["kind"])).toEqual(["order-confirmation", "order-cancelled-by-you"]);
     // Cancelled already: the window rides in the change, and nothing matches.
     const twice = await refusal(demo.diner.cancelLinked(id));
     expect([twice.status, twice.code]).toEqual([404, "PUBLIC_REF_NOT_FOUND"]);

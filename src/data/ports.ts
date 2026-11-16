@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OnlinePayments, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -33,8 +33,11 @@ export interface OrderWithLines {
   applied?: Applied[];
 }
 
-/** How an order was paid at the hand-over: one way, or a gift card and the rest another way. */
-export type PaidBy = "cash" | "card" | "gift_card" | "mixed";
+/** How an order was paid at the hand-over: one way, a gift card and the rest another way, or all of it online before. */
+export type PaidBy = "cash" | "card" | "gift_card" | "mixed" | "online";
+
+/** Which door an order was read through: its own link, or the signed-in diner's orders. */
+export type OrderDoor = "link" | "account";
 
 export interface DinerPort {
   config(): Promise<PublicConfig>;
@@ -57,8 +60,19 @@ export interface DinerPort {
 
   /** The order priced by Adminium, written nowhere. */
   quote(body: OrderBody): Promise<QuoteReply>;
-  /** The order placed. `clientKey` makes a retry land on the same order. */
-  place(body: OrderBody, clientKey: string): Promise<OrderReply>;
+  /**
+   * The order placed. `clientKey` makes a retry land on the same order.
+   * `payNow`: placed to be paid online now — made waiting for its payment,
+   * the reply carrying the link to pay it.
+   */
+  place(body: OrderBody, clientKey: string, opts?: { payNow?: boolean }): Promise<OrderReply>;
+
+  /** Whether the kitchen takes payments online right now. Never throws: no answer is "not now". */
+  payments(): Promise<OnlinePayments>;
+  /** The link to pay an order waiting for its payment: the one already open, never a second. */
+  payLink(door: OrderDoor, id: Id): Promise<string>;
+  /** An order waiting for its payment, made new to be paid at pickup instead. */
+  payAtPickup(door: OrderDoor, id: Id): Promise<Row>;
 
   /** Opens the order behind its own link (the code in the link's fragment). */
   openLink(token: string): Promise<ClaimReply>;

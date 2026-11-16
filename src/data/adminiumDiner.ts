@@ -21,7 +21,8 @@ import { mountKey } from "../lib/mountKey.ts";
 import { withYesNo } from "./columnKinds.ts";
 import type { DinerPort, Menu, OrderWithLines } from "./ports.ts";
 import { publicRefs, type Refs } from "./publicRefs.ts";
-import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime, type StockWord } from "./wire.ts";
+import type { OrderDoor } from "./ports.ts";
+import { ApiError, type Applied, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type OrderReply, type PublicConfig, type QuoteReply, type Row, type SlotTime, type StockWord } from "./wire.ts";
 
 /** What the door needs to start: the address, the customer key, the tables' real names and the other keys. */
 export interface DinerServed {
@@ -29,6 +30,8 @@ export interface DinerServed {
   publishableKey: string;
   tables?: Record<string, string>;
   publicKeys?: Record<string, string>;
+  /** A rehearsal's staff token (see `publicConfig.ts`): only for someone who manages payments, rehearsing. */
+  csrfToken?: string;
 }
 
 export interface DinerDoorOptions {
@@ -98,15 +101,17 @@ export class AdminiumDiner implements DinerPort {
         publishableKey,
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         humanCheck,
+        ...(served.csrfToken === undefined ? {} : { csrfToken: served.csrfToken }),
         ...this.seed(name),
         onSessionChange: (session) => this.keep(name, session),
         onSessionEnded: () => this.keep(name, null),
       });
-    const customer = client("customer", served.publishableKey, { refs: [this.refs.place, this.refs.enquire], claim: true });
+    const customer = client("customer", served.publishableKey, { refs: [this.refs.place, this.refs.placeToPay, this.refs.enquire], claim: true });
     if (customer === null) throw new Error("The order page's key could not be used.");
     this.customer = customer;
     const linkKey = served.publicKeys?.["link"] ?? null;
-    this.link = linkKey === null ? null : client("link", linkKey, false);
+    // The link's key reads its order with no check; starting its payment owes one, which the client asks for itself.
+    this.link = linkKey === null ? null : client("link", linkKey, { refs: [] });
   }
 
   // ── the tab's sessions ──────────────────────────────────────────────────────
@@ -277,9 +282,9 @@ export class AdminiumDiner implements DinerPort {
     });
   }
 
-  place(body: OrderBody, clientKey: string): Promise<OrderReply> {
+  place(body: OrderBody, clientKey: string, opts: { payNow?: boolean } = {}): Promise<OrderReply> {
     return answer(async () => {
-      const made = await this.customer.createTree<Row>(this.refs.place, {
+      const made = await this.customer.createTree<Row>(opts.payNow === true ? this.refs.placeToPay : this.refs.place, {
         values: { ...body.values, client_key: clientKey },
         children: body.children,
         ...(body.expect === undefined ? {} : { expect: body.expect }),
@@ -297,7 +302,38 @@ export class AdminiumDiner implements DinerPort {
         applied: made.applied,
         told: made.told,
         payment: made.payment,
+        ...(opts.payNow === true ? { payUrl: made.payUrl } : {}),
       };
+    });
+  }
+
+  // ── paying online ───────────────────────────────────────────────────────────
+
+  async payments(): Promise<OnlinePayments> {
+    try {
+      const said = await this.customer.payments.available();
+      return { online: said.online === true, test: said.test === true };
+    } catch {
+      return { online: false, test: false };
+    }
+  }
+
+  /** The door an order was read through: its client, and its entry. */
+  private door(door: OrderDoor): { client: PublicClient; ref: string } {
+    return door === "link" ? { client: this.linkClient(), ref: this.refs.linkOrder } : { client: this.customer, ref: this.refs.myOrders };
+  }
+
+  payLink(door: OrderDoor, id: Id): Promise<string> {
+    return answer(async () => {
+      const { client, ref } = this.door(door);
+      return (await client.payments.start(ref, String(id))).payUrl;
+    });
+  }
+
+  payAtPickup(door: OrderDoor, id: Id): Promise<Row> {
+    return answer(() => {
+      const { client, ref } = this.door(door);
+      return client.update<Row>(ref, String(id), { status: "placed" });
     });
   }
 
@@ -381,7 +417,8 @@ export class AdminiumDiner implements DinerPort {
   }
 
   cancelLinked(id: Id): Promise<Row> {
-    return answer(() => this.linkClient().update<Row>(this.refs.linkOrder, String(id), { status: "cancelled" }));
+    // The reason is the diner's own: said with the cancel, as the entry allows only that one.
+    return answer(() => this.linkClient().update<Row>(this.refs.linkOrder, String(id), { status: "cancelled", cancel_code: "self" }));
   }
 
   // ── signing in ──────────────────────────────────────────────────────────────
@@ -443,7 +480,7 @@ export class AdminiumDiner implements DinerPort {
   }
 
   cancelMine(id: Id): Promise<Row> {
-    return answer(() => this.customer.update<Row>(this.refs.myOrders, String(id), { status: "cancelled" }));
+    return answer(() => this.customer.update<Row>(this.refs.myOrders, String(id), { status: "cancelled", cancel_code: "self" }));
   }
 
   signOut(): Promise<void> {
