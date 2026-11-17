@@ -12,6 +12,14 @@
 #   the browser    the website's demo build, every screen swept by axe.
 #   the builds     both hosted sides and the website's demo (`demo.json`).
 #
+# The contract runs as one job per database (`CONTRACT_ENGINES` picks the leg,
+# and only that leg's URL is set), so no one job carries all three: on one
+# runner the set no longer fit its time. SQLite's job also runs the rest of
+# the suite (the manifest, the validator held to the product's, the units);
+# the browser and the builds are a job of their own. Each timeout is about
+# one and a half times what the job took on a developer's machine, plus the
+# runner's builds of Adminium and the add-ons.
+#
 # Both checkouts are moved out of the workspace before the suite runs:
 # vitest collects every `*.test.ts` under the repo root, and the product's own
 # suites are not this repo's to run.
@@ -33,9 +41,27 @@ env:
 
 jobs:
   contract:
-    name: three-engine contract & the demo in a browser
+    name: contract on ${{ matrix.engine }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # Measured on a developer's machine: about 30 minutes of contract per database (SQLite's leg adds the
+    # rest of the suite, about 3); the runner builds Adminium twice and the add-ons first (about 6).
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - engine: sqlite
+            postgres: ""
+            mysql: ""
+            files: ""
+          - engine: postgres
+            postgres: postgres://postgres:postgres@127.0.0.1:5432/postgres
+            mysql: ""
+            files: src/contract/
+          - engine: mysql
+            postgres: ""
+            mysql: mysql://root@127.0.0.1:3306
+            files: src/contract/
 
     services:
       postgres:
@@ -124,10 +150,7 @@ jobs:
           mv "$GITHUB_WORKSPACE/.adminium-from" "$RUNNER_TEMP/adminium-from"
           mv "$GITHUB_WORKSPACE/.add-ons" "$RUNNER_TEMP/add-ons"
 
-      - name: Types
-        run: npx tsc -b
-
-      - name: The suite, with the contract on three engines
+      - name: The contract on ${{ matrix.engine }}${{ matrix.files == '' && ', and the rest of the suite' || '' }}
         env:
           ADMINIUM_REPO: ${{ runner.temp }}/adminium-product
           ADD_ONS_REPO: ${{ runner.temp }}/add-ons
@@ -135,10 +158,33 @@ jobs:
           ADMINIUM_REQUIRE_VALIDATOR: "true"
           CONTRACT_FROM_ADMINIUM: ${{ runner.temp }}/adminium-from
           CONTRACT_FROM_TARBALL: ${{ runner.temp }}/ordering-${{ env.FROM_VERSION }}.tgz
-          TEST_POSTGRES_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
-          TEST_MYSQL_URL: mysql://root@127.0.0.1:3306
-        # One file at a time: each boots a server on every engine.
-        run: npx vitest run --no-file-parallelism
+          # Only this job's database: the others' legs are left out, not skipped quietly.
+          CONTRACT_ENGINES: ${{ matrix.engine }}
+          TEST_POSTGRES_URL: ${{ matrix.postgres }}
+          TEST_MYSQL_URL: ${{ matrix.mysql }}
+        # One file at a time: each boots a server.
+        run: npx vitest run --no-file-parallelism ${{ matrix.files }}
+
+  browser:
+    name: the demo in a browser, and the builds
+    runs-on: ubuntu-latest
+    # Measured on a developer's machine: the browser pass about 9 minutes, the types and builds about 3.
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Types
+        run: npx tsc -b
 
       - name: The demo in a browser
         run: |
