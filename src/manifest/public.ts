@@ -278,6 +278,7 @@ export const PUBLIC_ACCESS = [
 
   // ── paying online (after every older entry, so each one keeps its name) ──────
   // The same order, placed to be paid now: made waiting for its payment, its slot held,
-  // and the reply carries the link to pay it. The payment makes it new.
-  { ...PLACE, defaults: { status: "paying" }, pay: true },
+  // and the reply carries the link to pay it. The payment makes it new. Open only while
+  // the kitchen takes payments online: no order is held waiting for a payment that cannot come.
+  { ...PLACE, defaults: { status: "paying" }, pay: true, requirePayments: "on" },
 ];

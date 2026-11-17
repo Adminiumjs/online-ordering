@@ -257,6 +257,8 @@ export class DemoDiner implements DinerPort {
       this.fault = null;
       throw new ApiError(0, "PUBLIC_NETWORK_UNAVAILABLE", "could not reach the kitchen");
     }
+    // The pay-now door is open only while the kitchen takes payments online.
+    if (opts.payNow === true && !this.payOnline) throw new ApiError(403, "PUBLIC_SWITCHED_OFF", "This is switched off.");
     const first = this.beforePlace;
     this.beforePlace = null;
     first?.(body);

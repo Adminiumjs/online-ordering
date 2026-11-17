@@ -54,8 +54,8 @@ describe("the kitchen's diners", () => {
         ],
       },
     ]);
-    // 0.3.38 first read the diners; the floor has since moved on (0.3.61, orders paid online).
-    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.61");
+    // 0.3.38 first read the diners; the floor has since moved on (0.3.62, orders paid online).
+    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.62");
   });
 
   it("have one address: the outbox's, the one they sign in with, and the one the checkout finds them by", () => {

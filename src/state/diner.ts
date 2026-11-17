@@ -48,7 +48,8 @@ export type LineAlert =
   | { kind: "note" }
   | { kind: "gone"; name: string; dish: boolean };
 
-export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed";
+/** `payOff`: placed to pay now just as the kitchen stopped taking payments online: nothing was made. */
+export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed" | "payOff";
 
 /**
  * Why a typed code was not taken, as Adminium said it. `invalid` is every
@@ -906,6 +907,12 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
       }
       // A named refusal: nothing was made, and the next press is a new order.
       set({ clientKey: null });
+      // Placed to pay now while the kitchen had just stopped taking payments online: said, and the choice goes with it.
+      if (payNow && error.code === "PUBLIC_SWITCHED_OFF" && (await readPayments()).online === false && rulesOf().online) {
+        set({ placeError: "payOff" });
+        scheduleQuote();
+        return null;
+      }
       if (error.code === "PUBLIC_LIMIT_REACHED") set({ placeError: "limit" });
       else if (error.code === "PUBLIC_RATE_LIMITED") set({ placeError: "busy" });
       else if (!(await readRefusal(error, "place").catch(() => false))) set({ placeError: "failed" });

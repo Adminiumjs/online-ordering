@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.61",
+    "minAdminiumVersion": "0.3.62",
     "engines": [
       "sqlite",
       "postgres",
@@ -2355,7 +2355,8 @@
                       "column": "cancel_code",
                       "isNull": true
                     }
-                  ]
+                  ],
+                  "noPaymentInFlight": true
                 }
               },
               {
@@ -11390,7 +11391,8 @@
       "defaults": {
         "status": "paying"
       },
-      "pay": true
+      "pay": true,
+      "requirePayments": "on"
     }
   ],
   "outbox": {

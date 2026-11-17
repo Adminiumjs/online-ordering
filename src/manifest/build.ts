@@ -37,10 +37,12 @@ export const VERSION = "0.3.3";
  * online — the state it waits for its payment in, its timed cancel held back
  * while a payment lands, refunds sent back for the kitchen's own refund rows,
  * and the refund right a role holds; and (0.3.61) the order page reading where
- * a payment stands after the pay page. Written from the version actually
- * released, never guessed.
+ * a payment stands after the pay page; and (0.3.62) the move to pay at
+ * pickup instead refused while a payment is on its way, and the pay-now
+ * door open only while the kitchen takes payments. Written from the version
+ * actually released, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.61";
+export const MIN_ADMINIUM = "0.3.62";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },

@@ -445,7 +445,7 @@ function PlaceError() {
   const venue = useVenue();
   const error = useDiner((s) => s.placeError);
   if (error === null) return null;
-  const warn = error === "toomany" || error === "busy" || error === "limit" || error === "pending";
+  const warn = error === "toomany" || error === "busy" || error === "limit" || error === "pending" || error === "payOff";
   const phone = venue.phone;
   const call =
     phone === null ? (
@@ -471,6 +471,8 @@ function PlaceError() {
           ? t("co.err.offline")
           : error === "pending"
             ? t("co.err.pending")
+          : error === "payOff"
+            ? t("pay.off")
           : error === "busy"
             ? t("co.err.busy")
             : error === "limit"

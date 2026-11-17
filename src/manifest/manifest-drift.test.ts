@@ -133,8 +133,9 @@ describe("the diner's writes are the few the page needs", () => {
 
   it("places an order to pay now as the same order, made waiting for its payment, with the link to pay it in the reply", () => {
     const [atPickup, now] = posts() as unknown as [Json, Json];
-    const { defaults, pay, ...same } = now;
-    expect([defaults, pay]).toEqual([{ status: "paying" }, true]);
+    const { defaults, pay, requirePayments, ...same } = now;
+    // …open only while the kitchen takes payments online.
+    expect([defaults, pay, requirePayments]).toEqual([{ status: "paying" }, true, "on"]);
     expect(same).toEqual(atPickup);
     // The second entry comes after every older one, so each older entry keeps its name.
     expect(manifest.publicAccess.at(-1)).toBe(now);
@@ -156,7 +157,8 @@ describe("the diner's writes are the few the page needs", () => {
       expect(entry["defaults"]).toBeUndefined();
     }
     // The move to new from waiting for a payment never carries a cancel's reason; new → new is refused (strict).
-    expect(states().moves["paying"]).toContainEqual({ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }] } });
+    // …nor while a payment for it is on its way: that money would land on an order no longer waiting for it.
+    expect(states().moves["paying"]).toContainEqual({ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }], noPaymentInFlight: true } });
     expect(states()["strict"]).toBe(true);
   });
 });

@@ -437,9 +437,10 @@ export const TABLES: Table[] = [
       // "#2113 is already ready — 11:34, Sam": a second screen's tap is refused, naming the first.
       strict: true,
       moves: {
-        // The payment makes it new; so does the diner choosing to pay at pickup after all (never with a cancel's reason on it).
+        // The payment makes it new; so does the diner choosing to pay at pickup after all (never with a cancel's reason on it,
+        // and never while a payment for it is on its way: that money would land on an order no longer waiting for it).
         // Not paid in time, Adminium cancels it.
-        paying: [{ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }] } }, cancel()],
+        paying: [{ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }], noPaymentInFlight: true } }, cancel()],
         // No roles on this cancel: the diner's own link makes it too, and holds none.
         placed: ["confirmed", cancel()],
         confirmed: ["preparing", cancel(), undo("placed", "confirmed_at")],

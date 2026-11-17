@@ -571,7 +571,8 @@ export const MANIFEST_RULES = {
                   "column": "cancel_code",
                   "isNull": true
                 }
-              ]
+              ],
+              "noPaymentInFlight": true
             }
           },
           {
@@ -1878,7 +1879,8 @@ export const MANIFEST_RULES = {
       "defaults": {
         "status": "paying"
       },
-      "pay": true
+      "pay": true,
+      "requirePayments": "on"
     }
   ],
   "roles": [

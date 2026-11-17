@@ -272,7 +272,13 @@ export async function payAtPickupTracked(): Promise<"moved" | "busy" | "failed">
     await readTrack();
     useTrack.setState({ pay: "idle" });
     return "moved";
-  } catch {
+  } catch (error) {
+    // Adminium refuses the move itself while a payment for the order is on its way: the same words as the page's own check.
+    if (isApiError(error) && error.params["reason"] === "payment-in-flight") {
+      useTrack.setState({ pay: "busy" });
+      await readTrack();
+      return "busy";
+    }
     await readTrack();
     return useTrack.getState().order?.order["status"] === "placed" ? "moved" : "failed";
   } finally {

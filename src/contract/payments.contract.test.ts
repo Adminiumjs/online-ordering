@@ -14,9 +14,11 @@
  *      it held, and every order's money is what it was;
  *   4. the orders' payable arrives switched off, and someone who manages
  *      payments switches the app on and off in one place;
- *   5. with payments off, the order page reads "not now", and an order placed
- *      to pay now waits for its payment (no pay link): no confirmation goes;
- *      the diner pays at pickup instead, and the confirmation goes, once;
+ *   5. with payments off (and with the app switched on but no service live),
+ *      the order page reads "not now" and the pay-now door is shut: nothing
+ *      is made. An order waiting for its payment (made here by the admin, as
+ *      no payment service runs in the contract) is not confirmed; paid at
+ *      pickup instead, with nothing on its way, it is confirmed once;
  *   6. one left waiting past the kitchen's hold is cancelled as not paid in
  *      time, and nobody is emailed;
  *   7. the diner's own cancel still says it is theirs;
@@ -264,34 +266,58 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
 
       // ── the order page, payments off ──────────────────────────────────────
 
-      it("holds an order placed to pay now while payments are off: no pay link, no confirmation; paid at pickup instead, confirmed once", async () => {
+      /** An order waiting for its payment, as the pay-now door makes one while payments are on: here the admin makes it (no payment service runs in the contract). */
+      const waiting = async (name: string): Promise<number> => {
+        const time = free.shift()!;
+        const made = ok(
+          await staff.post<{ data: Row }>(data("orders"), {
+            values: { name, email: `${name.toLowerCase()}.${engine}@juniper-diners.dev`, language: "en-US", channel: "online", status: "paying", pickup_at: new Date(instantOf(TOMORROW, time, DEMO_ZONE)).toISOString() },
+          }),
+          201,
+        ).data;
+        expect(made["status"]).toBe("paying");
+        return made.id;
+      };
+
+      it("opens the pay-now door only while the kitchen takes payments online, and makes nothing while it is shut", async () => {
         ok(await staff.put("/api/v1/settings/email", { publicOrigin: server.base }));
         ok(await staff.put("/api/v1/public-api", { enabled: true }));
         const diner = await dinerDoor();
-        // Nobody switched the app on in Payments: "Pay now" is not offered.
+        const before = (await rows("orders")).length;
+        // Nobody switched the app on in Payments: "Pay now" is not offered, and the door is shut.
         expect(await diner.payments()).toEqual({ online: false, test: false });
-        const made = await placeOrder(diner, "Kwame", true);
-        expect([made.data["status"], made.payUrl]).toEqual(["paying", null]);
-        const id = made.data.id;
+        const shut = await placeOrder(diner, "Kwame", true).then(() => "placed", (error: { status?: number; code?: string }) => `${String(error.status)} ${String(error.code)}`);
+        expect(shut).toBe("403 PUBLIC_SWITCHED_OFF");
+        // Switched on with no payment service live: customers still cannot pay online, and the door stays shut.
+        ok(await staff.post("/api/v1/payments/apps/switch", { connectionId, appKey: "ordering", enabled: true }));
+        expect((await diner.payments()).online).toBe(false);
+        const still = await placeOrder(diner, "Kwame", true).then(() => "placed", (error: { status?: number; code?: string }) => `${String(error.status)} ${String(error.code)}`);
+        expect(still).toBe("403 PUBLIC_SWITCHED_OFF");
+        ok(await staff.post("/api/v1/payments/apps/switch", { connectionId, appKey: "ordering", enabled: false }));
+        expect((await rows("orders")).length).toBe(before);
+        // Paying at pickup is open as ever.
+        const placed = await placeOrder(diner, "Kwame", false);
+        expect(placed.data["status"]).toBe("placed");
         // Where its payment stands, as the page asks back from the pay page: none was started.
-        expect(await diner.paymentState("link", id)).toBe("none");
+        expect(await diner.paymentState("link", placed.data.id)).toBe("none");
+      }, 300_000);
+
+      it("confirms nothing while an order waits for its payment; paid at pickup instead (nothing on its way), it is confirmed once", async () => {
+        const id = await waiting("Ama");
         // Its confirmation waits, and is dropped: an order waiting for its payment is not confirmed.
         const dropped = await until(async () => (await messagesOf(id)).find((m) => m["kind"] === "order-confirmation" && m["status"] !== "queued"), "the held confirmation");
         expect([dropped["status"], dropped["skip_reason"]]).toEqual(["skipped", "no-longer-needed"]);
-        // The diner pays at pickup instead: new, unpaid, and confirmed as any order paid at pickup.
-        const placed = await diner.payAtPickup("link", id);
-        expect([placed["status"], placed["cancel_code"]]).toEqual(["placed", null]);
+        // To pay at pickup instead: the move waits for no payment, as none is on its way, and never carries a cancel's reason.
+        const reasoned = await staff.patch(`${data("orders")}/${String(id)}`, { values: { status: "placed", cancel_code: "other" } });
+        expect(reasoned.status).toBe(409);
+        ok(await staff.patch(`${data("orders")}/${String(id)}`, { values: { status: "placed" } }));
         const sent = await until(async () => (await messagesOf(id)).find((m) => m["kind"] === "order-confirmation" && m["status"] === "sent"), "the confirmation");
         expect(sent["status"]).toBe("sent");
         expect((await messagesOf(id)).filter((m) => m["status"] === "sent").map((m) => m["kind"])).toEqual(["order-confirmation"]);
-        // Once new, it is not waiting for anything: the move is refused (it is new already).
-        expect(await diner.payAtPickup("link", id).then(() => "moved", (error: { code?: string }) => error.code)).toMatch(/^PUBLIC_|^STATE_/);
       }, 300_000);
 
       it("lets an order go when its hold ends unpaid: cancelled as not paid in time, and nobody emailed", async () => {
-        const diner = await dinerDoor();
-        const made = await placeOrder(diner, "Ines", true);
-        const id = made.data.id;
+        const id = await waiting("Ines");
         const placedAt = Date.parse(String((await order(id))["placed_at"]));
         await server.setClock(placedAt + 11 * 60_000);
         const gone = await until(async () => {

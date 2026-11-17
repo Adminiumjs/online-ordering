@@ -538,6 +538,13 @@ describe("paying online, as the demo plays it", () => {
     expect(row.map((p) => [p["method"], p["provider"]])).toEqual([["online", "Stripe"]]);
   });
 
+  it("places nothing to pay now while the kitchen takes no payments online", async () => {
+    demo.diner.payOnline = false;
+    const before = demo.world.all("orders").length;
+    await expect(demo.diner.place(kwame({ pickup_at: at("12:30") }), "off-0123456789abcdef-pay", { payNow: true })).rejects.toMatchObject({ code: "PUBLIC_SWITCHED_OFF" });
+    expect(demo.world.all("orders").length).toBe(before);
+  });
+
   it("lets the diner pay at pickup instead while it waits, and confirms it as any order paid at pickup", async () => {
     const id = await placedToPay("instead");
     const placed = await demo.diner.payAtPickup("link", id);
