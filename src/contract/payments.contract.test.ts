@@ -151,7 +151,8 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
           { fetch: originFetch, storage: null },
         );
       };
-      let free = ["18:00", "18:15", "18:30", "18:45", "19:00"];
+      /** A pickup time apiece for the orders below, each its own slot of tomorrow's evening. */
+      const free = ["17:00", "17:15", "17:30", "17:45", "18:00", "18:15", "18:30", "18:45", "19:00", "19:15"];
       /** An order of a lemonade for tomorrow, placed as the page places it: to pay at pickup, or now. */
       const placeOrder = async (diner: AdminiumDiner, name: string, payNow: boolean) => {
         const menu = await diner.menu();
