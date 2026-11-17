@@ -700,8 +700,8 @@ export const TABLES: Table[] = [
         lookup: { from: "card_code", table: { addOn: "offers", table: "gift_cards" }, column: "code", where: [{ column: "status", eq: "active" }] },
       }),
       text("card_last4", 4, "Card ending", { ...opt, rules: { codeLast4: { of: "card_code" } } }),
-      // What it paid: the card's answer, or the money taken online. A card's payment with Offers & gift cards away has none, and is not saved.
-      { ...amount("amount", "Paid"), rules: { required: true } },
+      // What it paid: the card's answer, or the money taken online. With Offers & gift cards away a card's payment has none.
+      amount("amount", "Paid"),
       amount("card_balance_after", "Left on the card"),
       // What went back of it: refunds the kitchen made, and money Adminium says went back another way (at the service, a dispute lost).
       money("returned", "Given back", { rollup: { from: "payment_refunds", via: "payment_id", sum: "counted" } }),

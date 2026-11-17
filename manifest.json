@@ -5805,9 +5805,6 @@
               "ar-EG": "مدفوع",
               "zh-CN": "已付款",
               "zh-TW": "已付款"
-            },
-            "rules": {
-              "required": true
             }
           },
           {

@@ -92,7 +92,7 @@ const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {
  */
 const FILLED: Record<string, string[]> = {
   settings: ["auto_refund", "pay_hold_minutes"],
-  orders: ["card_paid", "online_used", "paid_as"],
+  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "paid_as"],
   payments: ["method"],
   payment_refunds: ["automatic", "counted"],
 };
