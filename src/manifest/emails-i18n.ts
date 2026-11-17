@@ -78,6 +78,23 @@ interface Sentences {
   keptPreheader: string;
   keptBody: string;
   keptAsk: string;
+  paidBox: string;
+  onlineRow: string;
+  confirmPaidName: string;
+  confirmPaidPreheader: string;
+  readyPaidName: string;
+  readyPaidPay: string;
+  cancelPaidName: string;
+  cancelPaidPreheader: string;
+  cancelPaidWhy: string;
+  moneyBack: string;
+  byYouPaidName: string;
+  byYouPaid: string;
+  refundedName: string;
+  refundedSubject: string;
+  refundedPreheader: string;
+  refundedBody: string;
+  refundedDays: string;
 }
 
 function wordsOf(s: Sentences): EmailWords {
@@ -90,6 +107,8 @@ function wordsOf(s: Sentences): EmailWords {
     toPay: s.toPay,
     giftCardRow: s.giftCardRow,
     prepaidBox: s.prepaidBox,
+    paidBox: s.paidBox,
+    onlineRow: s.onlineRow,
     orderFoot: s.orderFoot,
     enquiryFoot: s.enquiryFoot,
     "order-confirmation": { name: s.confirmName, subject: s.confirmSubject, preheader: s.confirmPreheader, heading: s.thanks, paras: [s.confirmBody], button: s.follow },
@@ -106,6 +125,11 @@ function wordsOf(s: Sentences): EmailWords {
     "order-ready-prepaid": { name: s.readyPrepaidName, subject: s.readySubject, preheader: s.readyPrepaidPreheader, heading: s.readyHeading, paras: [s.readyCome, "{{practice.directions}}", s.readyPrepaidPay] },
     "card-money-returned": { name: s.returnedName, subject: s.returnedSubject, preheader: s.returnedPreheader, paras: [s.returnedBody] },
     "card-money-kept": { name: s.keptName, subject: s.keptSubject, preheader: s.keptPreheader, paras: [s.keptBody, s.keptAsk] },
+    "order-confirmation-paid": { name: s.confirmPaidName, subject: s.confirmSubject, preheader: s.confirmPaidPreheader, heading: s.thanks, paras: [s.confirmBody], button: s.follow },
+    "order-ready-paid": { name: s.readyPaidName, subject: s.readySubject, preheader: s.readyPrepaidPreheader, heading: s.readyHeading, paras: [s.readyCome, "{{practice.directions}}", s.readyPaidPay] },
+    "order-cancelled-paid": { name: s.cancelPaidName, subject: s.cancelSubject, preheader: s.cancelPaidPreheader, heading: s.sorry, paras: [s.cancelPaidWhy, s.moneyBack, s.callAgain] },
+    "order-cancelled-paid-by-you": { name: s.byYouPaidName, subject: s.byYouSubject, preheader: s.cancelPaidPreheader, paras: [s.byYouPaid, s.moneyBack, s.byYouCall] },
+    "order-refunded": { name: s.refundedName, subject: s.refundedSubject, preheader: s.refundedPreheader, paras: [s.refundedBody, s.refundedDays] },
     "enquiry-received": { name: s.enquiryName, subject: s.enquirySubject, preheader: s.enquiryPreheader, heading: s.enquiryHeading, paras: [s.enquiryRef, s.enquiryCall] },
   };
 }
@@ -172,13 +196,30 @@ const DE: Sentences = {
   readyPrepaidPay: "Sie ist mit Geschenkkarte bezahlt: an der Theke ist nichts zu zahlen.",
   returnedName: "Geld auf die Geschenkkarte zurück",
   returnedSubject: "Deine Geschenkkarte hat ihr Geld zurück",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} wieder auf deiner Geschenkkarte",
-  returnedBody: "{{order.paid.money}} sind für die Bestellung #{{order.number}} zurück auf deine Geschenkkarte gegangen.",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} wieder auf deiner Geschenkkarte",
+  returnedBody: "{{order.card_paid.money}} sind für die Bestellung #{{order.number}} zurück auf deine Geschenkkarte gegangen.",
   keptName: "Geld der Geschenkkarte behalten",
   keptSubject: "Zu deiner Bestellung #{{order.number}}",
   keptPreheader: "#{{order.number}} wurde nicht abgeholt",
-  keptBody: "Deine Geschenkkarte hat {{order.paid.money}} für die Bestellung #{{order.number}} bezahlt, die nicht abgeholt wurde.",
+  keptBody: "Deine Geschenkkarte hat {{order.card_paid.money}} für die Bestellung #{{order.number}} bezahlt, die nicht abgeholt wurde.",
   keptAsk: "Frag an der Theke nach oder ruf uns unter {{practice.phone}} an.",
+  paidBox: "Online bezahlt · {{order.online_taken.money}}",
+  onlineRow: "Online bezahlt",
+  confirmPaidName: "Bestellbestätigung (online bezahlt)",
+  confirmPaidPreheader: "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · online bezahlt",
+  readyPaidName: "Bestellung fertig (online bezahlt)",
+  readyPaidPay: "Online bezahlt · An der Theke ist nichts zu zahlen.",
+  cancelPaidName: "Storniert nach Online-Zahlung",
+  cancelPaidPreheader: "{{order.online_taken.money}} gehen an dich zurück",
+  cancelPaidWhy: "Grund: {{order.cancel_code.label}}.",
+  moneyBack: "Die {{order.online_taken.money}}, die du online bezahlt hast, gehen zurück auf die Karte oder das PayPal-Konto, mit dem du bezahlt hast. Wir schreiben dir, sobald das Geld unterwegs ist.",
+  byYouPaidName: "Vom Gast storniert nach Online-Zahlung",
+  byYouPaid: "Du hast #{{order.number}} um {{order.cancelled_at.time}} storniert.",
+  refundedName: "Online-Zahlung erstattet",
+  refundedSubject: "Eine Erstattung für #{{order.number}}",
+  refundedPreheader: "{{order.online_refunded.money}} auf dem Weg zurück",
+  refundedBody: "{{order.online_refunded.money}} der Bestellung #{{order.number}} sind auf dem Weg zurück auf die Karte oder das PayPal-Konto, mit dem du bezahlt hast.",
+  refundedDays: "Es kann ein paar Tage dauern, bis du es siehst.",
 };
 
 const FR: Sentences = {
@@ -243,13 +284,30 @@ const FR: Sentences = {
   readyPrepaidPay: "Elle est payée par carte cadeau : rien à payer au comptoir.",
   returnedName: "Argent rendu sur la carte cadeau",
   returnedSubject: "Votre carte cadeau a été recréditée",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} de retour sur votre carte cadeau",
-  returnedBody: "{{order.paid.money}} ont été recrédités sur votre carte cadeau pour la commande #{{order.number}}.",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} de retour sur votre carte cadeau",
+  returnedBody: "{{order.card_paid.money}} ont été recrédités sur votre carte cadeau pour la commande #{{order.number}}.",
   keptName: "Argent de la carte cadeau conservé",
   keptSubject: "À propos de votre commande #{{order.number}}",
   keptPreheader: "#{{order.number}} n’a pas été retirée",
-  keptBody: "Votre carte cadeau a payé {{order.paid.money}} pour la commande #{{order.number}}, qui n’a pas été retirée.",
+  keptBody: "Votre carte cadeau a payé {{order.card_paid.money}} pour la commande #{{order.number}}, qui n’a pas été retirée.",
   keptAsk: "Demandez au comptoir, ou appelez-nous au {{practice.phone}}.",
+  paidBox: "Payé en ligne · {{order.online_taken.money}}",
+  onlineRow: "Payé en ligne",
+  confirmPaidName: "Confirmation de commande (payée en ligne)",
+  confirmPaidPreheader: "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · payé en ligne",
+  readyPaidName: "Commande prête (payée en ligne)",
+  readyPaidPay: "Payé en ligne · Rien à payer au comptoir.",
+  cancelPaidName: "Annulée après un paiement en ligne",
+  cancelPaidPreheader: "{{order.online_taken.money}} vous sont remboursés",
+  cancelPaidWhy: "Motif : {{order.cancel_code.label}}.",
+  moneyBack: "Les {{order.online_taken.money}} payés en ligne retournent sur la carte ou le compte PayPal utilisé pour payer. Nous vous écrirons dès que le remboursement sera en route.",
+  byYouPaidName: "Annulée par le client après un paiement en ligne",
+  byYouPaid: "Vous avez annulé la commande #{{order.number}} à {{order.cancelled_at.time}}.",
+  refundedName: "Paiement en ligne remboursé",
+  refundedSubject: "Un remboursement pour la commande #{{order.number}}",
+  refundedPreheader: "{{order.online_refunded.money}} en route",
+  refundedBody: "{{order.online_refunded.money}} de la commande #{{order.number}} retournent sur la carte ou le compte PayPal utilisé pour payer.",
+  refundedDays: "Cela peut prendre quelques jours avant d’apparaître.",
 };
 
 const DA: Sentences = {
@@ -314,13 +372,30 @@ const DA: Sentences = {
   readyPrepaidPay: "Den er betalt med gavekort: der er intet at betale ved disken.",
   returnedName: "Penge tilbage på gavekortet",
   returnedSubject: "Dit gavekort har fået pengene tilbage",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} tilbage på dit gavekort",
-  returnedBody: "{{order.paid.money}} er gået tilbage til dit gavekort for bestilling #{{order.number}}.",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} tilbage på dit gavekort",
+  returnedBody: "{{order.card_paid.money}} er gået tilbage til dit gavekort for bestilling #{{order.number}}.",
   keptName: "Gavekortets penge beholdt",
   keptSubject: "Om din bestilling #{{order.number}}",
   keptPreheader: "#{{order.number}} blev ikke afhentet",
-  keptBody: "Dit gavekort betalte {{order.paid.money}} for bestilling #{{order.number}}, som ikke blev afhentet.",
+  keptBody: "Dit gavekort betalte {{order.card_paid.money}} for bestilling #{{order.number}}, som ikke blev afhentet.",
   keptAsk: "Spørg ved disken, eller ring til os på {{practice.phone}}.",
+  paidBox: "Betalt online · {{order.online_taken.money}}",
+  onlineRow: "Betalt online",
+  confirmPaidName: "Ordrebekræftelse (betalt online)",
+  confirmPaidPreheader: "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · betalt online",
+  readyPaidName: "Bestilling klar (betalt online)",
+  readyPaidPay: "Betalt online · Der er intet at betale ved disken.",
+  cancelPaidName: "Annulleret efter betaling online",
+  cancelPaidPreheader: "{{order.online_taken.money}} går tilbage til dig",
+  cancelPaidWhy: "Årsag: {{order.cancel_code.label}}.",
+  moneyBack: "De {{order.online_taken.money}}, du betalte online, går tilbage til det kort eller den PayPal-konto, du betalte med. Vi skriver til dig, når pengene er på vej.",
+  byYouPaidName: "Annulleret af gæsten efter betaling online",
+  byYouPaid: "Du annullerede #{{order.number}} kl. {{order.cancelled_at.time}}.",
+  refundedName: "Online betaling refunderet",
+  refundedSubject: "En refundering for #{{order.number}}",
+  refundedPreheader: "{{order.online_refunded.money}} på vej tilbage",
+  refundedBody: "{{order.online_refunded.money}} for bestilling #{{order.number}} er på vej tilbage til det kort eller den PayPal-konto, du betalte med.",
+  refundedDays: "Der kan gå et par dage, før du kan se dem.",
 };
 
 const CS: Sentences = {
@@ -385,13 +460,30 @@ const CS: Sentences = {
   readyPrepaidPay: "Je zaplacená dárkovou kartou: u pultu nic neplatíte.",
   returnedName: "Peníze vráceny na dárkovou kartu",
   returnedSubject: "Na vaši dárkovou kartu se vrátily peníze",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} zpět na vaší dárkové kartě",
-  returnedBody: "Za objednávku #{{order.number}} se na vaši dárkovou kartu vrátilo {{order.paid.money}}.",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} zpět na vaší dárkové kartě",
+  returnedBody: "Za objednávku #{{order.number}} se na vaši dárkovou kartu vrátilo {{order.card_paid.money}}.",
   keptName: "Peníze z dárkové karty ponechány",
   keptSubject: "K vaší objednávce #{{order.number}}",
   keptPreheader: "#{{order.number}} nebyla vyzvednuta",
-  keptBody: "Vaše dárková karta zaplatila {{order.paid.money}} za objednávku #{{order.number}}, která nebyla vyzvednuta.",
+  keptBody: "Vaše dárková karta zaplatila {{order.card_paid.money}} za objednávku #{{order.number}}, která nebyla vyzvednuta.",
   keptAsk: "Zeptejte se u pultu, nebo nám zavolejte na {{practice.phone}}.",
+  paidBox: "Zaplaceno online · {{order.online_taken.money}}",
+  onlineRow: "Zaplaceno online",
+  confirmPaidName: "Potvrzení objednávky (zaplaceno online)",
+  confirmPaidPreheader: "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · zaplaceno online",
+  readyPaidName: "Objednávka připravena (zaplaceno online)",
+  readyPaidPay: "Zaplaceno online · U pultu nic neplatíte.",
+  cancelPaidName: "Zrušeno po platbě online",
+  cancelPaidPreheader: "{{order.online_taken.money}} se vám vrací",
+  cancelPaidWhy: "Důvod: {{order.cancel_code.label}}.",
+  moneyBack: "{{order.online_taken.money}}, které jste zaplatili online, se vrací na kartu nebo účet PayPal, kterými jste platili. Napíšeme vám, jakmile budou peníze na cestě.",
+  byYouPaidName: "Zrušeno hostem po platbě online",
+  byYouPaid: "Objednávku #{{order.number}} jste zrušili v {{order.cancelled_at.time}}.",
+  refundedName: "Vrácení platby online",
+  refundedSubject: "Vrácení peněz za objednávku #{{order.number}}",
+  refundedPreheader: "{{order.online_refunded.money}} na cestě zpět",
+  refundedBody: "{{order.online_refunded.money}} za objednávku #{{order.number}} je na cestě zpět na kartu nebo účet PayPal, kterými jste platili.",
+  refundedDays: "Může trvat několik dní, než se peníze objeví.",
 };
 
 const ZH_CN: Sentences = {
@@ -456,13 +548,30 @@ const ZH_CN: Sentences = {
   readyPrepaidPay: "已用礼品卡支付：到店无需付款。",
   returnedName: "礼品卡退款",
   returnedSubject: "款项已退回您的礼品卡",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} 已退回您的礼品卡",
-  returnedBody: "订单 #{{order.number}} 的 {{order.paid.money}} 已退回您的礼品卡。",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} 已退回您的礼品卡",
+  returnedBody: "订单 #{{order.number}} 的 {{order.card_paid.money}} 已退回您的礼品卡。",
   keptName: "礼品卡款项保留",
   keptSubject: "关于您的订单 #{{order.number}}",
   keptPreheader: "#{{order.number}} 未被取走",
-  keptBody: "您的礼品卡为订单 #{{order.number}} 支付了 {{order.paid.money}}，但该订单未被取走。",
+  keptBody: "您的礼品卡为订单 #{{order.number}} 支付了 {{order.card_paid.money}}，但该订单未被取走。",
   keptAsk: "请到柜台咨询，或致电 {{practice.phone}}。",
+  paidBox: "已在线支付 · {{order.online_taken.money}}",
+  onlineRow: "已在线支付",
+  confirmPaidName: "订单确认（已在线支付）",
+  confirmPaidPreheader: "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 已在线支付",
+  readyPaidName: "订单已备好（已在线支付）",
+  readyPaidPay: "已在线支付 · 到店无需付款。",
+  cancelPaidName: "在线支付后已取消",
+  cancelPaidPreheader: "{{order.online_taken.money}} 将退还给你",
+  cancelPaidWhy: "原因：{{order.cancel_code.label}}。",
+  moneyBack: "你在线支付的 {{order.online_taken.money}} 将退回到你付款时使用的银行卡或 PayPal 账户。款项退出后我们会发邮件告诉你。",
+  byYouPaidName: "顾客在线支付后已取消",
+  byYouPaid: "你于 {{order.cancelled_at.time}} 取消了订单 #{{order.number}}。",
+  refundedName: "在线付款已退款",
+  refundedSubject: "订单 #{{order.number}} 的退款",
+  refundedPreheader: "{{order.online_refunded.money}} 正在退回",
+  refundedBody: "订单 #{{order.number}} 的 {{order.online_refunded.money}} 正在退回到你付款时使用的银行卡或 PayPal 账户。",
+  refundedDays: "可能需要几天才能到账。",
 };
 
 const ZH_TW: Sentences = {
@@ -527,13 +636,30 @@ const ZH_TW: Sentences = {
   readyPrepaidPay: "已用禮品卡支付：到店無需付款。",
   returnedName: "禮品卡退款",
   returnedSubject: "款項已退回您的禮品卡",
-  returnedPreheader: "#{{order.number}} · {{order.paid.money}} 已退回您的禮品卡",
-  returnedBody: "訂單 #{{order.number}} 的 {{order.paid.money}} 已退回您的禮品卡。",
+  returnedPreheader: "#{{order.number}} · {{order.card_paid.money}} 已退回您的禮品卡",
+  returnedBody: "訂單 #{{order.number}} 的 {{order.card_paid.money}} 已退回您的禮品卡。",
   keptName: "禮品卡款項保留",
   keptSubject: "關於您的訂單 #{{order.number}}",
   keptPreheader: "#{{order.number}} 未被取走",
-  keptBody: "您的禮品卡為訂單 #{{order.number}} 支付了 {{order.paid.money}}，但該訂單未被取走。",
+  keptBody: "您的禮品卡為訂單 #{{order.number}} 支付了 {{order.card_paid.money}}，但該訂單未被取走。",
   keptAsk: "請到櫃檯洽詢，或致電 {{practice.phone}}。",
+  paidBox: "已線上付款 · {{order.online_taken.money}}",
+  onlineRow: "已線上付款",
+  confirmPaidName: "訂單確認（已線上付款）",
+  confirmPaidPreheader: "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 已線上付款",
+  readyPaidName: "訂單已備妥（已線上付款）",
+  readyPaidPay: "已線上付款 · 到店無需付款。",
+  cancelPaidName: "線上付款後已取消",
+  cancelPaidPreheader: "{{order.online_taken.money}} 將退還給你",
+  cancelPaidWhy: "原因：{{order.cancel_code.label}}。",
+  moneyBack: "你線上支付的 {{order.online_taken.money}} 將退回到你付款時使用的信用卡或 PayPal 帳戶。款項退出後我們會寄信通知你。",
+  byYouPaidName: "顧客線上付款後已取消",
+  byYouPaid: "你於 {{order.cancelled_at.time}} 取消了訂單 #{{order.number}}。",
+  refundedName: "線上付款已退款",
+  refundedSubject: "訂單 #{{order.number}} 的退款",
+  refundedPreheader: "{{order.online_refunded.money}} 正在退回",
+  refundedBody: "訂單 #{{order.number}} 的 {{order.online_refunded.money}} 正在退回到你付款時使用的信用卡或 PayPal 帳戶。",
+  refundedDays: "可能需要幾天才會入帳。",
 };
 
 const AR: Sentences = {
@@ -598,13 +724,30 @@ const AR: Sentences = {
   readyPrepaidPay: "الطلب مدفوع ببطاقة هدية: لا شيء يُدفع عند المنضدة.",
   returnedName: "إعادة مبلغ إلى بطاقة الهدية",
   returnedSubject: "عاد المبلغ إلى بطاقة هديتك",
-  returnedPreheader: "#{{order.number}} · عاد {{order.paid.money}} إلى بطاقة هديتك",
-  returnedBody: "عاد {{order.paid.money}} إلى بطاقة هديتك عن الطلب #{{order.number}}.",
+  returnedPreheader: "#{{order.number}} · عاد {{order.card_paid.money}} إلى بطاقة هديتك",
+  returnedBody: "عاد {{order.card_paid.money}} إلى بطاقة هديتك عن الطلب #{{order.number}}.",
   keptName: "الاحتفاظ بمبلغ بطاقة الهدية",
   keptSubject: "بخصوص طلبك #{{order.number}}",
   keptPreheader: "#{{order.number}} لم يُستلم",
-  keptBody: "دفعت بطاقة هديتك {{order.paid.money}} عن الطلب #{{order.number}} الذي لم يُستلم.",
+  keptBody: "دفعت بطاقة هديتك {{order.card_paid.money}} عن الطلب #{{order.number}} الذي لم يُستلم.",
   keptAsk: "اسأل عند المنضدة، أو اتصل بنا على {{practice.phone}}.",
+  paidBox: "مدفوع عبر الإنترنت · {{order.online_taken.money}}",
+  onlineRow: "مدفوع عبر الإنترنت",
+  confirmPaidName: "تأكيد الطلب (مدفوع عبر الإنترنت)",
+  confirmPaidPreheader: "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · مدفوع عبر الإنترنت",
+  readyPaidName: "الطلب جاهز (مدفوع عبر الإنترنت)",
+  readyPaidPay: "مدفوع عبر الإنترنت · لا شيء يُدفع عند المنضدة.",
+  cancelPaidName: "أُلغي بعد الدفع عبر الإنترنت",
+  cancelPaidPreheader: "يعود إليك {{order.online_taken.money}}",
+  cancelPaidWhy: "السبب: {{order.cancel_code.label}}.",
+  moneyBack: "يعود مبلغ {{order.online_taken.money}} الذي دفعته عبر الإنترنت إلى البطاقة أو حساب PayPal الذي دفعت به. سنراسلك حين يكون المبلغ في طريقه إليك.",
+  byYouPaidName: "ألغاه الزبون بعد الدفع عبر الإنترنت",
+  byYouPaid: "ألغيت الطلب #{{order.number}} الساعة {{order.cancelled_at.time}}.",
+  refundedName: "استرداد مبلغ مدفوع عبر الإنترنت",
+  refundedSubject: "استرداد للطلب #{{order.number}}",
+  refundedPreheader: "{{order.online_refunded.money}} في طريقه إليك",
+  refundedBody: "مبلغ {{order.online_refunded.money}} من الطلب #{{order.number}} في طريقه إلى البطاقة أو حساب PayPal الذي دفعت به.",
+  refundedDays: "قد يستغرق ظهوره بضعة أيام.",
 };
 
 export const EMAIL_TRANSLATIONS: Record<Exclude<Tag, "en-US">, EmailWords> = {

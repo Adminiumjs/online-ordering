@@ -54,8 +54,8 @@ describe("the kitchen's diners", () => {
         ],
       },
     ]);
-    // 0.3.38 first read the diners; the floor has since moved on (0.3.49, installs per database).
-    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.49");
+    // 0.3.38 first read the diners; the floor has since moved on (0.3.62, orders paid online).
+    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.62");
   });
 
   it("have one address: the outbox's, the one they sign in with, and the one the checkout finds them by", () => {
@@ -125,12 +125,14 @@ describe("the checkout's tick", () => {
 
   it("is carried by the checkout alone, kept for the diner the address finds or the diner signed in", () => {
     const ticks = manifest.publicAccess.filter((e) => (e.writable ?? []).includes("opt_in"));
-    expect(ticks.map((e) => [e.table, e.key ?? "customer", e.methods.join()])).toEqual([["orders", "customer", "POST"]]);
-    const e = ticks[0]!;
-    expect(e.consent).toEqual({ column: "opt_in", purpose: "newsletter", wording });
-    expect([e.identity!["table"], e.identity!["link"], e.claimedBy!["table"], e.claimedBy!["column"]]).toEqual(["customers", "customer_id", "customers", "customer_id"]);
+    // The checkout, placed to pay at pickup or to pay now: the same tick on both.
+    expect(ticks.map((e) => [e.table, e.key ?? "customer", e.methods.join()])).toEqual([["orders", "customer", "POST"], ["orders", "customer", "POST"]]);
+    for (const e of ticks) {
+      expect(e.consent).toEqual({ column: "opt_in", purpose: "newsletter", wording });
+      expect([e.identity!["table"], e.identity!["link"], e.claimedBy!["table"], e.claimedBy!["column"]]).toEqual(["customers", "customer_id", "customers", "customer_id"]);
+    }
     // No other door of the order page takes a tick.
-    expect(manifest.publicAccess.filter((x) => x.consent !== undefined)).toEqual([e]);
+    expect(manifest.publicAccess.filter((x) => x.consent !== undefined)).toEqual(ticks);
   });
 
   it("is the only yes the diner's side can give: their own account cannot set the newsletter by hand", () => {

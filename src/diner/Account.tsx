@@ -228,6 +228,7 @@ export function FindPage() {
 }
 
 const DINER_STATUS: Record<string, string> = {
+  paying: "pay.badge",
   placed: "track.badge.placed",
   confirmed: "track.badge.kitchen",
   preparing: "track.badge.kitchen",

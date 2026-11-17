@@ -10,14 +10,14 @@ export const MOMENTS: Readonly<Record<string, readonly string[]>> = {
   customers: ["forgotten_at", "created_at"],
   orders: ["pickup_at", "hold_until", "placed_at", "confirmed_at", "preparing_at", "ready_at", "picked_up_at", "cancelled_at", "not_collected_at", "link_expires"],
   order_codes: ["removed_at"],
-  payments: ["made_at"],
+  payments: ["made_at", "paid_at"],
   payment_refunds: ["made_at"],
   enquiries: ["created_at"],
   messages: ["due", "created_at", "sent_at"],
 };
 
 export const YES_NO: Readonly<Record<string, readonly string[]>> = {
-  settings: ["online_on", "ready_email_on", "receipt_email_on"],
+  settings: ["online_on", "ready_email_on", "receipt_email_on", "auto_refund"],
   menu_items: ["available", "featured", "online"],
   modifiers: ["available"],
   hours: ["open"],
@@ -25,6 +25,7 @@ export const YES_NO: Readonly<Record<string, readonly string[]>> = {
   slot_pauses: ["active"],
   customers: ["opt_in"],
   orders: ["customer_proved", "link_stopped", "opt_in"],
+  payment_refunds: ["automatic"],
 };
 
 /** A yes/no as a boolean: SQLite and MySQL (and an Adminium before 0.3.9 on any door) hand back 0 or 1. */

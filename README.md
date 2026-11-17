@@ -2,13 +2,14 @@
 
 A pickup kitchen's order page and its kitchen screens, installed into
 [Adminium](https://adminium.dev). Diners order from the menu, pick a pickup
-time and pay at the counter; the kitchen confirms, cooks, shelves and hands
-over each order on a tablet. Adminium decides every price, total, order
-number, pickup slot and status — the pages only ask.
+time and pay at the counter — or, once the kitchen takes payments, online as
+they order; the kitchen confirms, cooks, shelves and hands over each order on
+a tablet. Adminium decides every price, total, order number, pickup slot and
+status — the pages only ask.
 
-**Pickup only, and pay at pickup.** There is no delivery, no card form and no
-text message anywhere in it. An order is handed over a counter, and paid for
-there.
+**Pickup only.** There is no delivery, no card form and no text message
+anywhere in it. An order is handed over a counter, and paid for there or on
+Adminium's own pay page before it.
 
 The demo is dressed as **Juniper Kitchen**, a fictional pickup kitchen on
 Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
@@ -17,7 +18,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.49** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.62** or later, on SQLite, Postgres or MySQL.
 - Nothing else. Four add-ons are offered at install, and the app is whole
   without any of them:
   - **Offers & gift cards** — diners type a code at checkout, automatic offers
@@ -50,6 +51,13 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
   it, the diner can cancel it there.
 - Signing in with a link emailed to them, to see and reorder past orders.
 - A large-order enquiry the kitchen calls back about.
+- Once the kitchen takes payments (see below): "Pay now" beside "Pay when
+  you pick up" at checkout. The order waits for its payment a few minutes,
+  its pickup time kept; the diner pays on Adminium's pay page (a card or a
+  wallet, never a bank transfer that takes days) and comes back to the
+  order's page. A payment that didn't finish can be tried again, or the
+  diner pays at pickup instead. The confirmation says what was paid, and is
+  the receipt of it.
 
 **For the kitchen** (the app's staff side, on a tablet):
 - The board: new, confirmed, preparing and ready orders, each one tap from the
@@ -61,6 +69,10 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 - Today's menu: switching a dish or an option off, setting today's portions,
   marking a dish sold out.
 - Phone orders, taken on the same menu and the same slots.
+- With payments on: a "Paid" chip on an order paid online, and no payment
+  step when it is handed over. A manager may refund it from its ticket (two
+  steps: the amount and why, then one sentence). A paid order cancelled
+  whose money has not gone back yet shows "Refund owed" above the board.
 
 **In the dashboard** (the Online ordering section): the Overview, the orders
 and enquiries, the menu, the hours, closures and paused slots, the customers,
@@ -68,6 +80,33 @@ the emails sent, and the settings — the kitchen's name, words and photos, its
 tax rate, its slot size and whether it takes online orders.
 
 With Point of Sale installed, the two apps can share one menu.
+
+## Taking payments online
+
+Online Ordering takes payments through the payment service you connect in
+Adminium (Card payments for Stripe, Wallet payments for PayPal). Installing
+or updating the app switches nothing on: someone who manages payments
+switches Online Ordering on in Adminium's **Payments → Apps**. Until then the
+order page and the kitchen read exactly as they always have.
+
+- **The hold.** An order placed to pay now waits for its payment: it holds its
+  pickup slot and its portions, and the kitchen does not see it yet. Unpaid
+  after the kitchen's hold (Settings, "Minutes an order waits for its
+  payment", 10 by default), it is cancelled as not paid in time — never while
+  a payment for it is on its way — and its slot, its portions and any gift
+  card money are let go. Paid, it reaches the board as a new order.
+- **Gift cards.** A gift card still pays first; the rest is what is paid
+  online. An order a gift card pays in full has nothing to pay online.
+- **Refunds.** A paid order the diner cancels, or the kitchen cancels at
+  closing, is refunded by itself; so is one cancelled by someone who may
+  refund (the `manager` role carries that right; the install review shows it,
+  and it can be unticked). Anyone else's cancel shows "Refund owed" until
+  someone who may refund gives the money back. An order nobody collected
+  keeps its money: refunding it is a person's call. A manager can turn the
+  automatic refunds off in Hours ("Refund free cancellations
+  automatically"): every paid cancel then shows "Refund owed".
+- **Trying it.** Someone who manages payments can rehearse the checkout in
+  test mode: their orders are sample data, and go when the sample is removed.
 
 ## Installing it
 
@@ -80,6 +119,16 @@ add it later from the app's settings.
 Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
 and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
+
+**Moving from 0.3.2.** 0.3.3 adds paying online and updates a 0.3.2 install
+in place: update Adminium to 0.3.62 first, then the app. The update adds
+columns and keeps every row: the settings' two payment settings, an order's
+online money and the state it waits for its payment in, a payment's online
+reference and service, a refund's state. Every gift card payment and refund
+already there stays a gift card's. The update asks you to allow the order
+page's two new doors (placing an order to pay now, and paying at pickup
+instead) and the manager's right to refund. Payments stay off until someone
+switches the app on in Payments.
 
 **Moving from 0.3.1.** 0.3.2 changes no table and updates a 0.3.1 install in
 place: update Adminium to 0.3.49 first, then the app. A kitchen may then

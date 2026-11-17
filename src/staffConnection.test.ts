@@ -125,6 +125,7 @@ describe("loadStaffConfig", () => {
       access: { tables: { tickets: ["read", "update"] }, roles: [{ slug: "pos-cashier", name: "POS cashier" }] },
       addOns: { invoices: { version: "1.0.3", settings: { business_name: "Harbour Café" } } },
       sharedTables: { menu_items: ["ordering"] },
+      payments: null,
     });
   });
 
@@ -145,5 +146,19 @@ describe("loadStaffConfig", () => {
     const fetchImpl = ok({});
     expect(await loadStaffConfig({ hostedStaff: false, fetchImpl })).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("what the staff config says of payments", () => {
+  it("reads whether the app takes payments and what this person may do", async () => {
+    const fetchImpl = ok({ connectionId: "con_42", payments: { on: true, online: true, test: false, refund: true } });
+    const config = await loadStaffConfig({ hostedStaff: true, base: "/apps/ordering/staff/", fetchImpl });
+    expect(config?.payments).toEqual({ on: true, online: true, test: false, refund: true });
+  });
+
+  it("says nothing of payments for a server that does not, and takes only true as yes", async () => {
+    expect((await loadStaffConfig({ hostedStaff: true, base: "/apps/ordering/staff/", fetchImpl: ok({ connectionId: "con_42" }) }))?.payments).toBeNull();
+    const odd = await loadStaffConfig({ hostedStaff: true, base: "/apps/ordering/staff/", fetchImpl: ok({ connectionId: "con_42", payments: { on: "yes", refund: 1 } }) });
+    expect(odd?.payments).toEqual({ on: false, online: false, test: false, refund: false });
   });
 });

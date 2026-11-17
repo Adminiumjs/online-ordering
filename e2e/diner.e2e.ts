@@ -2,7 +2,9 @@
  * The order page, walked the way a diner walks it — Home, the menu, a dish,
  * the cart, checkout, the confirmation, Track and its cancel question, Large
  * orders, Find my order and Order again — in light, dark, Arabic and on a
- * phone, each screen shot and swept by axe.
+ * phone, each screen shot and swept by axe. The demo's kitchen takes payments
+ * (no money moves): the walk pays at pickup, and a second order pays now,
+ * through the demo's moment of hand-off, straight to its paid page.
  */
 import { expect, test, type Page } from "@playwright/test";
 
@@ -86,6 +88,11 @@ for (const variant of VARIANTS) {
     await expect(times.getByRole("radio", { checked: true })).not.toHaveAttribute("data-time", before ?? "");
     await expect(times.getByRole("radio", { checked: true })).toBeFocused();
 
+    // Pay now is the choice while the kitchen takes payments; this walk pays at pickup, as today.
+    const payChoice = page.getByRole("radiogroup", { name: t("pay.head") });
+    await expect(payChoice.getByRole("radio", { name: new RegExp(`^${t("pay.now")}`) })).toBeChecked();
+    await payChoice.getByRole("radio", { name: new RegExp(`^${t("co.pay")}`) }).click();
+    await expect(payChoice.getByRole("radio", { name: new RegExp(`^${t("co.pay")}`) })).toBeChecked();
     // "Place order · $16.78": the words before the total, which no other button starts with.
     const placeWords = t("co.place").split("{total}")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     await page.getByRole("button", { name: new RegExp(`^${placeWords}`) }).click();
@@ -125,6 +132,45 @@ for (const variant of VARIANTS) {
     await page.getByRole("button", { name: t("orders.account") }).click();
     await check(page, PROJECT, "orders-menu", variant);
 
+    expect(errors).toEqual([]);
+    await context.close();
+  });
+}
+
+for (const variant of VARIANTS) {
+  test(`paying online in the demo, ${variant}`, async ({ browser }) => {
+    const t = words(variant);
+    const context = await newContext(browser, variant);
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(DEMO_BASE);
+    await page.getByRole("button", { name: t("home.cta.build") }).click();
+    await page.getByRole("button", { name: /^Signature grain bowl/ }).click();
+    await answerSheet(page);
+    await page.getByRole("dialog").getByRole("button", { name: new RegExp(`^${t("sheet.add")}`) }).click();
+    await page.getByRole("button", { name: t("cart.fullPage") }).click();
+    await page.getByRole("main").getByRole("button", { name: t("cart.checkout") }).click();
+    await page.getByLabel(t("co.name"), { exact: true }).fill("Kwame B.");
+    await page.getByLabel(t("co.email"), { exact: true }).fill("kwame.b@mail.example");
+    await expect(page.getByText(t("totals.checking"))).toHaveCount(0);
+    // Pay now, chosen as it opens; one tab stop, and an arrow key moves the choice.
+    const payChoice = page.getByRole("radiogroup", { name: t("pay.head") });
+    const now = payChoice.getByRole("radio", { name: new RegExp(`^${t("pay.now")}`) });
+    await expect(now).toBeChecked();
+    await now.focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(payChoice.getByRole("radio", { name: new RegExp(`^${t("co.pay")}`) })).toBeChecked();
+    await page.keyboard.press("ArrowUp");
+    await expect(now).toBeChecked();
+    await check(page, PROJECT, "checkout-pay", variant);
+    const payWords = t("pay.place").split("{amount}")[0]!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    await page.getByRole("button", { name: new RegExp(`^${payWords}`) }).click();
+    // The moment's hand-off to the pay page, then the order's page, paid.
+    await expect(page.getByText(t("pay.taking"))).toBeVisible();
+    await expect(page.getByText(t("pay.paidOnline"))).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("status").filter({ hasText: t("track.badge.placed") })).toBeVisible();
+    await check(page, PROJECT, "track-paid", variant);
     expect(errors).toEqual([]);
     await context.close();
   });

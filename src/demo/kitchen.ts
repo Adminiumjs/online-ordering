@@ -7,7 +7,7 @@
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
 import { DEMO_HOLIDAYS } from "../data/demo.ts";
-import type { KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
+import type { KitchenPayments, KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
 import { DemoCards } from "./offers.ts";
 import { ApiError, type CardPayment, type Id, type KitchenStock, type LiveFrame, type OrderBody, type OrderReply, type QuoteReply, type Row } from "../data/wire.ts";
 import { venueDay } from "../lib/venueTime.ts";
@@ -106,6 +106,7 @@ export class DemoKitchen implements KitchenPort {
     return {
       order: { ...order },
       payments: this.world.where("payments", (p) => p["order_id"] === order.id).map((p) => ({ ...p })),
+      refunds: this.world.where("payment_refunds", (r) => r["order_id"] === order.id).map((r) => ({ ...r })),
       lines: this.world
         .where("order_items", (l) => l["order_id"] === order.id)
         .sort((a, b) => Number(a["position"] ?? 0) - Number(b["position"] ?? 0))
@@ -139,7 +140,34 @@ export class DemoKitchen implements KitchenPort {
   async cancel(id: Id, from: string, code: string, dish: string | null, note: string | null): Promise<Row> {
     const values = { status: "cancelled", cancel_code: code, cancel_dish: dish, cancel_note: note };
     this.held("orders", values);
-    return { ...this.engine.updateOrder(id, values, this.writer, { from }) };
+    const row = { ...this.engine.updateOrder(id, values, this.writer, { from }) };
+    // A paid order the kitchen cancels is refunded by itself only when this person may refund; otherwise it is owed.
+    this.engine.refundCancelled(id, this.paymentsOn.refund ? "refund-right" : "other");
+    return { ...(this.world.get("orders", id) ?? row) };
+  }
+
+  /** The demo takes payments (no money moves), and Sam, a manager, may give money back. */
+  paymentsOn: KitchenPayments = { on: true, refund: true };
+
+  async payments(): Promise<KitchenPayments> {
+    return { ...this.paymentsOn };
+  }
+
+  async refund(payment: { id: Id; orderId: Id }, amount: string, reason: string, clientKey: string): Promise<Row> {
+    this.signedIn();
+    if (!this.paymentsOn.refund) throw new ApiError(403, "PAYMENT_REFUND_NOT_ALLOWED", "Sending money back needs the right to refund payments.");
+    const again = this.refundKeys.get(clientKey);
+    if (again !== undefined) return { ...this.world.get("payment_refunds", again)! };
+    const row = this.engine.refundOnline(payment.id, Number(amount), { automatic: false, reason, by: this.person.name });
+    this.refundKeys.set(clientKey, row.id);
+    return { ...row };
+  }
+  private readonly refundKeys = new Map<string, Id>();
+
+  async setAutoRefund(on: boolean): Promise<Row> {
+    this.manager("settings");
+    const settings = this.world.settings();
+    return { ...this.world.update("settings", settings.id, { auto_refund: on }) };
   }
 
   async handOff(id: Id, paid: PaidBy, rest?: "cash" | "card"): Promise<Row> {

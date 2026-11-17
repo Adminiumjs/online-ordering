@@ -94,16 +94,20 @@ describe.skipIf(why !== null)(`with the add-ons away, or unable to answer${why =
         expect((await stand.kitchen.handOff(made.data.id, "cash"))["paid_method"]).toBe("cash");
       }, 180_000);
 
-      it("refuses a code or a gift card sent anyway, without a name, and writes nothing", async () => {
+      it("refuses a code sent anyway, without a name; and a gift card sent anyway pays nothing", async () => {
         const diner = await stand.dinerOf();
         const before = (await stand.rows("orders")).length;
         const coded = await refusal(diner.place(await body(diner, "Ben", engine, "12:45", { order_codes: [{ values: { typed: "WELCOME10" } }] }), `ben-absent-${engine}-0123456789ab`));
         expect([coded.status >= 400 && coded.status < 500, coded.params["reason"] ?? null]).toEqual([true, null]);
-        const carded = await refusal(diner.place(await body(diner, "Cy", engine, "13:15", { payments: [{ values: { card_code: "GC-7K2M-W3HN-Q4XP" } }] }), `cy-absent-${engine}-0123456789abc`));
-        expect(carded.status >= 400 && carded.status < 500).toBe(true);
         expect((await stand.rows("orders")).length).toBe(before);
         expect(await stand.rows("order_codes")).toEqual([]);
-        expect(await stand.rows("payments")).toEqual([]);
+        // A gift card sent anyway: no card is found, nothing is taken off any card, and the order owes all of it. (Payments
+        // made online share the table and name no card, so a payment that names none is no longer refused by itself.)
+        const carded = await diner.place(await body(diner, "Cy", engine, "13:15", { payments: [{ values: { card_code: "GC-7K2M-W3HN-Q4XP" } }] }), `cy-absent-${engine}-0123456789abc`);
+        const order = (await stand.rows("orders")).find((o) => o.id === carded.data.id)!;
+        const paid = (await stand.rows("payments")).filter((p) => p["order_id"] === carded.data.id);
+        expect(paid.map((p) => [p["card_id"], p["amount"] ?? null, p["method"]])).toEqual([[null, null, "gift_card"]]);
+        expect([Number(order["paid"] ?? 0), Number(order["to_pay"])]).toEqual([0, Number(order["total"])]);
       }, 120_000);
     });
 

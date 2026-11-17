@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "key": "ordering",
   "name": "Online Ordering",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "publisher": {
     "id": "adminium",
     "name": "Adminium",
@@ -12,13 +12,13 @@
   "license": "AGPL-3.0-only",
   "description": {
     "key": "mft.ordering.desc",
-    "fallback": "A pickup kitchen's order page and its kitchen screens: diners order and pay at pickup, the kitchen confirms, cooks and hands over — every price, slot and status decided by your own database."
+    "fallback": "A pickup kitchen's order page and its kitchen screens: diners order and pay at pickup or online, the kitchen confirms, cooks and hands over — every price, slot and status decided by your own database."
   },
   "categories": [
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.49",
+    "minAdminiumVersion": "0.3.62",
     "engines": [
       "sqlite",
       "postgres",
@@ -814,6 +814,42 @@
               "ar-EG": "إرسال الإيصال بالبريد عند الاستلام",
               "zh-CN": "取餐时邮件发送收据",
               "zh-TW": "取餐時郵件寄送收據"
+            }
+          },
+          {
+            "ref": "pay_hold_minutes",
+            "type": "int",
+            "label": {
+              "en-US": "Minutes an order waits for its payment",
+              "de-DE": "Minuten, die eine Bestellung auf ihre Zahlung wartet",
+              "fr-FR": "Minutes d’attente du paiement d’une commande",
+              "da-DK": "Minutter en bestilling venter på betaling",
+              "cs-CZ": "Minuty, po které objednávka čeká na platbu",
+              "ar-EG": "دقائق انتظار الطلب لدفعه",
+              "zh-CN": "订单等待付款的分钟数",
+              "zh-TW": "訂單等待付款的分鐘數"
+            },
+            "default": 10,
+            "rules": {
+              "validation": {
+                "min": 3,
+                "max": 30
+              }
+            }
+          },
+          {
+            "ref": "auto_refund",
+            "type": "bool",
+            "default": true,
+            "label": {
+              "en-US": "Refund free cancellations automatically",
+              "de-DE": "Kostenlose Stornierungen automatisch erstatten",
+              "fr-FR": "Rembourser automatiquement les annulations gratuites",
+              "da-DK": "Refunder gratis annulleringer automatisk",
+              "cs-CZ": "Bezplatná zrušení vracet automaticky",
+              "ar-EG": "استرداد المبالغ تلقائيًا عند الإلغاء المجاني",
+              "zh-CN": "自动退还免费取消的款项",
+              "zh-TW": "自動退還免費取消的款項"
             }
           },
           {
@@ -2182,6 +2218,7 @@
           "countWhere": {
             "column": "status",
             "values": [
+              "paying",
               "placed",
               "confirmed",
               "preparing",
@@ -2249,6 +2286,7 @@
               "counts": {
                 "column": "status",
                 "in": [
+                  "paying",
                   "placed",
                   "confirmed",
                   "preparing",
@@ -2303,8 +2341,36 @@
         "states": {
           "column": "status",
           "initial": "placed",
+          "starts": [
+            "paying"
+          ],
           "strict": true,
           "moves": {
+            "paying": [
+              {
+                "to": "placed",
+                "requires": {
+                  "where": [
+                    {
+                      "column": "cancel_code",
+                      "isNull": true
+                    }
+                  ],
+                  "noPaymentInFlight": true
+                }
+              },
+              {
+                "to": "cancelled",
+                "requires": {
+                  "where": [
+                    {
+                      "column": "cancel_code",
+                      "isNull": false
+                    }
+                  ]
+                }
+              }
+            ],
             "placed": [
               "confirmed",
               {
@@ -2471,6 +2537,7 @@
             "payments": {
               "via": "order_id",
               "createIn": [
+                "paying",
                 "placed",
                 "confirmed",
                 "preparing",
@@ -2479,6 +2546,23 @@
             }
           },
           "timed": [
+            {
+              "from": "paying",
+              "to": "cancelled",
+              "at": {
+                "column": "placed_at",
+                "plus": {
+                  "minutes": {
+                    "table": "settings",
+                    "column": "pay_hold_minutes"
+                  }
+                }
+              },
+              "set": {
+                "cancel_code": "unpaid"
+              },
+              "waitsForPayment": true
+            },
             {
               "from": "ready",
               "to": "not_collected",
@@ -2619,6 +2703,7 @@
             "ref": "status",
             "type": "enum",
             "enum": [
+              "paying",
               "placed",
               "confirmed",
               "preparing",
@@ -2641,6 +2726,16 @@
             "rules": {
               "enumLabels": {
                 "labels": {
+                  "paying": {
+                    "en-US": "Paying online",
+                    "de-DE": "Wird online bezahlt",
+                    "fr-FR": "Paiement en ligne en cours",
+                    "da-DK": "Betales online",
+                    "cs-CZ": "Platí se online",
+                    "ar-EG": "قيد الدفع عبر الإنترنت",
+                    "zh-CN": "在线付款中",
+                    "zh-TW": "線上付款中"
+                  },
                   "placed": {
                     "en-US": "New",
                     "de-DE": "Neu",
@@ -2713,6 +2808,7 @@
                   }
                 },
                 "tones": {
+                  "paying": "neutral",
                   "placed": "info",
                   "confirmed": "accent",
                   "preparing": "warn",
@@ -3061,14 +3157,14 @@
             "scale": "currency",
             "nullable": true,
             "label": {
-              "en-US": "Paid by gift card",
-              "de-DE": "Mit Geschenkkarte bezahlt",
-              "fr-FR": "Payé par carte cadeau",
-              "da-DK": "Betalt med gavekort",
-              "cs-CZ": "Zaplaceno dárkovou kartou",
-              "ar-EG": "مدفوع ببطاقة هدية",
-              "zh-CN": "礼品卡已付",
-              "zh-TW": "禮品卡已付"
+              "en-US": "Paid",
+              "de-DE": "Bezahlt",
+              "fr-FR": "Payé",
+              "da-DK": "Betalt",
+              "cs-CZ": "Zaplaceno",
+              "ar-EG": "مدفوع",
+              "zh-CN": "已付款",
+              "zh-TW": "已付款"
             },
             "rules": {
               "rollup": {
@@ -3089,14 +3185,153 @@
             "scale": "currency",
             "nullable": true,
             "label": {
-              "en-US": "Left after gift cards",
-              "de-DE": "Rest nach Geschenkkarten",
-              "fr-FR": "Reste après cartes cadeaux",
-              "da-DK": "Tilbage efter gavekort",
-              "cs-CZ": "Zbývá po dárkových kartách",
-              "ar-EG": "المتبقي بعد بطاقات الهدايا",
-              "zh-CN": "礼品卡支付后余额",
-              "zh-TW": "禮品卡支付後餘額"
+              "en-US": "Left to pay",
+              "de-DE": "Noch zu zahlen",
+              "fr-FR": "Reste à payer",
+              "da-DK": "Tilbage at betale",
+              "cs-CZ": "Zbývá zaplatit",
+              "ar-EG": "المتبقي للدفع",
+              "zh-CN": "待付金额",
+              "zh-TW": "待付金額"
+            }
+          },
+          {
+            "ref": "online_taken",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid online",
+              "de-DE": "Online bezahlt",
+              "fr-FR": "Payé en ligne",
+              "da-DK": "Betalt online",
+              "cs-CZ": "Zaplaceno online",
+              "ar-EG": "مدفوع عبر الإنترنت",
+              "zh-CN": "已在线支付",
+              "zh-TW": "已線上付款"
+            },
+            "rules": {
+              "rollup": {
+                "from": "payments",
+                "via": "order_id",
+                "sum": "amount",
+                "unlessSet": "card_code"
+              }
+            }
+          },
+          {
+            "ref": "online_paid",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid online, kept",
+              "de-DE": "Online bezahlt, einbehalten",
+              "fr-FR": "Payé en ligne, conservé",
+              "da-DK": "Betalt online, beholdt",
+              "cs-CZ": "Zaplaceno online, ponecháno",
+              "ar-EG": "مدفوع عبر الإنترنت، محتفظ به",
+              "zh-CN": "已在线支付（未退）",
+              "zh-TW": "已線上付款（未退）"
+            },
+            "rules": {
+              "rollup": {
+                "from": "payments",
+                "via": "order_id",
+                "sum": "kept",
+                "unlessSet": "card_code"
+              }
+            }
+          },
+          {
+            "ref": "online_refunded",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Refunded online",
+              "de-DE": "Online erstattet",
+              "fr-FR": "Remboursé en ligne",
+              "da-DK": "Refunderet online",
+              "cs-CZ": "Vráceno online",
+              "ar-EG": "مُسترد عبر الإنترنت",
+              "zh-CN": "已在线退款",
+              "zh-TW": "已線上退款"
+            },
+            "rules": {
+              "rollup": {
+                "from": "payments",
+                "via": "order_id",
+                "sum": "returned",
+                "unlessSet": "card_code"
+              }
+            }
+          },
+          {
+            "ref": "card_paid",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid by gift card",
+              "de-DE": "Mit Geschenkkarte bezahlt",
+              "fr-FR": "Payé par carte cadeau",
+              "da-DK": "Betalt med gavekort",
+              "cs-CZ": "Zaplaceno dárkovou kartou",
+              "ar-EG": "مدفوع ببطاقة هدية",
+              "zh-CN": "礼品卡已付",
+              "zh-TW": "禮品卡已付"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "isNull": "status"
+                  },
+                  {
+                    "max": [
+                      0,
+                      {
+                        "sub": [
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          },
+                          {
+                            "coalesce": [
+                              "online_paid",
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "max": [
+                      0,
+                      {
+                        "sub": [
+                          {
+                            "coalesce": [
+                              "paid",
+                              0
+                            ]
+                          },
+                          {
+                            "coalesce": [
+                              "online_paid",
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
             }
           },
           {
@@ -3163,7 +3398,8 @@
               "cash",
               "card",
               "gift_card",
-              "mixed"
+              "mixed",
+              "online"
             ],
             "label": {
               "en-US": "Paid by",
@@ -3218,6 +3454,16 @@
                     "ar-EG": "بطاقة هدية وغيرها",
                     "zh-CN": "礼品卡加其他",
                     "zh-TW": "禮品卡加其他"
+                  },
+                  "online": {
+                    "en-US": "Online",
+                    "de-DE": "Online",
+                    "fr-FR": "En ligne",
+                    "da-DK": "Online",
+                    "cs-CZ": "Online",
+                    "ar-EG": "عبر الإنترنت",
+                    "zh-CN": "在线",
+                    "zh-TW": "線上"
                   }
                 }
               }
@@ -3296,49 +3542,6 @@
                       {
                         "and": [
                           {
-                            "gt": [
-                              {
-                                "coalesce": [
-                                  "paid",
-                                  0
-                                ]
-                              },
-                              0
-                            ]
-                          },
-                          {
-                            "gte": [
-                              {
-                                "coalesce": [
-                                  "paid",
-                                  0
-                                ]
-                              },
-                              {
-                                "coalesce": [
-                                  "total",
-                                  0
-                                ]
-                              }
-                            ]
-                          }
-                        ]
-                      },
-                      1,
-                      0
-                    ]
-                  },
-                  {
-                    "if": [
-                      {
-                        "eq": [
-                          "paid_method",
-                          "mixed"
-                        ]
-                      },
-                      {
-                        "if": [
-                          {
                             "and": [
                               {
                                 "gt": [
@@ -3352,7 +3555,7 @@
                                 ]
                               },
                               {
-                                "lt": [
+                                "gte": [
                                   {
                                     "coalesce": [
                                       "paid",
@@ -3369,6 +3572,79 @@
                               }
                             ]
                           },
+                          {
+                            "lte": [
+                              {
+                                "coalesce": [
+                                  "online_paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "eq": [
+                          "paid_method",
+                          "online"
+                        ]
+                      },
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "gt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "gte": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "coalesce": [
+                                          "total",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "online_paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              }
+                            ]
+                          },
                           1,
                           0
                         ]
@@ -3376,18 +3652,65 @@
                       {
                         "if": [
                           {
-                            "lte": [
+                            "eq": [
+                              "paid_method",
+                              "mixed"
+                            ]
+                          },
+                          {
+                            "if": [
                               {
-                                "coalesce": [
-                                  "paid",
-                                  0
+                                "and": [
+                                  {
+                                    "gt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "lt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "coalesce": [
+                                          "total",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  }
                                 ]
                               },
+                              1,
                               0
                             ]
                           },
-                          1,
-                          0
+                          {
+                            "if": [
+                              {
+                                "lte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              1,
+                              0
+                            ]
+                          }
                         ]
                       }
                     ]
@@ -3421,30 +3744,45 @@
                       {
                         "and": [
                           {
-                            "gt": [
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "lte": [
                               {
                                 "coalesce": [
-                                  "paid",
+                                  "online_paid",
                                   0
                                 ]
                               },
                               0
-                            ]
-                          },
-                          {
-                            "gte": [
-                              {
-                                "coalesce": [
-                                  "paid",
-                                  0
-                                ]
-                              },
-                              {
-                                "coalesce": [
-                                  "total",
-                                  0
-                                ]
-                              }
                             ]
                           }
                         ]
@@ -3458,30 +3796,45 @@
                       {
                         "and": [
                           {
-                            "gt": [
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "lte": [
                               {
                                 "coalesce": [
-                                  "paid",
+                                  "online_paid",
                                   0
                                 ]
                               },
                               0
-                            ]
-                          },
-                          {
-                            "gte": [
-                              {
-                                "coalesce": [
-                                  "paid",
-                                  0
-                                ]
-                              },
-                              {
-                                "coalesce": [
-                                  "total",
-                                  0
-                                ]
-                              }
                             ]
                           }
                         ]
@@ -3519,8 +3872,86 @@
                       {
                         "gt": [
                           {
+                            "sub": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
+                              {
+                                "coalesce": [
+                                  "online_paid",
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "gt": [
+                          {
+                            "sub": [
+                              {
+                                "coalesce": [
+                                  "paid",
+                                  0
+                                ]
+                              },
+                              {
+                                "coalesce": [
+                                  "online_paid",
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          0
+                        ]
+                      },
+                      1,
+                      0
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "online_used",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid online",
+              "de-DE": "Online bezahlt",
+              "fr-FR": "Payé en ligne",
+              "da-DK": "Betalt online",
+              "cs-CZ": "Zaplaceno online",
+              "ar-EG": "مدفوع عبر الإنترنت",
+              "zh-CN": "已在线支付",
+              "zh-TW": "已線上付款"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "isNull": "status"
+                  },
+                  {
+                    "if": [
+                      {
+                        "gt": [
+                          {
                             "coalesce": [
-                              "paid",
+                              "online_taken",
                               0
                             ]
                           },
@@ -3537,7 +3968,7 @@
                         "gt": [
                           {
                             "coalesce": [
-                              "paid",
+                              "online_taken",
                               0
                             ]
                           },
@@ -3546,6 +3977,236 @@
                       },
                       1,
                       0
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "ref": "paid_as",
+            "type": "int",
+            "nullable": true,
+            "label": {
+              "en-US": "Paid before pickup",
+              "de-DE": "Vor der Abholung bezahlt",
+              "fr-FR": "Payé avant le retrait",
+              "da-DK": "Betalt før afhentning",
+              "cs-CZ": "Zaplaceno před vyzvednutím",
+              "ar-EG": "مدفوع قبل الاستلام",
+              "zh-CN": "取餐前已付",
+              "zh-TW": "取餐前已付"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "isNull": "status"
+                  },
+                  {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "online_paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      2,
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "gt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "gte": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "coalesce": [
+                                          "total",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "lte": [
+                                  {
+                                    "coalesce": [
+                                      "online_paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          1,
+                          0
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "if": [
+                      {
+                        "and": [
+                          {
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "gt": [
+                              {
+                                "coalesce": [
+                                  "online_paid",
+                                  0
+                                ]
+                              },
+                              0
+                            ]
+                          }
+                        ]
+                      },
+                      2,
+                      {
+                        "if": [
+                          {
+                            "and": [
+                              {
+                                "and": [
+                                  {
+                                    "gt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "gte": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "coalesce": [
+                                          "total",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "lte": [
+                                  {
+                                    "coalesce": [
+                                      "online_paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              }
+                            ]
+                          },
+                          1,
+                          0
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -3581,36 +4242,102 @@
                       {
                         "and": [
                           {
+                            "and": [
+                              {
+                                "gt": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  0
+                                ]
+                              },
+                              {
+                                "gte": [
+                                  {
+                                    "coalesce": [
+                                      "paid",
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "coalesce": [
+                                      "total",
+                                      0
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
                             "gt": [
                               {
                                 "coalesce": [
-                                  "paid",
+                                  "online_paid",
                                   0
                                 ]
                               },
                               0
                             ]
-                          },
+                          }
+                        ]
+                      },
+                      3,
+                      {
+                        "if": [
                           {
-                            "gte": [
+                            "and": [
                               {
-                                "coalesce": [
-                                  "paid",
-                                  0
+                                "and": [
+                                  {
+                                    "gt": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      0
+                                    ]
+                                  },
+                                  {
+                                    "gte": [
+                                      {
+                                        "coalesce": [
+                                          "paid",
+                                          0
+                                        ]
+                                      },
+                                      {
+                                        "coalesce": [
+                                          "total",
+                                          0
+                                        ]
+                                      }
+                                    ]
+                                  }
                                 ]
                               },
                               {
-                                "coalesce": [
-                                  "total",
+                                "lte": [
+                                  {
+                                    "coalesce": [
+                                      "online_paid",
+                                      0
+                                    ]
+                                  },
                                   0
                                 ]
                               }
                             ]
-                          }
+                          },
+                          2,
+                          1
                         ]
-                      },
-                      2,
-                      1
+                      }
                     ]
                   }
                 ]
@@ -3669,7 +4396,8 @@
               "customer_asked",
               "closed",
               "other",
-              "self"
+              "self",
+              "unpaid"
             ],
             "label": {
               "en-US": "Why it was cancelled",
@@ -3744,6 +4472,16 @@
                     "ar-EG": "ألغاه الزبون عبر الإنترنت",
                     "zh-CN": "顾客在线取消",
                     "zh-TW": "顧客線上取消"
+                  },
+                  "unpaid": {
+                    "en-US": "Not paid in time",
+                    "de-DE": "Nicht rechtzeitig bezahlt",
+                    "fr-FR": "Pas payée à temps",
+                    "da-DK": "Ikke betalt i tide",
+                    "cs-CZ": "Nezaplaceno včas",
+                    "ar-EG": "لم يُدفع في الوقت",
+                    "zh-CN": "未按时付款",
+                    "zh-TW": "未按時付款"
                   }
                 }
               }
@@ -4291,6 +5029,7 @@
           "countWhere": {
             "column": "status",
             "values": [
+              "paying",
               "placed",
               "confirmed",
               "preparing",
@@ -4579,6 +5318,7 @@
                   "cancelled"
                 ],
                 "from": [
+                  "paying",
                   "placed",
                   "confirmed"
                 ]
@@ -4832,24 +5572,24 @@
           "law": "tax"
         },
         "label": {
-          "en-US": "Gift card payment",
-          "de-DE": "Zahlung mit Geschenkkarte",
-          "fr-FR": "Paiement par carte cadeau",
-          "da-DK": "Betaling med gavekort",
-          "cs-CZ": "Platba dárkovou kartou",
-          "ar-EG": "دفعة ببطاقة هدية",
-          "zh-CN": "礼品卡付款",
-          "zh-TW": "禮品卡付款"
+          "en-US": "Payment",
+          "de-DE": "Zahlung",
+          "fr-FR": "Paiement",
+          "da-DK": "Betaling",
+          "cs-CZ": "Platba",
+          "ar-EG": "دفعة",
+          "zh-CN": "付款",
+          "zh-TW": "付款"
         },
         "labelPlural": {
-          "en-US": "Gift card payments",
-          "de-DE": "Zahlungen mit Geschenkkarte",
-          "fr-FR": "Paiements par carte cadeau",
-          "da-DK": "Betalinger med gavekort",
-          "cs-CZ": "Platby dárkovou kartou",
-          "ar-EG": "دفعات ببطاقات الهدايا",
-          "zh-CN": "礼品卡付款",
-          "zh-TW": "禮品卡付款"
+          "en-US": "Payments",
+          "de-DE": "Zahlungen",
+          "fr-FR": "Paiements",
+          "da-DK": "Betalinger",
+          "cs-CZ": "Platby",
+          "ar-EG": "الدفعات",
+          "zh-CN": "付款",
+          "zh-TW": "付款"
         },
         "keyField": "card_last4",
         "postings": [
@@ -4881,6 +5621,10 @@
                 "parent": "due"
               },
               "balance_after": "card_balance_after"
+            },
+            "only": {
+              "column": "card_code",
+              "set": true
             }
           }
         ],
@@ -4905,6 +5649,51 @@
               "zh-TW": "訂單"
             },
             "index": true
+          },
+          {
+            "ref": "method",
+            "type": "enum",
+            "enum": [
+              "gift_card",
+              "online"
+            ],
+            "label": {
+              "en-US": "Paid by",
+              "de-DE": "Bezahlt mit",
+              "fr-FR": "Mode de paiement",
+              "da-DK": "Betalt med",
+              "cs-CZ": "Zaplaceno",
+              "ar-EG": "دُفع بـ",
+              "zh-CN": "付款方式",
+              "zh-TW": "付款方式"
+            },
+            "default": "gift_card",
+            "rules": {
+              "enumLabels": {
+                "labels": {
+                  "gift_card": {
+                    "en-US": "Gift card",
+                    "de-DE": "Geschenkkarte",
+                    "fr-FR": "Carte cadeau",
+                    "da-DK": "Gavekort",
+                    "cs-CZ": "Dárková karta",
+                    "ar-EG": "بطاقة هدية",
+                    "zh-CN": "礼品卡",
+                    "zh-TW": "禮品卡"
+                  },
+                  "online": {
+                    "en-US": "Online",
+                    "de-DE": "Online",
+                    "fr-FR": "En ligne",
+                    "da-DK": "Online",
+                    "cs-CZ": "Online",
+                    "ar-EG": "عبر الإنترنت",
+                    "zh-CN": "在线",
+                    "zh-TW": "線上"
+                  }
+                }
+              }
+            }
           },
           {
             "ref": "client_key",
@@ -4937,7 +5726,15 @@
               "zh-CN": "卡号代码",
               "zh-TW": "卡片代碼"
             },
-            "nullable": true
+            "nullable": true,
+            "rules": {
+              "requiredWhen": {
+                "column": "method",
+                "in": [
+                  "gift_card"
+                ]
+              }
+            }
           },
           {
             "ref": "card_id",
@@ -4971,8 +5768,7 @@
                     "eq": "active"
                   }
                 ]
-              },
-              "required": true
+              }
             }
           },
           {
@@ -5047,8 +5843,24 @@
               "rollup": {
                 "from": "payment_refunds",
                 "via": "payment_id",
-                "sum": "amount"
+                "sum": "counted"
               }
+            }
+          },
+          {
+            "ref": "refunded_elsewhere",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Given back at the service",
+              "de-DE": "Beim Zahlungsdienst erstattet",
+              "fr-FR": "Remboursé auprès du service",
+              "da-DK": "Refunderet hos betalingstjenesten",
+              "cs-CZ": "Vráceno u platební služby",
+              "ar-EG": "مُعاد لدى خدمة الدفع",
+              "zh-CN": "在支付服务处退还",
+              "zh-TW": "在付款服務處退還"
             }
           },
           {
@@ -5071,9 +5883,19 @@
                 "sub": [
                   "amount",
                   {
-                    "coalesce": [
-                      "returned",
-                      0
+                    "add": [
+                      {
+                        "coalesce": [
+                          "returned",
+                          0
+                        ]
+                      },
+                      {
+                        "coalesce": [
+                          "refunded_elsewhere",
+                          0
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -5127,6 +5949,54 @@
                 "on": "create"
               }
             }
+          },
+          {
+            "ref": "paid_at",
+            "type": "timestamptz",
+            "label": {
+              "en-US": "Paid at",
+              "de-DE": "Bezahlt am",
+              "fr-FR": "Payé le",
+              "da-DK": "Betalt",
+              "cs-CZ": "Zaplaceno",
+              "ar-EG": "وقت الدفع",
+              "zh-CN": "付款时间",
+              "zh-TW": "付款時間"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "payment_ref",
+            "type": "text",
+            "maxLength": 64,
+            "label": {
+              "en-US": "Online payment reference",
+              "de-DE": "Referenz der Online-Zahlung",
+              "fr-FR": "Référence du paiement en ligne",
+              "da-DK": "Reference for online betaling",
+              "cs-CZ": "Reference platby online",
+              "ar-EG": "مرجع الدفع عبر الإنترنت",
+              "zh-CN": "在线付款参考号",
+              "zh-TW": "線上付款參考號"
+            },
+            "nullable": true,
+            "unique": true
+          },
+          {
+            "ref": "provider",
+            "type": "text",
+            "maxLength": 40,
+            "label": {
+              "en-US": "Paid through",
+              "de-DE": "Bezahlt über",
+              "fr-FR": "Payé via",
+              "da-DK": "Betalt via",
+              "cs-CZ": "Zaplaceno přes",
+              "ar-EG": "مدفوع عبر",
+              "zh-CN": "支付渠道",
+              "zh-TW": "付款管道"
+            },
+            "nullable": true
           }
         ]
       },
@@ -5136,24 +6006,24 @@
           "law": "tax"
         },
         "label": {
-          "en-US": "Money back to a gift card",
-          "de-DE": "Geld zurück auf eine Geschenkkarte",
-          "fr-FR": "Argent rendu sur une carte cadeau",
-          "da-DK": "Penge tilbage til et gavekort",
-          "cs-CZ": "Peníze vrácené na dárkovou kartu",
-          "ar-EG": "مبلغ مُعاد إلى بطاقة هدية",
-          "zh-CN": "退回礼品卡的款项",
-          "zh-TW": "退回禮品卡的款項"
+          "en-US": "Refund",
+          "de-DE": "Erstattung",
+          "fr-FR": "Remboursement",
+          "da-DK": "Refundering",
+          "cs-CZ": "Vrácení peněz",
+          "ar-EG": "استرداد",
+          "zh-CN": "退款",
+          "zh-TW": "退款"
         },
         "labelPlural": {
-          "en-US": "Money back to gift cards",
-          "de-DE": "Geld zurück auf Geschenkkarten",
-          "fr-FR": "Argent rendu sur des cartes cadeaux",
-          "da-DK": "Penge tilbage til gavekort",
-          "cs-CZ": "Peníze vrácené na dárkové karty",
-          "ar-EG": "مبالغ مُعادة إلى بطاقات الهدايا",
-          "zh-CN": "退回礼品卡的款项",
-          "zh-TW": "退回禮品卡的款項"
+          "en-US": "Refunds",
+          "de-DE": "Erstattungen",
+          "fr-FR": "Remboursements",
+          "da-DK": "Refunderinger",
+          "cs-CZ": "Vrácení peněz",
+          "ar-EG": "الاستردادات",
+          "zh-CN": "退款",
+          "zh-TW": "退款"
         },
         "keyField": "reason",
         "postings": [
@@ -5176,7 +6046,8 @@
                 "value": "ordering:payments"
               },
               "against_row": "payment_id"
-            }
+            },
+            "unlessSet": "method"
           }
         ],
         "columns": [
@@ -5190,14 +6061,14 @@
             "type": "fk",
             "references": "payments",
             "label": {
-              "en-US": "Gift card payment",
-              "de-DE": "Zahlung mit Geschenkkarte",
-              "fr-FR": "Paiement par carte cadeau",
-              "da-DK": "Betaling med gavekort",
-              "cs-CZ": "Platba dárkovou kartou",
-              "ar-EG": "دفعة ببطاقة هدية",
-              "zh-CN": "礼品卡付款",
-              "zh-TW": "禮品卡付款"
+              "en-US": "Payment",
+              "de-DE": "Zahlung",
+              "fr-FR": "Paiement",
+              "da-DK": "Betaling",
+              "cs-CZ": "Platba",
+              "ar-EG": "دفعة",
+              "zh-CN": "付款",
+              "zh-TW": "付款"
             },
             "index": true
           },
@@ -5231,6 +6102,47 @@
               "ar-EG": "الطلب",
               "zh-CN": "订单",
               "zh-TW": "訂單"
+            },
+            "rules": {
+              "copy": {
+                "via": "payment_id",
+                "from": "order_id",
+                "mode": "always"
+              }
+            }
+          },
+          {
+            "ref": "method",
+            "type": "enum",
+            "enum": [
+              "online"
+            ],
+            "label": {
+              "en-US": "Given back",
+              "de-DE": "Zurückgegeben",
+              "fr-FR": "Rendu",
+              "da-DK": "Givet tilbage",
+              "cs-CZ": "Vráceno",
+              "ar-EG": "أُعيد",
+              "zh-CN": "已退回",
+              "zh-TW": "已退回"
+            },
+            "nullable": true,
+            "rules": {
+              "enumLabels": {
+                "labels": {
+                  "online": {
+                    "en-US": "Online",
+                    "de-DE": "Online",
+                    "fr-FR": "En ligne",
+                    "da-DK": "Online",
+                    "cs-CZ": "Online",
+                    "ar-EG": "عبر الإنترنت",
+                    "zh-CN": "在线",
+                    "zh-TW": "線上"
+                  }
+                }
+              }
             }
           },
           {
@@ -5309,6 +6221,134 @@
               "stamp": {
                 "set": "user-name",
                 "on": "create"
+              }
+            }
+          },
+          {
+            "ref": "automatic",
+            "type": "bool",
+            "default": false,
+            "label": {
+              "en-US": "Refunded automatically",
+              "de-DE": "Automatisch erstattet",
+              "fr-FR": "Remboursé automatiquement",
+              "da-DK": "Refunderet automatisk",
+              "cs-CZ": "Vráceno automaticky",
+              "ar-EG": "مُسترد تلقائيًا",
+              "zh-CN": "已自动退款",
+              "zh-TW": "已自動退款"
+            }
+          },
+          {
+            "ref": "refund_state",
+            "type": "enum",
+            "enum": [
+              "asked",
+              "pending",
+              "done",
+              "not-sent"
+            ],
+            "label": {
+              "en-US": "Refund",
+              "de-DE": "Erstattung",
+              "fr-FR": "Remboursement",
+              "da-DK": "Refundering",
+              "cs-CZ": "Vrácení peněz",
+              "ar-EG": "استرداد",
+              "zh-CN": "退款",
+              "zh-TW": "退款"
+            },
+            "nullable": true,
+            "rules": {
+              "enumLabels": {
+                "labels": {
+                  "asked": {
+                    "en-US": "Asked",
+                    "de-DE": "Angefragt",
+                    "fr-FR": "Demandé",
+                    "da-DK": "Anmodet",
+                    "cs-CZ": "Vyžádáno",
+                    "ar-EG": "مطلوب",
+                    "zh-CN": "已申请",
+                    "zh-TW": "已申請"
+                  },
+                  "pending": {
+                    "en-US": "On its way",
+                    "de-DE": "Unterwegs",
+                    "fr-FR": "En route",
+                    "da-DK": "På vej",
+                    "cs-CZ": "Na cestě",
+                    "ar-EG": "في الطريق",
+                    "zh-CN": "退款中",
+                    "zh-TW": "退款中"
+                  },
+                  "done": {
+                    "en-US": "Refunded",
+                    "de-DE": "Erstattet",
+                    "fr-FR": "Remboursé",
+                    "da-DK": "Refunderet",
+                    "cs-CZ": "Vráceno",
+                    "ar-EG": "مُسترد",
+                    "zh-CN": "已退款",
+                    "zh-TW": "已退款"
+                  },
+                  "not-sent": {
+                    "en-US": "Not sent",
+                    "de-DE": "Nicht gesendet",
+                    "fr-FR": "Non envoyé",
+                    "da-DK": "Ikke sendt",
+                    "cs-CZ": "Neodesláno",
+                    "ar-EG": "لم يُرسل",
+                    "zh-CN": "未发送",
+                    "zh-TW": "未寄送"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "ref": "provider_ref",
+            "type": "text",
+            "maxLength": 255,
+            "label": {
+              "en-US": "Refund reference",
+              "de-DE": "Referenz der Erstattung",
+              "fr-FR": "Référence du remboursement",
+              "da-DK": "Reference for refundering",
+              "cs-CZ": "Reference vrácení peněz",
+              "ar-EG": "مرجع الاسترداد",
+              "zh-CN": "退款参考号",
+              "zh-TW": "退款參考號"
+            },
+            "nullable": true
+          },
+          {
+            "ref": "counted",
+            "type": "decimal",
+            "scale": "currency",
+            "nullable": true,
+            "label": {
+              "en-US": "Counted",
+              "de-DE": "Angerechnet",
+              "fr-FR": "Compté",
+              "da-DK": "Medregnet",
+              "cs-CZ": "Započteno",
+              "ar-EG": "المحتسب",
+              "zh-CN": "计入金额",
+              "zh-TW": "計入金額"
+            },
+            "rules": {
+              "formula": {
+                "if": [
+                  {
+                    "eq": [
+                      "refund_state",
+                      "not-sent"
+                    ]
+                  },
+                  0,
+                  "amount"
+                ]
               }
             }
           }
@@ -5768,7 +6808,12 @@
               "card-money-returned",
               "card-money-kept",
               "order-receipt",
-              "enquiry-received"
+              "enquiry-received",
+              "order-confirmation-paid",
+              "order-ready-paid",
+              "order-cancelled-paid",
+              "order-cancelled-paid-by-you",
+              "order-refunded"
             ],
             "label": {
               "en-US": "Kind",
@@ -5932,6 +6977,56 @@
                     "ar-EG": "استُلم استفسار طلب كبير",
                     "zh-CN": "已收到团体订餐咨询",
                     "zh-TW": "已收到大量訂單詢問"
+                  },
+                  "order-confirmation-paid": {
+                    "en-US": "Order confirmation (paid online)",
+                    "de-DE": "Bestellbestätigung (online bezahlt)",
+                    "fr-FR": "Confirmation de commande (payée en ligne)",
+                    "da-DK": "Ordrebekræftelse (betalt online)",
+                    "cs-CZ": "Potvrzení objednávky (zaplaceno online)",
+                    "ar-EG": "تأكيد الطلب (مدفوع عبر الإنترنت)",
+                    "zh-CN": "订单确认（已在线支付）",
+                    "zh-TW": "訂單確認（已線上付款）"
+                  },
+                  "order-ready-paid": {
+                    "en-US": "Order ready (paid online)",
+                    "de-DE": "Bestellung fertig (online bezahlt)",
+                    "fr-FR": "Commande prête (payée en ligne)",
+                    "da-DK": "Bestilling klar (betalt online)",
+                    "cs-CZ": "Objednávka připravena (zaplaceno online)",
+                    "ar-EG": "الطلب جاهز (مدفوع عبر الإنترنت)",
+                    "zh-CN": "订单已备好（已在线支付）",
+                    "zh-TW": "訂單已備妥（已線上付款）"
+                  },
+                  "order-cancelled-paid": {
+                    "en-US": "Cancelled after paying online",
+                    "de-DE": "Storniert nach Online-Zahlung",
+                    "fr-FR": "Annulée après un paiement en ligne",
+                    "da-DK": "Annulleret efter betaling online",
+                    "cs-CZ": "Zrušeno po platbě online",
+                    "ar-EG": "أُلغي بعد الدفع عبر الإنترنت",
+                    "zh-CN": "在线支付后已取消",
+                    "zh-TW": "線上付款後已取消"
+                  },
+                  "order-cancelled-paid-by-you": {
+                    "en-US": "Cancelled by the customer after paying online",
+                    "de-DE": "Vom Gast storniert nach Online-Zahlung",
+                    "fr-FR": "Annulée par le client après un paiement en ligne",
+                    "da-DK": "Annulleret af gæsten efter betaling online",
+                    "cs-CZ": "Zrušeno hostem po platbě online",
+                    "ar-EG": "ألغاه الزبون بعد الدفع عبر الإنترنت",
+                    "zh-CN": "顾客在线支付后已取消",
+                    "zh-TW": "顧客線上付款後已取消"
+                  },
+                  "order-refunded": {
+                    "en-US": "Money paid online refunded",
+                    "de-DE": "Online-Zahlung erstattet",
+                    "fr-FR": "Paiement en ligne remboursé",
+                    "da-DK": "Online betaling refunderet",
+                    "cs-CZ": "Vrácení platby online",
+                    "ar-EG": "استرداد مبلغ مدفوع عبر الإنترنت",
+                    "zh-CN": "在线付款已退款",
+                    "zh-TW": "線上付款已退款"
                   }
                 }
               }
@@ -8748,6 +9843,7 @@
         "table:@order_items:read",
         "table:@order_item_modifiers:read",
         "table:@payments:read",
+        "table:@payment_refunds:read",
         "table:@settings:read",
         "table:@hours:read",
         "table:@closures:read",
@@ -8830,15 +9926,20 @@
           "readable": [
             "id",
             "order_id",
+            "method",
             "client_key",
             "card_id",
             "card_last4",
             "amount",
             "card_balance_after",
             "returned",
+            "refunded_elsewhere",
             "kept",
             "made_at",
-            "made_by"
+            "made_by",
+            "paid_at",
+            "payment_ref",
+            "provider"
           ],
           "creatable": [
             "order_id",
@@ -9036,7 +10137,8 @@
         "table:@orders:read_pii",
         "table:@customers:read_pii",
         "table:@enquiries:read_pii",
-        "table:@messages:read_pii"
+        "table:@messages:read_pii",
+        "payments:@:refund"
       ],
       "limits": {
         "orders": {
@@ -9143,20 +10245,38 @@
           "readable": [
             "id",
             "order_id",
+            "method",
             "client_key",
             "card_id",
             "card_last4",
             "amount",
             "card_balance_after",
             "returned",
+            "refunded_elsewhere",
             "kept",
             "made_at",
-            "made_by"
+            "made_by",
+            "paid_at",
+            "payment_ref",
+            "provider"
           ],
           "creatable": [
             "order_id",
             "card_code",
             "client_key"
+          ]
+        },
+        "payment_refunds": {
+          "creatable": [
+            "payment_id",
+            "order_id",
+            "client_key",
+            "method",
+            "amount",
+            "reason"
+          ],
+          "writable": [
+            "reason"
           ]
         }
       },
@@ -9331,6 +10451,9 @@
         "paid",
         "due",
         "to_pay",
+        "online_taken",
+        "online_paid",
+        "online_refunded",
         "paid_method",
         "rest_paid_by",
         "cancel_code",
@@ -9346,20 +10469,23 @@
         "link_expires"
       ],
       "writable": [
-        "status"
+        "status",
+        "cancel_code"
       ],
       "writableValues": {
         "status": [
-          "cancelled"
+          "cancelled",
+          "placed"
+        ],
+        "cancel_code": [
+          "self"
         ]
       },
       "writableWhen": {
         "status": [
-          "placed"
+          "placed",
+          "paying"
         ]
-      },
-      "defaults": {
-        "cancel_code": "self"
       }
     },
     {
@@ -9375,6 +10501,7 @@
       "select": [
         "id",
         "order_id",
+        "method",
         "amount",
         "returned",
         "kept",
@@ -9598,7 +10725,8 @@
         "preorder_days",
         "prep_minutes",
         "max_items",
-        "online_on"
+        "online_on",
+        "auto_refund"
       ],
       "pictures": [
         "photo_hero",
@@ -9631,6 +10759,9 @@
         "paid",
         "due",
         "to_pay",
+        "online_taken",
+        "online_paid",
+        "online_refunded",
         "paid_method",
         "rest_paid_by",
         "cancel_code",
@@ -9718,6 +10849,7 @@
       "maxOpen": {
         "column": "status",
         "values": [
+          "paying",
           "placed",
           "confirmed",
           "preparing",
@@ -9913,6 +11045,9 @@
         "paid",
         "due",
         "to_pay",
+        "online_taken",
+        "online_paid",
+        "online_refunded",
         "paid_method",
         "rest_paid_by",
         "cancel_code",
@@ -9936,20 +11071,23 @@
         "address": "email"
       },
       "writable": [
-        "status"
+        "status",
+        "cancel_code"
       ],
       "writableValues": {
         "status": [
-          "cancelled"
+          "cancelled",
+          "placed"
+        ],
+        "cancel_code": [
+          "self"
         ]
       },
       "writableWhen": {
         "status": [
-          "placed"
+          "placed",
+          "paying"
         ]
-      },
-      "defaults": {
-        "cancel_code": "self"
       }
     },
     {
@@ -9966,6 +11104,7 @@
       "select": [
         "id",
         "order_id",
+        "method",
         "amount",
         "returned",
         "kept",
@@ -10016,6 +11155,244 @@
         "name",
         "price_delta"
       ]
+    },
+    {
+      "table": "orders",
+      "methods": [
+        "POST"
+      ],
+      "humanCheck": true,
+      "level": "verified",
+      "select": [
+        "id",
+        "number",
+        "status",
+        "channel",
+        "pickup_at",
+        "note",
+        "item_count",
+        "subtotal",
+        "tax_rate",
+        "discount",
+        "net",
+        "tax",
+        "total",
+        "paid",
+        "due",
+        "to_pay",
+        "online_taken",
+        "online_paid",
+        "online_refunded",
+        "paid_method",
+        "rest_paid_by",
+        "cancel_code",
+        "cancel_dish",
+        "cancel_note",
+        "placed_at",
+        "confirmed_at",
+        "preparing_at",
+        "ready_at",
+        "picked_up_at",
+        "cancelled_at",
+        "not_collected_at",
+        "link_expires"
+      ],
+      "writable": [
+        "name",
+        "email",
+        "phone",
+        "language",
+        "pickup_at",
+        "note",
+        "client_key",
+        "opt_in"
+      ],
+      "requires": [
+        "name",
+        "email"
+      ],
+      "requireSetting": [
+        {
+          "table": "settings",
+          "column": "online_on"
+        }
+      ],
+      "claimedBy": {
+        "table": "customers",
+        "column": "customer_id",
+        "optional": true
+      },
+      "identity": {
+        "table": "customers",
+        "email": "email",
+        "link": "customer_id",
+        "fill": {
+          "name": "name",
+          "language": "language"
+        }
+      },
+      "consent": {
+        "column": "opt_in",
+        "purpose": "newsletter",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Email me news and offers from {venue}\nEvery email has a link to stop them.",
+            "de-DE": "Schick mir Neuigkeiten und Angebote von {venue} per E-Mail\nJede E-Mail enthält einen Link, mit dem du sie abbestellen kannst.",
+            "fr-FR": "M’envoyer par e-mail les nouvelles et les offres de {venue}\nChaque e-mail contient un lien pour ne plus les recevoir.",
+            "da-DK": "Send mig nyheder og tilbud fra {venue} på mail\nHver mail har et link, så du kan stoppe dem.",
+            "cs-CZ": "Chci dostávat e-mailem novinky a nabídky od {venue}\nKaždý e-mail obsahuje odkaz, kterým je můžete odhlásit.",
+            "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
+            "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
+            "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
+        }
+      },
+      "shareLink": "link_token",
+      "anonymous": {
+        "perValue": {
+          "columns": [
+            "email"
+          ],
+          "n": 10
+        },
+        "perIpHour": 10,
+        "perKeyHour": 300,
+        "plainText": [
+          "name",
+          {
+            "column": "note",
+            "digits": 4,
+            "max": 140
+          }
+        ]
+      },
+      "maxOpen": {
+        "column": "status",
+        "values": [
+          "paying",
+          "placed",
+          "confirmed",
+          "preparing",
+          "ready"
+        ],
+        "n": 3,
+        "upcoming": "pickup_at"
+      },
+      "children": {
+        "order_items": {
+          "via": "order_id",
+          "writable": [
+            "menu_item_id",
+            "qty",
+            "note"
+          ],
+          "select": [
+            "id",
+            "position",
+            "menu_item_id",
+            "qty",
+            "note",
+            "name",
+            "unit_price",
+            "options_total",
+            "unit_total",
+            "line_total",
+            "discount"
+          ],
+          "position": "position",
+          "min": 1,
+          "max": 20,
+          "plainText": [
+            {
+              "column": "note",
+              "digits": 4,
+              "max": 80
+            }
+          ],
+          "sumMax": {
+            "column": "qty",
+            "max": {
+              "table": "settings",
+              "column": "max_items"
+            }
+          },
+          "children": {
+            "order_item_modifiers": {
+              "via": "order_item_id",
+              "writable": [
+                "modifier_id"
+              ],
+              "select": [
+                "id",
+                "modifier_id",
+                "name",
+                "price_delta"
+              ],
+              "max": 20,
+              "agrees": [
+                {
+                  "column": "modifier_id",
+                  "path": [
+                    "group_id",
+                    "item_id"
+                  ],
+                  "eq": {
+                    "parent": "menu_item_id"
+                  }
+                }
+              ],
+              "counts": [
+                {
+                  "by": [
+                    "modifier_id",
+                    "group_id"
+                  ],
+                  "every": {
+                    "column": "item_id",
+                    "eq": {
+                      "parent": "menu_item_id"
+                    }
+                  },
+                  "min": "min",
+                  "max": "max"
+                }
+              ]
+            }
+          }
+        },
+        "order_codes": {
+          "via": "order_id",
+          "writable": [
+            "typed"
+          ],
+          "select": [
+            "id",
+            "typed"
+          ],
+          "max": 12
+        },
+        "payments": {
+          "via": "order_id",
+          "writable": [
+            "card_code"
+          ],
+          "select": [
+            "id",
+            "amount",
+            "card_last4"
+          ],
+          "max": 1
+        }
+      },
+      "dryRun": true,
+      "expect": "total",
+      "clientKey": "client_key",
+      "defaults": {
+        "status": "paying"
+      },
+      "pay": true,
+      "requirePayments": "on"
     }
   ],
   "outbox": {
@@ -10075,7 +11452,12 @@
       "order-confirmation-prepaid": "ordering-order-confirmation-prepaid",
       "order-ready-prepaid": "ordering-order-ready-prepaid",
       "card-money-returned": "ordering-card-money-returned",
-      "card-money-kept": "ordering-card-money-kept"
+      "card-money-kept": "ordering-card-money-kept",
+      "order-confirmation-paid": "ordering-order-confirmation-paid",
+      "order-ready-paid": "ordering-order-ready-paid",
+      "order-cancelled-paid": "ordering-order-cancelled-paid",
+      "order-cancelled-paid-by-you": "ordering-order-cancelled-paid-by-you",
+      "order-refunded": "ordering-order-refunded"
     },
     "classes": {
       "order-confirmation": "service",
@@ -10092,7 +11474,12 @@
       "order-confirmation-prepaid": "service",
       "order-ready-prepaid": "service",
       "card-money-returned": "service",
-      "card-money-kept": "service"
+      "card-money-kept": "service",
+      "order-confirmation-paid": "service",
+      "order-ready-paid": "service",
+      "order-cancelled-paid": "service",
+      "order-cancelled-paid-by-you": "service",
+      "order-refunded": "service"
     },
     "producers": [
       {
@@ -10104,7 +11491,23 @@
             "column": "confirm_as",
             "eq": 1
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "paying",
+              "cancelled"
+            ],
+            "reason": "no-longer-needed"
+          },
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-confirmation-prepaid",
@@ -10115,7 +11518,23 @@
             "column": "confirm_as",
             "eq": 2
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "paying",
+              "cancelled"
+            ],
+            "reason": "no-longer-needed"
+          },
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-confirmation-phone",
@@ -10127,6 +11546,52 @@
             "eq": "phone"
           }
         }
+      },
+      {
+        "kind": "order-confirmation-paid",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "placed",
+          "where": {
+            "column": "confirm_as",
+            "eq": 3
+          }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "cancelled"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-confirmation",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "placed",
+          "where": {
+            "column": "confirm_as",
+            "eq": 1
+          }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "cancelled"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-ready",
@@ -10142,7 +11607,7 @@
           "column": "status",
           "to": "ready",
           "where": {
-            "column": "prepaid",
+            "column": "paid_as",
             "eq": 0
           }
         },
@@ -10176,8 +11641,42 @@
           "column": "status",
           "to": "ready",
           "where": {
-            "column": "prepaid",
+            "column": "paid_as",
             "eq": 1
+          }
+        },
+        "holdSeconds": 20,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "placed",
+              "confirmed",
+              "preparing",
+              "picked_up",
+              "cancelled",
+              "not_collected"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-ready-paid",
+        "link": "order_id",
+        "gate": {
+          "setting": {
+            "table": "settings",
+            "column": "ready_email_on"
+          }
+        },
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "ready",
+          "where": {
+            "column": "paid_as",
+            "eq": 2
           }
         },
         "holdSeconds": 20,
@@ -10207,7 +11706,15 @@
             "column": "cancel_code",
             "eq": "ran_out"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-too-busy",
@@ -10220,7 +11727,15 @@
             "column": "cancel_code",
             "eq": "too_busy"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-customer-asked",
@@ -10233,7 +11748,15 @@
             "column": "cancel_code",
             "eq": "customer_asked"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-closed",
@@ -10246,7 +11769,15 @@
             "column": "cancel_code",
             "eq": "closed"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-other",
@@ -10259,7 +11790,15 @@
             "column": "cancel_code",
             "eq": "other"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "order-cancelled-by-you",
@@ -10272,7 +11811,57 @@
             "column": "cancel_code",
             "eq": "self"
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 1,
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-cancelled-paid",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "cancelled",
+          "where": {
+            "column": "online_used",
+            "eq": 1
+          }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "cancel_code",
+            "eq": "self",
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-cancelled-paid-by-you",
+        "link": "order_id",
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "cancelled",
+          "where": {
+            "column": "cancel_code",
+            "eq": "self"
+          }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "online_used",
+            "eq": 0,
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "card-money-returned",
@@ -10285,7 +11874,15 @@
             "column": "card_used",
             "eq": 1
           }
-        }
+        },
+        "holdSeconds": 5,
+        "dropWhen": [
+          {
+            "column": "cancel_code",
+            "eq": "unpaid",
+            "reason": "no-longer-needed"
+          }
+        ]
       },
       {
         "kind": "card-money-kept",
@@ -10338,6 +11935,20 @@
           "name": "name",
           "language": "language"
         }
+      },
+      {
+        "kind": "order-refunded",
+        "link": "order_id",
+        "onCreate": {
+          "table": "payment_refunds",
+          "via": "order_id",
+          "where": {
+            "column": "method",
+            "eq": "online"
+          }
+        },
+        "repeatBy": "online_refunded",
+        "holdSeconds": 5
       }
     ]
   },
@@ -10519,7 +12130,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gift card ending {{row.card_last4}}",
@@ -10671,7 +12288,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Geschenkkarte mit Endung {{row.card_last4}}",
@@ -10823,7 +12446,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Carte cadeau se terminant par {{row.card_last4}}",
@@ -10975,7 +12604,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gavekort, der ender på {{row.card_last4}}",
@@ -11127,7 +12762,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Dárková karta končící na {{row.card_last4}}",
@@ -11279,7 +12920,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
@@ -11431,7 +13078,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "尾号 {{row.card_last4}} 的礼品卡",
@@ -11583,7 +13236,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "末碼 {{row.card_last4}} 的禮品卡",
@@ -11766,7 +13425,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gift card ending {{row.card_last4}}",
@@ -11911,7 +13576,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Geschenkkarte mit Endung {{row.card_last4}}",
@@ -12056,7 +13727,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Carte cadeau se terminant par {{row.card_last4}}",
@@ -12201,7 +13878,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gavekort, der ender på {{row.card_last4}}",
@@ -12346,7 +14029,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Dárková karta končící na {{row.card_last4}}",
@@ -12491,7 +14180,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
@@ -12636,7 +14331,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "尾号 {{row.card_last4}} 的礼品卡",
@@ -12781,7 +14482,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "末碼 {{row.card_last4}} 的禮品卡",
@@ -14818,7 +16525,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gift card ending {{row.card_last4}}",
@@ -14970,7 +16683,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Geschenkkarte mit Endung {{row.card_last4}}",
@@ -15122,7 +16841,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Carte cadeau se terminant par {{row.card_last4}}",
@@ -15274,7 +16999,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Gavekort, der ender på {{row.card_last4}}",
@@ -15426,7 +17157,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "Dárková karta končící na {{row.card_last4}}",
@@ -15578,7 +17315,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
@@ -15730,7 +17473,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "尾号 {{row.card_last4}} 的礼品卡",
@@ -15882,7 +17631,13 @@
                   "table": "payments",
                   "via": "order_id",
                   "orderBy": "made_at",
-                  "limit": 10
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
                 },
                 "row": {
                   "title": "末碼 {{row.card_last4}} 的禮品卡",
@@ -16172,22 +17927,22 @@
         "zh-TW": "禮品卡退款"
       },
       "vars": [
+        "order.card_paid.money",
         "order.number",
-        "order.paid.money",
         "practice.address",
         "practice.phone"
       ],
       "locales": {
         "en-US": {
           "subject": "Your gift card got its money back",
-          "preheader": "#{{order.number}} · {{order.paid.money}} back on your gift card",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} back on your gift card",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "{{order.paid.money}} went back to your gift card for order #{{order.number}}."
+                  "{{order.card_paid.money}} went back to your gift card for order #{{order.number}}."
                 ]
               }
             }
@@ -16196,14 +17951,14 @@
         },
         "de-DE": {
           "subject": "Deine Geschenkkarte hat ihr Geld zurück",
-          "preheader": "#{{order.number}} · {{order.paid.money}} wieder auf deiner Geschenkkarte",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} wieder auf deiner Geschenkkarte",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "{{order.paid.money}} sind für die Bestellung #{{order.number}} zurück auf deine Geschenkkarte gegangen."
+                  "{{order.card_paid.money}} sind für die Bestellung #{{order.number}} zurück auf deine Geschenkkarte gegangen."
                 ]
               }
             }
@@ -16212,14 +17967,14 @@
         },
         "fr-FR": {
           "subject": "Votre carte cadeau a été recréditée",
-          "preheader": "#{{order.number}} · {{order.paid.money}} de retour sur votre carte cadeau",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} de retour sur votre carte cadeau",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "{{order.paid.money}} ont été recrédités sur votre carte cadeau pour la commande #{{order.number}}."
+                  "{{order.card_paid.money}} ont été recrédités sur votre carte cadeau pour la commande #{{order.number}}."
                 ]
               }
             }
@@ -16228,14 +17983,14 @@
         },
         "da-DK": {
           "subject": "Dit gavekort har fået pengene tilbage",
-          "preheader": "#{{order.number}} · {{order.paid.money}} tilbage på dit gavekort",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} tilbage på dit gavekort",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "{{order.paid.money}} er gået tilbage til dit gavekort for bestilling #{{order.number}}."
+                  "{{order.card_paid.money}} er gået tilbage til dit gavekort for bestilling #{{order.number}}."
                 ]
               }
             }
@@ -16244,14 +17999,14 @@
         },
         "cs-CZ": {
           "subject": "Na vaši dárkovou kartu se vrátily peníze",
-          "preheader": "#{{order.number}} · {{order.paid.money}} zpět na vaší dárkové kartě",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} zpět na vaší dárkové kartě",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "Za objednávku #{{order.number}} se na vaši dárkovou kartu vrátilo {{order.paid.money}}."
+                  "Za objednávku #{{order.number}} se na vaši dárkovou kartu vrátilo {{order.card_paid.money}}."
                 ]
               }
             }
@@ -16260,14 +18015,14 @@
         },
         "ar-EG": {
           "subject": "عاد المبلغ إلى بطاقة هديتك",
-          "preheader": "#{{order.number}} · عاد {{order.paid.money}} إلى بطاقة هديتك",
+          "preheader": "#{{order.number}} · عاد {{order.card_paid.money}} إلى بطاقة هديتك",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "عاد {{order.paid.money}} إلى بطاقة هديتك عن الطلب #{{order.number}}."
+                  "عاد {{order.card_paid.money}} إلى بطاقة هديتك عن الطلب #{{order.number}}."
                 ]
               }
             }
@@ -16276,14 +18031,14 @@
         },
         "zh-CN": {
           "subject": "款项已退回您的礼品卡",
-          "preheader": "#{{order.number}} · {{order.paid.money}} 已退回您的礼品卡",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} 已退回您的礼品卡",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "订单 #{{order.number}} 的 {{order.paid.money}} 已退回您的礼品卡。"
+                  "订单 #{{order.number}} 的 {{order.card_paid.money}} 已退回您的礼品卡。"
                 ]
               }
             }
@@ -16292,14 +18047,14 @@
         },
         "zh-TW": {
           "subject": "款項已退回您的禮品卡",
-          "preheader": "#{{order.number}} · {{order.paid.money}} 已退回您的禮品卡",
+          "preheader": "#{{order.number}} · {{order.card_paid.money}} 已退回您的禮品卡",
           "blocks": [
             {
               "block": "email.text",
               "id": "body",
               "data": {
                 "paras": [
-                  "訂單 #{{order.number}} 的 {{order.paid.money}} 已退回您的禮品卡。"
+                  "訂單 #{{order.number}} 的 {{order.card_paid.money}} 已退回您的禮品卡。"
                 ]
               }
             }
@@ -16321,8 +18076,8 @@
         "zh-TW": "禮品卡款項保留"
       },
       "vars": [
+        "order.card_paid.money",
         "order.number",
-        "order.paid.money",
         "practice.address",
         "practice.phone"
       ],
@@ -16336,7 +18091,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Your gift card paid {{order.paid.money}} for order #{{order.number}}, which was not collected.",
+                  "Your gift card paid {{order.card_paid.money}} for order #{{order.number}}, which was not collected.",
                   "Ask at the counter, or call us on {{practice.phone}}."
                 ]
               }
@@ -16353,7 +18108,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Deine Geschenkkarte hat {{order.paid.money}} für die Bestellung #{{order.number}} bezahlt, die nicht abgeholt wurde.",
+                  "Deine Geschenkkarte hat {{order.card_paid.money}} für die Bestellung #{{order.number}} bezahlt, die nicht abgeholt wurde.",
                   "Frag an der Theke nach oder ruf uns unter {{practice.phone}} an."
                 ]
               }
@@ -16370,7 +18125,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Votre carte cadeau a payé {{order.paid.money}} pour la commande #{{order.number}}, qui n’a pas été retirée.",
+                  "Votre carte cadeau a payé {{order.card_paid.money}} pour la commande #{{order.number}}, qui n’a pas été retirée.",
                   "Demandez au comptoir, ou appelez-nous au {{practice.phone}}."
                 ]
               }
@@ -16387,7 +18142,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Dit gavekort betalte {{order.paid.money}} for bestilling #{{order.number}}, som ikke blev afhentet.",
+                  "Dit gavekort betalte {{order.card_paid.money}} for bestilling #{{order.number}}, som ikke blev afhentet.",
                   "Spørg ved disken, eller ring til os på {{practice.phone}}."
                 ]
               }
@@ -16404,7 +18159,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "Vaše dárková karta zaplatila {{order.paid.money}} za objednávku #{{order.number}}, která nebyla vyzvednuta.",
+                  "Vaše dárková karta zaplatila {{order.card_paid.money}} za objednávku #{{order.number}}, která nebyla vyzvednuta.",
                   "Zeptejte se u pultu, nebo nám zavolejte na {{practice.phone}}."
                 ]
               }
@@ -16421,7 +18176,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "دفعت بطاقة هديتك {{order.paid.money}} عن الطلب #{{order.number}} الذي لم يُستلم.",
+                  "دفعت بطاقة هديتك {{order.card_paid.money}} عن الطلب #{{order.number}} الذي لم يُستلم.",
                   "اسأل عند المنضدة، أو اتصل بنا على {{practice.phone}}."
                 ]
               }
@@ -16438,7 +18193,7 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "您的礼品卡为订单 #{{order.number}} 支付了 {{order.paid.money}}，但该订单未被取走。",
+                  "您的礼品卡为订单 #{{order.number}} 支付了 {{order.card_paid.money}}，但该订单未被取走。",
                   "请到柜台咨询，或致电 {{practice.phone}}。"
                 ]
               }
@@ -16455,8 +18210,2159 @@
               "id": "body",
               "data": {
                 "paras": [
-                  "您的禮品卡為訂單 #{{order.number}} 支付了 {{order.paid.money}}，但該訂單未被取走。",
+                  "您的禮品卡為訂單 #{{order.number}} 支付了 {{order.card_paid.money}}，但該訂單未被取走。",
                   "請到櫃檯洽詢，或致電 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-confirmation-paid",
+      "name": {
+        "en-US": "Order confirmation (paid online)",
+        "de-DE": "Bestellbestätigung (online bezahlt)",
+        "fr-FR": "Confirmation de commande (payée en ligne)",
+        "da-DK": "Ordrebekræftelse (betalt online)",
+        "cs-CZ": "Potvrzení objednávky (zaplaceno online)",
+        "ar-EG": "تأكيد الطلب (مدفوع عبر الإنترنت)",
+        "zh-CN": "订单确认（已在线支付）",
+        "zh-TW": "訂單確認（已線上付款）"
+      },
+      "vars": [
+        "manage_url",
+        "order.link_token",
+        "order.number",
+        "order.online_taken.money",
+        "order.pickup_at.day_month",
+        "order.pickup_at.relative_day",
+        "order.pickup_at.time",
+        "order.subtotal",
+        "order.tax.money",
+        "order.tax_rate.percent",
+        "order.total",
+        "practice.address",
+        "practice.directions",
+        "practice.phone",
+        "recipient.first_name"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "Your order #{{order.number}} is in",
+          "preheader": "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · paid online",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Thanks, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Subtotal",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Tax {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "Total",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Gift card ending {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Paid online",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Paid online · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Follow your order",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Deine Bestellung #{{order.number}} ist eingegangen",
+          "preheader": "Abholung {{order.pickup_at.relative_day}} um {{order.pickup_at.time}} · online bezahlt",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Danke, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Wir haben deine Bestellung #{{order.number}} für {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} um {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Zwischensumme",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Steuer {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "Gesamt",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Geschenkkarte mit Endung {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Online bezahlt",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Online bezahlt · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Bestellung verfolgen",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Votre commande #{{order.number}} est enregistrée",
+          "preheader": "Retrait {{order.pickup_at.relative_day}} à {{order.pickup_at.time}} · payé en ligne",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Merci, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Nous avons votre commande #{{order.number}} pour {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} à {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Sous-total",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Taxe {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "Total",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Carte cadeau se terminant par {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Payé en ligne",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Payé en ligne · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Suivre votre commande",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Din bestilling #{{order.number}} er modtaget",
+          "preheader": "Afhentning {{order.pickup_at.relative_day}} kl. {{order.pickup_at.time}} · betalt online",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Tak, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vi har din bestilling #{{order.number}} til {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} kl. {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Subtotal",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Moms {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "I alt",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Gavekort, der ender på {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Betalt online",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Betalt online · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Følg din bestilling",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Vaše objednávka #{{order.number}} je přijata",
+          "preheader": "Vyzvednutí {{order.pickup_at.relative_day}} v {{order.pickup_at.time}} · zaplaceno online",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Děkujeme, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vaši objednávku #{{order.number}} máme. Vyzvednutí: {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} v {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "Mezisoučet",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "Daň {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "Celkem",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Dárková karta končící na {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "Zaplaceno online",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "Zaplaceno online · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "Sledovat objednávku",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "وصلنا طلبك #{{order.number}}",
+          "preheader": "الاستلام {{order.pickup_at.relative_day}} الساعة {{order.pickup_at.time}} · مدفوع عبر الإنترنت",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "شكرًا، {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "وصلنا طلبك #{{order.number}} للاستلام {{order.pickup_at.relative_day}}، {{order.pickup_at.day_month}} الساعة {{order.pickup_at.time}}."
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "المجموع الفرعي",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "الضريبة {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "الإجمالي",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "بطاقة هدية تنتهي بـ {{row.card_last4}}",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "مدفوع عبر الإنترنت",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "مدفوع عبر الإنترنت · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "تابع طلبك",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "已收到你的订单 #{{order.number}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 已在线支付",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "谢谢，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "已收到你的订单 #{{order.number}}，取餐时间 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。"
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "小计",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "税费 {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "合计",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "尾号 {{row.card_last4}} 的礼品卡",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "已在线支付",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "已在线支付 · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "跟踪订单",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "已收到你的訂單 #{{order.number}}",
+          "preheader": "{{order.pickup_at.relative_day}} {{order.pickup_at.time}} 取餐 · 已線上付款",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "謝謝，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "已收到你的訂單 #{{order.number}}，取餐時間 {{order.pickup_at.relative_day}}，{{order.pickup_at.day_month}} {{order.pickup_at.time}}。"
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "lines",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "order_items",
+                  "via": "order_id",
+                  "orderBy": "position",
+                  "limit": 50
+                },
+                "joins": {
+                  "options": {
+                    "table": "order_item_modifiers",
+                    "via": "order_item_id",
+                    "column": "name",
+                    "orderBy": "id",
+                    "separator": ", "
+                  }
+                },
+                "row": {
+                  "title": "{{row.name}} × {{row.qty}}",
+                  "meta": "{{row.options}}",
+                  "amount": "{{row.line_total}}",
+                  "note": "{{row.note}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "reductions",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "addOn": "offers",
+                  "table": "applied",
+                  "match": {
+                    "table": "source_table",
+                    "row": "source_row"
+                  },
+                  "orderBy": "id",
+                  "limit": 20
+                },
+                "row": {
+                  "title": "{{row.name}}",
+                  "amount": "−{{row.amount}}"
+                }
+              }
+            },
+            {
+              "block": "email.tax-breakdown",
+              "id": "totals",
+              "data": {
+                "lines": [
+                  {
+                    "label": "小計",
+                    "amount": "{{order.subtotal}}"
+                  },
+                  {
+                    "label": "稅金 {{order.tax_rate.percent}}",
+                    "amount": "{{order.tax.money}}"
+                  },
+                  {
+                    "label": "合計",
+                    "amount": "{{order.total}}"
+                  }
+                ]
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "card-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "gift_card"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "末碼 {{row.card_last4}} 的禮品卡",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.rows",
+              "id": "online-payments",
+              "data": {
+                "from": {
+                  "link": "order",
+                  "table": "payments",
+                  "via": "order_id",
+                  "orderBy": "made_at",
+                  "limit": 10,
+                  "where": {
+                    "column": "method",
+                    "in": [
+                      "online"
+                    ]
+                  }
+                },
+                "row": {
+                  "title": "已線上付款",
+                  "amount": "−{{row.kept.money}}"
+                }
+              }
+            },
+            {
+              "block": "email.box",
+              "id": "pay",
+              "data": {
+                "label": "已線上付款 · {{order.online_taken.money}}"
+              }
+            },
+            {
+              "block": "email.contact",
+              "id": "where",
+              "data": {
+                "name": "{{practice.address}}"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "directions",
+              "data": {
+                "paras": [
+                  "{{practice.directions}}"
+                ]
+              }
+            },
+            {
+              "block": "email.button",
+              "id": "follow",
+              "data": {
+                "label": "追蹤訂單",
+                "url": "{{manage_url}}#{{order.link_token}}"
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-ready-paid",
+      "name": {
+        "en-US": "Order ready (paid online)",
+        "de-DE": "Bestellung fertig (online bezahlt)",
+        "fr-FR": "Commande prête (payée en ligne)",
+        "da-DK": "Bestilling klar (betalt online)",
+        "cs-CZ": "Objednávka připravena (zaplaceno online)",
+        "ar-EG": "الطلب جاهز (مدفوع عبر الإنترنت)",
+        "zh-CN": "订单已备好（已在线支付）",
+        "zh-TW": "訂單已備妥（已線上付款）"
+      },
+      "vars": [
+        "order.number",
+        "practice.address",
+        "practice.directions",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "#{{order.number}} is on the shelf",
+          "preheader": "On the shelf now · nothing to pay",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} is ready."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Come on in — it's waiting for you, filed by number.",
+                  "{{practice.directions}}",
+                  "Paid online · Nothing to pay at the counter."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "#{{order.number}} liegt im Regal",
+          "preheader": "Jetzt im Regal · nichts zu zahlen",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} ist fertig."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Komm rein — sie wartet auf dich, nach Nummer abgelegt.",
+                  "{{practice.directions}}",
+                  "Online bezahlt · An der Theke ist nichts zu zahlen."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "#{{order.number}} est sur l’étagère",
+          "preheader": "Sur l’étagère maintenant · rien à payer",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} est prête."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Entrez — elle vous attend, classée par numéro.",
+                  "{{practice.directions}}",
+                  "Payé en ligne · Rien à payer au comptoir."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "#{{order.number}} står på hylden",
+          "preheader": "På hylden nu · intet at betale",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} er klar."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Kom bare ind — den venter på dig, sorteret efter nummer.",
+                  "{{practice.directions}}",
+                  "Betalt online · Der er intet at betale ved disken."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "#{{order.number}} je na polici",
+          "preheader": "Už je v regálu · nic k zaplacení",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} je hotová."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Pojďte dál — čeká na vás, seřazená podle čísla.",
+                  "{{practice.directions}}",
+                  "Zaplaceno online · U pultu nic neplatíte."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "#{{order.number}} على الرف",
+          "preheader": "على الرف الآن · لا شيء يُدفع",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} جاهز."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "تفضّل بالدخول — إنه بانتظارك، مرتّب بالرقم.",
+                  "{{practice.directions}}",
+                  "مدفوع عبر الإنترنت · لا شيء يُدفع عند المنضدة."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "#{{order.number}} 已放上取餐架",
+          "preheader": "已放上取餐架 · 无需付款",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} 已做好。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "请进店领取——已按号码放好等你。",
+                  "{{practice.directions}}",
+                  "已在线支付 · 到店无需付款。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "#{{order.number}} 已放上取餐架",
+          "preheader": "已放上取餐架 · 無需付款",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "#{{order.number}} 已做好。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "請進店領取——已按號碼放好等你。",
+                  "{{practice.directions}}",
+                  "已線上付款 · 到店無需付款。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-cancelled-paid",
+      "name": {
+        "en-US": "Cancelled after paying online",
+        "de-DE": "Storniert nach Online-Zahlung",
+        "fr-FR": "Annulée après un paiement en ligne",
+        "da-DK": "Annulleret efter betaling online",
+        "cs-CZ": "Zrušeno po platbě online",
+        "ar-EG": "أُلغي بعد الدفع عبر الإنترنت",
+        "zh-CN": "在线支付后已取消",
+        "zh-TW": "線上付款後已取消"
+      },
+      "vars": [
+        "order.cancel_code.label",
+        "order.number",
+        "order.online_taken.money",
+        "practice.address",
+        "practice.phone",
+        "recipient.first_name"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "We had to cancel #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} goes back to you",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Sorry, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Why: {{order.cancel_code.label}}.",
+                  "The {{order.online_taken.money}} you paid online goes back to the card or PayPal account you paid with. We'll email you when it's on its way.",
+                  "Call us on {{practice.phone}} if you'd like to order again."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Wir mussten #{{order.number}} stornieren",
+          "preheader": "{{order.online_taken.money}} gehen an dich zurück",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Tut uns leid, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Grund: {{order.cancel_code.label}}.",
+                  "Die {{order.online_taken.money}}, die du online bezahlt hast, gehen zurück auf die Karte oder das PayPal-Konto, mit dem du bezahlt hast. Wir schreiben dir, sobald das Geld unterwegs ist.",
+                  "Ruf uns unter {{practice.phone}} an, wenn du noch einmal bestellen möchtest."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Nous avons dû annuler la commande #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} vous sont remboursés",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Désolés, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Motif : {{order.cancel_code.label}}.",
+                  "Les {{order.online_taken.money}} payés en ligne retournent sur la carte ou le compte PayPal utilisé pour payer. Nous vous écrirons dès que le remboursement sera en route.",
+                  "Appelez-nous au {{practice.phone}} si vous souhaitez commander à nouveau."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Vi måtte annullere #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} går tilbage til dig",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Undskyld, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Årsag: {{order.cancel_code.label}}.",
+                  "De {{order.online_taken.money}}, du betalte online, går tilbage til det kort eller den PayPal-konto, du betalte med. Vi skriver til dig, når pengene er på vej.",
+                  "Ring til os på {{practice.phone}}, hvis du vil bestille igen."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Objednávku #{{order.number}} jsme museli zrušit",
+          "preheader": "{{order.online_taken.money}} se vám vrací",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "Omlouváme se, {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Důvod: {{order.cancel_code.label}}.",
+                  "{{order.online_taken.money}}, které jste zaplatili online, se vrací na kartu nebo účet PayPal, kterými jste platili. Napíšeme vám, jakmile budou peníze na cestě.",
+                  "Zavolejte nám na {{practice.phone}}, pokud si chcete objednat znovu."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "اضطررنا إلى إلغاء الطلب #{{order.number}}",
+          "preheader": "يعود إليك {{order.online_taken.money}}",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "نعتذر، {{recipient.first_name}}."
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "السبب: {{order.cancel_code.label}}.",
+                  "يعود مبلغ {{order.online_taken.money}} الذي دفعته عبر الإنترنت إلى البطاقة أو حساب PayPal الذي دفعت به. سنراسلك حين يكون المبلغ في طريقه إليك.",
+                  "اتصل بنا على {{practice.phone}} إن أردت الطلب مجددًا."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "我们不得不取消订单 #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} 将退还给你",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "抱歉，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "原因：{{order.cancel_code.label}}。",
+                  "你在线支付的 {{order.online_taken.money}} 将退回到你付款时使用的银行卡或 PayPal 账户。款项退出后我们会发邮件告诉你。",
+                  "如想重新下单，请致电 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "我們不得不取消訂單 #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} 將退還給你",
+          "blocks": [
+            {
+              "block": "email.heading",
+              "id": "heading",
+              "data": {
+                "text": "抱歉，{{recipient.first_name}}。"
+              }
+            },
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "原因：{{order.cancel_code.label}}。",
+                  "你線上支付的 {{order.online_taken.money}} 將退回到你付款時使用的信用卡或 PayPal 帳戶。款項退出後我們會寄信通知你。",
+                  "如想重新下單，請致電 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-cancelled-paid-by-you",
+      "name": {
+        "en-US": "Cancelled by the customer after paying online",
+        "de-DE": "Vom Gast storniert nach Online-Zahlung",
+        "fr-FR": "Annulée par le client après un paiement en ligne",
+        "da-DK": "Annulleret af gæsten efter betaling online",
+        "cs-CZ": "Zrušeno hostem po platbě online",
+        "ar-EG": "ألغاه الزبون بعد الدفع عبر الإنترنت",
+        "zh-CN": "顾客在线支付后已取消",
+        "zh-TW": "顧客線上付款後已取消"
+      },
+      "vars": [
+        "order.cancelled_at.time",
+        "order.number",
+        "order.online_taken.money",
+        "practice.address",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "You cancelled #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} goes back to you",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "You cancelled #{{order.number}} at {{order.cancelled_at.time}}.",
+                  "The {{order.online_taken.money}} you paid online goes back to the card or PayPal account you paid with. We'll email you when it's on its way.",
+                  "If you didn't cancel it, call us on {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Du hast #{{order.number}} storniert",
+          "preheader": "{{order.online_taken.money}} gehen an dich zurück",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Du hast #{{order.number}} um {{order.cancelled_at.time}} storniert.",
+                  "Die {{order.online_taken.money}}, die du online bezahlt hast, gehen zurück auf die Karte oder das PayPal-Konto, mit dem du bezahlt hast. Wir schreiben dir, sobald das Geld unterwegs ist.",
+                  "Wenn du das nicht warst, ruf uns unter {{practice.phone}} an."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Vous avez annulé la commande #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} vous sont remboursés",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Vous avez annulé la commande #{{order.number}} à {{order.cancelled_at.time}}.",
+                  "Les {{order.online_taken.money}} payés en ligne retournent sur la carte ou le compte PayPal utilisé pour payer. Nous vous écrirons dès que le remboursement sera en route.",
+                  "Si ce n’est pas vous, appelez-nous au {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "Du annullerede #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} går tilbage til dig",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Du annullerede #{{order.number}} kl. {{order.cancelled_at.time}}.",
+                  "De {{order.online_taken.money}}, du betalte online, går tilbage til det kort eller den PayPal-konto, du betalte med. Vi skriver til dig, når pengene er på vej.",
+                  "Hvis det ikke var dig, så ring til os på {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Zrušili jste objednávku #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} se vám vrací",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "Objednávku #{{order.number}} jste zrušili v {{order.cancelled_at.time}}.",
+                  "{{order.online_taken.money}}, které jste zaplatili online, se vrací na kartu nebo účet PayPal, kterými jste platili. Napíšeme vám, jakmile budou peníze na cestě.",
+                  "Pokud jste to nebyli vy, zavolejte nám na {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "ألغيت الطلب #{{order.number}}",
+          "preheader": "يعود إليك {{order.online_taken.money}}",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "ألغيت الطلب #{{order.number}} الساعة {{order.cancelled_at.time}}.",
+                  "يعود مبلغ {{order.online_taken.money}} الذي دفعته عبر الإنترنت إلى البطاقة أو حساب PayPal الذي دفعت به. سنراسلك حين يكون المبلغ في طريقه إليك.",
+                  "إن لم تكن أنت من ألغاه، اتصل بنا على {{practice.phone}}."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "你已取消订单 #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} 将退还给你",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "你于 {{order.cancelled_at.time}} 取消了订单 #{{order.number}}。",
+                  "你在线支付的 {{order.online_taken.money}} 将退回到你付款时使用的银行卡或 PayPal 账户。款项退出后我们会发邮件告诉你。",
+                  "如果不是你本人取消，请致电 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "你已取消訂單 #{{order.number}}",
+          "preheader": "{{order.online_taken.money}} 將退還給你",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "你於 {{order.cancelled_at.time}} 取消了訂單 #{{order.number}}。",
+                  "你線上支付的 {{order.online_taken.money}} 將退回到你付款時使用的信用卡或 PayPal 帳戶。款項退出後我們會寄信通知你。",
+                  "如果不是你本人取消，請致電 {{practice.phone}}。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到這封郵件，是因為你在我們這裡下了單。"
+        }
+      }
+    },
+    {
+      "key": "ordering-order-refunded",
+      "name": {
+        "en-US": "Money paid online refunded",
+        "de-DE": "Online-Zahlung erstattet",
+        "fr-FR": "Paiement en ligne remboursé",
+        "da-DK": "Online betaling refunderet",
+        "cs-CZ": "Vrácení platby online",
+        "ar-EG": "استرداد مبلغ مدفوع عبر الإنترنت",
+        "zh-CN": "在线付款已退款",
+        "zh-TW": "線上付款已退款"
+      },
+      "vars": [
+        "order.number",
+        "order.online_refunded.money",
+        "practice.address",
+        "practice.phone"
+      ],
+      "locales": {
+        "en-US": {
+          "subject": "A refund for #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} on its way back",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.online_refunded.money}} of order #{{order.number}} is on its way back to the card or PayPal account you paid with.",
+                  "It can take a few days to show."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us."
+        },
+        "de-DE": {
+          "subject": "Eine Erstattung für #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} auf dem Weg zurück",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.online_refunded.money}} der Bestellung #{{order.number}} sind auf dem Weg zurück auf die Karte oder das PayPal-Konto, mit dem du bezahlt hast.",
+                  "Es kann ein paar Tage dauern, bis du es siehst."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du bekommst diese E-Mail, weil du bei uns bestellt hast."
+        },
+        "fr-FR": {
+          "subject": "Un remboursement pour la commande #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} en route",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.online_refunded.money}} de la commande #{{order.number}} retournent sur la carte ou le compte PayPal utilisé pour payer.",
+                  "Cela peut prendre quelques jours avant d’apparaître."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Vous recevez cet e-mail parce que vous avez commandé chez nous."
+        },
+        "da-DK": {
+          "subject": "En refundering for #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} på vej tilbage",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.online_refunded.money}} for bestilling #{{order.number}} er på vej tilbage til det kort eller den PayPal-konto, du betalte med.",
+                  "Der kan gå et par dage, før du kan se dem."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Du får denne mail, fordi du har bestilt hos os."
+        },
+        "cs-CZ": {
+          "subject": "Vrácení peněz za objednávku #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} na cestě zpět",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "{{order.online_refunded.money}} za objednávku #{{order.number}} je na cestě zpět na kartu nebo účet PayPal, kterými jste platili.",
+                  "Může trvat několik dní, než se peníze objeví."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. Tento e-mail dostáváte, protože jste si u nás objednali."
+        },
+        "ar-EG": {
+          "subject": "استرداد للطلب #{{order.number}}",
+          "preheader": "{{order.online_refunded.money}} في طريقه إليك",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "مبلغ {{order.online_refunded.money}} من الطلب #{{order.number}} في طريقه إلى البطاقة أو حساب PayPal الذي دفعت به.",
+                  "قد يستغرق ظهوره بضعة أيام."
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}. تصلك هذه الرسالة لأنك طلبت منا."
+        },
+        "zh-CN": {
+          "subject": "订单 #{{order.number}} 的退款",
+          "preheader": "{{order.online_refunded.money}} 正在退回",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "订单 #{{order.number}} 的 {{order.online_refunded.money}} 正在退回到你付款时使用的银行卡或 PayPal 账户。",
+                  "可能需要几天才能到账。"
+                ]
+              }
+            }
+          ],
+          "footer": "{{appName}} · {{practice.address}} · {{practice.phone}}。你收到这封邮件，是因为你在我们这里下了单。"
+        },
+        "zh-TW": {
+          "subject": "訂單 #{{order.number}} 的退款",
+          "preheader": "{{order.online_refunded.money}} 正在退回",
+          "blocks": [
+            {
+              "block": "email.text",
+              "id": "body",
+              "data": {
+                "paras": [
+                  "訂單 #{{order.number}} 的 {{order.online_refunded.money}} 正在退回到你付款時使用的信用卡或 PayPal 帳戶。",
+                  "可能需要幾天才會入帳。"
                 ]
               }
             }
@@ -16466,6 +20372,99 @@
       }
     }
   ],
+  "payments": {
+    "payables": [
+      {
+        "table": "orders",
+        "label": "number",
+        "amount": {
+          "column": "total"
+        },
+        "currency": {
+          "connection": true
+        },
+        "due": {
+          "column": "due"
+        },
+        "payments": {
+          "kind": "table",
+          "table": "payments",
+          "link": "order_id",
+          "amount": "amount",
+          "paidAt": "paid_at",
+          "method": {
+            "column": "method",
+            "values": {
+              "*": "online"
+            }
+          },
+          "reference": "payment_ref",
+          "provider": "provider",
+          "refundedElsewhere": "refunded_elsewhere"
+        },
+        "status": {
+          "column": "status",
+          "paid": "placed",
+          "from": [
+            "paying"
+          ]
+        },
+        "customerEmail": "email",
+        "payableWhen": [
+          {
+            "column": "status",
+            "eq": "paying"
+          }
+        ],
+        "returnTo": "/o",
+        "receipt": "app",
+        "instantOnly": true,
+        "refunds": {
+          "model": "rows",
+          "table": "payment_refunds",
+          "payment": "payment_id",
+          "amount": "amount",
+          "when": [
+            {
+              "column": "method",
+              "eq": "online"
+            }
+          ],
+          "providerRef": "provider_ref",
+          "state": "refund_state",
+          "openIn": "/",
+          "auto": {
+            "values": {
+              "method": "online",
+              "automatic": true
+            }
+          }
+        },
+        "refundOn": {
+          "moves": [
+            {
+              "from": [
+                "placed",
+                "confirmed",
+                "preparing",
+                "ready"
+              ],
+              "to": "cancelled",
+              "by": [
+                "customer",
+                "system",
+                "refund-right"
+              ]
+            }
+          ],
+          "switch": {
+            "table": "settings",
+            "column": "auto_refund"
+          }
+        }
+      }
+    ]
+  },
   "sampleData": {
     "file": "seeds/ordering.sample.json",
     "skipWhenShared": {

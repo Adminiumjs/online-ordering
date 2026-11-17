@@ -59,8 +59,25 @@ const CASED = new RegExp(
   "g",
 );
 
+/**
+ * A bare id in brackets, the way the plans tagged a decision, question, ruling,
+ * fact or task onto the end of a sentence: one capital (or one of the few
+ * two-letter prefixes) and up to three digits, with an optional letter or a
+ * dashed number after it, several joined by a comma, a slash, a dash, "and" or a
+ * space. The bracket must hold ONLY ids, so an id followed by a colon and a
+ * reason, or a hex byte such as 0xC4, is not read; and it must not follow a word
+ * character, a `$`, a dot or a closing bracket, so a call such as `split(T1)` is
+ * not read either. Other two-letter prefixes are left alone: an MP3's ID3 tag is
+ * real. Matched with its case, for the reason CASED gives.
+ */
+const TAG_ID = String.raw`(?:CR|BN|AC|DP|YR|[A-Z])\d{1,3}[a-z]?(?:-\d{1,3})?`;
+const TAG = new RegExp(
+  String.raw`(?<![\w$.\])])\(` + TAG_ID + String.raw`(?:\s*(?:,|\/|\u2013|-|\+|&|and|\s)\s*` + TAG_ID + String.raw`)*\)`,
+  "g",
+);
+
 function hits(text: string): number {
-  return [...text.matchAll(POINTER)].length + [...text.matchAll(CASED)].length;
+  return [...text.matchAll(POINTER)].length + [...text.matchAll(CASED)].length + [...text.matchAll(TAG)].length;
 }
 
 function tracked(): string[] {
@@ -98,6 +115,42 @@ describe("the citation forms", () => {
   it("leave order numbers, email kinds, paths and style tokens alone", () => {
     const plain = ["WV-8816", "WV-S8017", "e2c", "M10 10 Q12 5 20 0", "#E1E1E1", "bg-slate-800", "d1", "q1", "h-10", "grid-cols-2", "K7QX-M2PD", "4QJK-S429"];
     expect(plain.filter((text) => hits(text) > 0)).toEqual([]);
+  });
+});
+
+describe("the bracketed id form", () => {
+  /** Built, not written, so this file holds no bracketed id itself. */
+  const tag = (...ids: string[]) => `(${ids.join(", ")})`;
+
+  it("reads a bare id in brackets, alone or several together", () => {
+    const cited = [
+      `// refunded in its app ${tag("CR4")}: it says what.`,
+      `describe('the sidebar section ${tag(j("D", "7"))}', () => {`,
+      `// campaign runs ${tag(j("D", "11"), j("D", "12"))}: save first`,
+      `* the row this server is too old for ${tag(j("G8-", "D", "2"))}`,
+      `* a file hung on a record ${tag("F1\u2013F3")}`,
+      `// kept on the phone ${tag("F17")}`,
+      `// the question ${tag(j("Q", "10"))}`,
+      `// the task ${tag("T01-48")}`,
+      `// the comp row ${tag("C9-F2")}`,
+      `// the step ${tag("M1d-1")}`,
+      `// both ${tag(j("D", "6")).replace(")", j(" ", "Q", "6)"))}`,
+    ];
+    expect(cited.filter((text) => hits(text) === 0)).toEqual([]);
+  });
+
+  it("leaves calls, hex bytes, tag names and spelled-out reasons alone", () => {
+    const plain = [
+      "const [before, after] = sentence.split(T1);",
+      "{ name: 'MP3 (ID3)', bytes }",
+      "return fn(T1) + g.(T2);",
+      "// every SOFn but DHT (0xC4), JPG (0xC8) and DAC (0xCC).",
+      `// a task spelled out ${tag("T13").replace(")", ": the reason)")} is a sentence`,
+      "expect(text).toMatch(/center \\(T7\\)/);",
+      "STUDENT10",
+      "2026-05-02T10:00:00Z",
+    ];
+    expect(plain.filter((text) => [...text.matchAll(TAG)].length > 0)).toEqual([]);
   });
 });
 

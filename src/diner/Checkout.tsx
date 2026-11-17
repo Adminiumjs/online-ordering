@@ -1,10 +1,15 @@
 /**
  * Checkout: who is picking up, the pickup time, how they pay (at the
- * counter), the order's summary with Adminium's totals, and "Place order" —
- * then the refusals a place can meet: a changed price, a dish just sold out,
- * a time just taken, online orders switched off, the item limit.
+ * counter — or, once the kitchen takes payments online, now on the pay page,
+ * chosen beside it), the order's summary with Adminium's totals, and "Place
+ * order" — then the refusals a place can meet: a changed price, a dish just
+ * sold out, a time just taken, online orders switched off, the item limit.
+ *
+ * Paying now hands the diner to Adminium's pay page ("Taking you to the
+ * secure payment page…"): the page never asks for a card, and the amount is
+ * the order's own. With payments off the screen reads exactly as it always has.
  */
-import { useId } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import { Icon } from "../components/Icon.tsx";
 import { Modal, useNarrow } from "../components/Modal.tsx";
@@ -19,17 +24,21 @@ import {
   closeSoldOut,
   dismissPriceChanged,
   freshQuote,
+  paysNow,
   placeOrder,
+  readPayments,
   rulesOf,
   setField,
   setOptIn,
+  setPay,
   takeOff,
   touch,
   useDiner,
   validPick,
   type Placed,
 } from "../state/diner.ts";
-import { openTrack, showWithoutLink } from "../state/track.ts";
+import { sources } from "../data/sources.ts";
+import { goPay, openTrack, showWithoutLink, useTrack } from "../state/track.ts";
 import { goDiner, toast } from "../state/ui.ts";
 import { useFmt, useVenue } from "../app/venue.ts";
 import { Bdi } from "../components/Bdi.tsx";
@@ -50,8 +59,34 @@ export function phoneBad(phone: string): boolean {
   return !/^[0-9+()\-.\s]+$/.test(s) || s.replace(/[^0-9]/g, "").length < 6;
 }
 
-/** After a place: the order's own page, by its link, or its facts when the answer was a replay. */
+/**
+ * After a place: the order's own page, by its link, or its facts when the
+ * answer was a replay. Placed to pay now with the pay page ready: to it
+ * first. With none (the kitchen could not take the payment just then), the
+ * order's page offers to pay again, or at pickup.
+ */
 export async function followPlaced(placed: Placed): Promise<void> {
+  if (placed.payUrl !== undefined && placed.payUrl !== null) {
+    useDiner.setState({ taking: true });
+    try {
+      await goPay(placed.payUrl, { id: placed.id, token: placed.token });
+    } finally {
+      useDiner.setState({ taking: false });
+    }
+    if (sources().diner.demoPay !== undefined) {
+      window.location.hash = placed.token ?? "";
+      goDiner("track");
+    }
+    return;
+  }
+  // Placed to pay now, and the kitchen could not take the payment just then: its page offers to try again, or to pay at pickup.
+  if (placed.payUrl === null && placed.token !== null) {
+    window.location.hash = placed.token;
+    goDiner("track");
+    await openTrack(placed.token);
+    useTrack.setState({ pay: "refused" });
+    return;
+  }
   if (placed.token !== null) {
     window.location.hash = placed.token;
     goDiner("track");
@@ -139,12 +174,21 @@ export function Checkout() {
   const payment = fresh?.payment ?? null;
   const due = fresh === null ? null : payment === null ? total : fmt.money(payment.due);
   const cardPaysAll = payment !== null && Number(payment.due) <= 0;
+  // Whether the kitchen takes payments online right now: asked again at checkout. Nothing changes while it says no.
+  const payments = useDiner((x) => x.payments);
+  const offerPay = payments?.online === true && fresh !== null && !cardPaysAll;
+  const payNow = useDiner(() => paysNow());
+  const taking = useDiner((x) => x.taking);
+  useEffect(() => {
+    void readPayments();
+  }, []);
   const place = async () => {
     if (block !== null) return;
     const placed = await placeOrder(locale);
     if (placed !== null) await followPlaced(placed);
   };
-  if (s.cart.length === 0 && !s.placing) {
+  // While it hands the diner to the pay page the cart is already empty: the hand-off still shows.
+  if (s.cart.length === 0 && !s.placing && !taking) {
     return (
       <div className="jn-view jk-shell">
         <div style={{ paddingBlock: "clamp(24px,4vw,42px) clamp(34px,5vw,62px)" }}>
@@ -209,6 +253,9 @@ export function Checkout() {
               </div>
             </div>
             <PickupCard compact={false} />
+            {offerPay ? (
+              <PayChoice due={due ?? ""} locked={s.clientKey !== null || s.placing || taking} />
+            ) : (
             <div style={{ display: "flex", alignItems: "flex-start", gap: 14, padding: "20px 22px", borderRadius: 18, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
               <span style={{ flex: "none", width: 38, height: 38, borderRadius: 11, background: "var(--surface)", border: "1px solid var(--border)", color: "var(--fg-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Icon name="wallet" size={17} />
@@ -226,6 +273,7 @@ export function Checkout() {
                 </span>
               </span>
             </div>
+            )}
           </fieldset>
 
           <aside style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -280,6 +328,12 @@ export function Checkout() {
               </div>
               <PriceMoved />
               <PlaceError />
+              {taking ? (
+                <div role="status" style={{ width: "100%", marginBlockStart: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, minHeight: 52, padding: "8px 14px", borderRadius: 13, background: "var(--surface-3)", color: "var(--fg)", fontSize: 14, fontWeight: 700, textAlign: "center" }}>
+                  <span aria-hidden="true" style={{ flex: "none", width: 14, height: 14, borderRadius: 999, border: "2px solid currentColor", borderInlineEndColor: "transparent", animation: "jn-spin .75s linear infinite" }} />
+                  {t("pay.taking")}
+                </div>
+              ) : (
               <button
                 className="jn-btn"
                 onClick={() => void place()}
@@ -287,9 +341,10 @@ export function Checkout() {
                 aria-describedby={block !== null && !s.placing ? reasonId : undefined}
                 style={{ width: "100%", marginBlockStart: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 52, borderRadius: 13, border: "none", background: block !== null ? "var(--surface-3)" : "var(--accent)", color: block !== null ? "var(--fg-subtle)" : "var(--accent-fg)", fontSize: 15, fontWeight: 800, cursor: block !== null || s.placing ? "not-allowed" : "pointer" }}
               >
-                {s.placing ? <span aria-hidden="true" style={{ flex: "none", width: 14, height: 14, borderRadius: 999, border: "2px solid currentColor", borderInlineEndColor: "transparent", animation: "jn-spin .75s linear infinite" }} /> : <Icon name="check" size={17} />}
-                {s.placing ? t("co.placing") : total === null ? t("co.placeNoTotal") : payment === null ? t("co.place", { total }) : cardPaysAll ? t("co.place.card") : t("co.place.due", { due: due ?? "" })}
+                {s.placing ? <span aria-hidden="true" style={{ flex: "none", width: 14, height: 14, borderRadius: 999, border: "2px solid currentColor", borderInlineEndColor: "transparent", animation: "jn-spin .75s linear infinite" }} /> : <Icon name={payNow ? "lock" : "check"} size={17} />}
+                {s.placing ? t("co.placing") : total === null ? t("co.placeNoTotal") : payNow ? t("pay.place", { amount: due ?? "" }) : payment === null ? t("co.place", { total }) : cardPaysAll ? t("co.place.card") : t("co.place.due", { due: due ?? "" })}
               </button>
+              )}
               {block !== null && !s.placing && (
                 <span id={reasonId} style={{ display: "flex", alignItems: "center", gap: 7, marginBlockStart: 11, fontSize: 12.5, fontWeight: 600, color: "var(--fg-subtle)" }}>
                   <Icon name="info" size={13} />
@@ -306,13 +361,91 @@ export function Checkout() {
   );
 }
 
+/**
+ * How the diner pays, once the kitchen takes payments online: now, on the
+ * pay page (the default), or when they pick up, as today. One tab stop,
+ * arrows move the choice. Locked while a press is unanswered, so a retry
+ * lands on the same order.
+ */
+function PayChoice({ due, locked }: { due: string; locked: boolean }) {
+  const { t } = useI18n();
+  const pay = useDiner((s) => s.form.pay);
+  const headId = useId();
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const options = [
+    { id: "now" as const, title: t("pay.now"), sub: t("pay.now.sub") },
+    { id: "pickup" as const, title: t("co.pay"), sub: <Rich text={t("co.pay.body")} parts={{ total: <span className="jk-mono" style={{ fontWeight: 600, color: "var(--fg)" }}>{due}</span> }} /> },
+  ];
+  const move = (from: number, by: number) => {
+    const next = (from + by + options.length) % options.length;
+    setPay(options[next]!.id);
+    refs.current[next]?.focus();
+  };
+  return (
+    <div style={{ padding: 22, borderRadius: 18, background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <span id={headId} className="jk-cardlabel" style={{ gap: 8 }}>
+        <Icon name="wallet" size={14} style={{ color: "var(--accent-ink)" }} />
+        {t("pay.head")}
+      </span>
+      <div role="radiogroup" aria-labelledby={headId} style={{ display: "flex", flexDirection: "column", gap: 10, marginBlockStart: 14 }}>
+        {options.map((o, i) => {
+          const on = pay === o.id;
+          return (
+            <button
+              key={o.id}
+              ref={(el) => {
+                refs.current[i] = el;
+              }}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              tabIndex={on ? 0 : -1}
+              disabled={locked}
+              onClick={() => setPay(o.id)}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown" || e.key === "ArrowRight") {
+                  e.preventDefault();
+                  move(i, 1);
+                } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
+                  e.preventDefault();
+                  move(i, -1);
+                }
+              }}
+              style={{ display: "flex", alignItems: "flex-start", gap: 14, width: "100%", padding: 16, borderRadius: 14, border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "var(--accent-soft)" : "var(--surface-2)", color: "var(--fg)", cursor: locked ? "not-allowed" : "pointer", textAlign: "start", fontFamily: "inherit" }}
+            >
+              <span aria-hidden="true" style={{ flex: "none", width: 20, height: 20, marginBlockStart: 1, borderRadius: "50%", border: on ? "6px solid var(--accent)" : "2px solid var(--border-strong)", background: "var(--surface)" }} />
+              <span style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+                <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.02em" }}>{o.title}</span>
+                <span style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--fg-muted)", textWrap: "pretty" }}>{o.sub}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Someone who manages payments, rehearsing the checkout here: only they see it, and the order is sample data. */
+export function TestBand() {
+  const { t } = useI18n();
+  const test = useDiner((s) => s.payments?.test === true);
+  if (!test) return null;
+  return (
+    <div role="note" style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "11px 16px", background: "var(--warn-soft)", color: "var(--warn)", fontSize: 13, fontWeight: 700, lineHeight: 1.5 }}>
+      <Icon name="flask-conical" size={15} style={{ flex: "none", marginBlockStart: 2 }} />
+      <span>{t("pay.testBand")}</span>
+    </div>
+  );
+}
+
 function PlaceError() {
   const { t } = useI18n();
   const fmt = useFmt();
   const venue = useVenue();
   const error = useDiner((s) => s.placeError);
   if (error === null) return null;
-  const warn = error === "toomany" || error === "busy" || error === "limit" || error === "pending";
+  const warn = error === "toomany" || error === "busy" || error === "limit" || error === "pending" || error === "payOff";
   const phone = venue.phone;
   const call =
     phone === null ? (
@@ -338,6 +471,8 @@ function PlaceError() {
           ? t("co.err.offline")
           : error === "pending"
             ? t("co.err.pending")
+          : error === "payOff"
+            ? t("pay.off")
           : error === "busy"
             ? t("co.err.busy")
             : error === "limit"

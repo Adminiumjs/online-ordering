@@ -1,7 +1,7 @@
 {
   "name": "online-ordering",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.3.3",
   "type": "module",
   "description": "Online Ordering — an open-source order-ahead example app for Adminium.",
   "license": "AGPL-3.0-only",
@@ -22,7 +22,7 @@
     "e2e": "playwright test"
   },
   "dependencies": {
-    "@adminiumjs/public-client": "^0.3.20",
+    "@adminiumjs/public-client": "^0.3.61",
     "lucide-react": "^0.462.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

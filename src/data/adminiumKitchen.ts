@@ -19,7 +19,7 @@
  * wall time with no zone, and 0 or 1); every row is read back here as the
  * screens expect it, an ISO instant and a boolean.
  */
-import type { KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "./ports.ts";
+import type { KitchenPayments, KitchenPerson, KitchenPort, Menu, OrderWithLines, PaidBy } from "./ports.ts";
 import { SessionPortError, type SessionTransport } from "./sessionSource.ts";
 import type { StaffConfig } from "../staffConnection.ts";
 import { MOMENTS, YES_NO, yesNo } from "./columnKinds.ts";
@@ -35,10 +35,10 @@ const WORDS_PAGE = 60;
 
 type Table =
   | "settings" | "menu_categories" | "menu_items" | "modifier_groups" | "modifiers" | "hours" | "closures" | "slot_pauses"
-  | "orders" | "order_items" | "order_item_modifiers" | "payments";
+  | "orders" | "order_items" | "order_item_modifiers" | "payments" | "payment_refunds";
 
 /** The tables whose changes the kitchen hears: every one it reads (a channel it may not read refuses the whole stream). */
-const LIVE: readonly Table[] = ["orders", "order_items", "order_item_modifiers", "slot_pauses", "menu_items", "modifiers", "modifier_groups", "menu_categories", "settings", "hours", "closures"];
+const LIVE: readonly Table[] = ["orders", "order_items", "order_item_modifiers", "slot_pauses", "menu_items", "modifiers", "modifier_groups", "menu_categories", "settings", "hours", "closures", "payment_refunds"];
 
 /** The transport's refusal as the screens read one: its status, its code, what it said beside. */
 function asApiError(error: unknown): unknown {
@@ -239,12 +239,15 @@ export class AdminiumKitchen implements KitchenPort {
   private async withLines(orders: Row[]): Promise<OrderWithLines[]> {
     const lines = await this.listIn("order_items", "order_id", orders.map((o) => o.id), "position.asc");
     const options = await this.listIn("order_item_modifiers", "order_item_id", lines.map((l) => l.id));
-    // What gift cards paid: read only for the orders that say a card paid something.
-    const carded = orders.filter((o) => Number(o["paid"] ?? 0) > 0).map((o) => o.id);
+    // What gift cards and online payments paid: read only for the orders that say something was paid (or ever paid online).
+    const carded = orders.filter((o) => Number(o["paid"] ?? 0) > 0 || Number(o["online_taken"] ?? 0) > 0).map((o) => o.id);
     const payments = carded.length === 0 ? [] : await this.listIn("payments", "order_id", carded, "made_at.asc");
+    // …and what went back of them, for the orders that had something paid.
+    const refunds = payments.length === 0 ? [] : await this.listIn("payment_refunds", "payment_id", payments.map((p) => p.id), "made_at.asc").catch(() => [] as Row[]);
     return orders.map((order) => ({
       order,
       payments: payments.filter((p) => p["order_id"] === order.id),
+      refunds: refunds.filter((r) => r["order_id"] === order.id),
       lines: lines
         .filter((l) => l["order_id"] === order.id)
         .sort(byPosition)
@@ -492,6 +495,26 @@ export class AdminiumKitchen implements KitchenPort {
   /** A receipt is drawn by Invoices & Receipts: on while it is attached (the feature `receipts`). */
   async receipts(): Promise<boolean> {
     return this.cfg.addOns["invoices"] !== undefined;
+  }
+
+  // ── paying online ─────────────────────────────────────────────────────────
+
+  /** Whether the app takes payments (switched on in Payments) and whether this person may refund: the staff config says. */
+  async payments(): Promise<KitchenPayments> {
+    const said = this.cfg.payments ?? null;
+    return { on: said?.on === true, refund: said?.on === true && said.refund === true };
+  }
+
+  refund(payment: { id: Id; orderId: Id }, amount: string, reason: string, clientKey: string): Promise<Row> {
+    // The refund says which payment, how much and why, and that it goes back online: Adminium sends it, and stamps where it stands.
+    return this.run(() => this.create("payment_refunds", { payment_id: payment.id, order_id: payment.orderId, method: "online", amount, reason, client_key: clientKey }));
+  }
+
+  setAutoRefund(on: boolean): Promise<Row> {
+    return this.run(async () => {
+      const id = this.settingsId ?? (await this.settings()).id;
+      return this.change("settings", id, { auto_refund: on });
+    });
   }
 
   /** The menu shared with another app on the same database (Point of Sale's): Adminium says so (0.3.8). */

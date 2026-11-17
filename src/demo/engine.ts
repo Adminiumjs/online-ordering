@@ -399,7 +399,11 @@ export class Engine {
       // What Adminium works out is judged as the save would leave it (whether "Paid by" agrees with what a gift card paid).
       settleFormulas("orders", after);
       for (const condition of move.requires?.where ?? []) {
-        if ((condition.isNull === false && empty(after[condition.column])) || (condition.eq !== undefined && Number(after[condition.column]) !== Number(condition.eq))) {
+        if (
+          (condition.isNull === false && empty(after[condition.column])) ||
+          (condition.isNull === true && !empty(after[condition.column])) ||
+          (condition.eq !== undefined && Number(after[condition.column]) !== Number(condition.eq))
+        ) {
           throw new ApiError(409, "STATE_MOVE_REFUSED", `A move to ${to} needs ${condition.column}.`, { column: "status", from: was, to, requires: condition.column });
         }
       }
@@ -433,7 +437,12 @@ export class Engine {
     return row;
   }
 
-  /** The moves the clock makes: at closing, a ready order not collected; half an hour on, an unfinished one cancelled. */
+  /**
+   * The moves the clock makes: at closing, a ready order not collected; half
+   * an hour on, an unfinished one cancelled; and an order still waiting for
+   * its payment past the kitchen's hold, cancelled unpaid. (The demo's
+   * payments land at once, so none is ever on its way when the hold ends.)
+   */
   runTimed(): Row[] {
     const moved: Row[] = [];
     for (const order of this.world.all("orders")) {
@@ -442,10 +451,14 @@ export class Engine {
       const h = this.dayHours(day);
       // A closed day ends at midnight.
       const closes = h.open || h.closure === null ? instantOf(day, h.closes, this.world.zone) : instantOf(addDays(day, 1), "00:00", this.world.zone);
-      for (const timed of MANIFEST_RULES.states.orders.timed as readonly { from: string; to: string; at: { plus?: { minutes?: number } }; set?: Record<string, unknown> }[]) {
-        if (timed.from === status && this.now >= closes + (timed.at.plus?.minutes ?? 0) * 60_000) {
-          moved.push(this.updateOrder(order.id, { status: timed.to, ...timed.set }, CLOCK));
-        }
+      type Timed = { from: string; to: string; at: { column: string; time?: unknown; plus?: { minutes?: number | { column: string } } }; set?: Record<string, unknown> };
+      for (const timed of MANIFEST_RULES.states.orders.timed as readonly Timed[]) {
+        if (timed.from !== status) continue;
+        const plus = timed.at.plus?.minutes;
+        const minutes = typeof plus === "object" ? this.num(plus.column) : (plus ?? 0);
+        // A moment of the row itself (when it was placed), or the day's closing.
+        const base = timed.at.time === undefined ? (empty(order[timed.at.column]) ? null : toMs(String(order[timed.at.column]))) : closes;
+        if (base !== null && this.now >= base + minutes * 60_000) moved.push(this.updateOrder(order.id, { status: timed.to, ...timed.set }, CLOCK));
       }
     }
     this.sendDue();
@@ -494,7 +507,7 @@ export class Engine {
     // A row the sample added is sample data: no email is ever about it.
     if (this.world.isSample(table, after.id)) return;
     for (const producer of MANIFEST_RULES.producers as readonly Record<string, unknown>[]) {
-      const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
+      const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; via?: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
       if (source.table !== table) continue;
       if (producer["onCreate"] !== undefined && before !== null) continue;
       if (producer["onChange"] !== undefined && (before === null || before[source.column!] === after[source.column!] || after[source.column!] !== source.to)) continue;
@@ -505,22 +518,26 @@ export class Engine {
       if (gate?.feature !== undefined && !this.featureOn(gate.feature)) continue;
       const kind = String(producer["kind"]);
       const link = String(producer["link"]);
+      // The row the message is about: this one, or (a child's, `via`) the order its link names.
+      const about = source.via === undefined ? after : this.world.get("orders", Number(after[source.via]));
+      if (about === undefined) continue;
+      const aboutTable = source.via === undefined ? table : "orders";
       // One per row — or, with `repeatBy`, one per value of that column (a receipt per hand-over).
       const repeatBy = producer["repeatBy"] as string | undefined;
-      const repeatKey = repeatBy === undefined || empty(after[repeatBy]) ? null : String(after[repeatBy]);
-      const sent = (m: Row) => m["kind"] === kind && m[link] === after.id && m["status"] !== "skipped" && (repeatBy === undefined || m["repeat_key"] === repeatKey);
+      const repeatKey = repeatBy === undefined || empty(about[repeatBy]) ? null : String(about[repeatBy]);
+      const sent = (m: Row) => m["kind"] === kind && m[link] === about.id && m["status"] !== "skipped" && (repeatBy === undefined || m["repeat_key"] === repeatKey);
       if (this.world.where("messages", sent).length > 0) continue;
       const recipient = producer["recipient"] as { column: string } | undefined;
-      const customer = table === "orders" && !empty(after["customer_id"]) ? this.world.get("customers", Number(after["customer_id"])) : undefined;
-      const to = recipient !== undefined ? after[recipient.column] : (customer?.["email"] ?? after["email"]);
+      const customer = aboutTable === "orders" && !empty(about["customer_id"]) ? this.world.get("customers", Number(about["customer_id"])) : undefined;
+      const to = recipient !== undefined ? about[recipient.column] : (customer?.["email"] ?? about["email"]);
       const hold = typeof producer["holdSeconds"] === "number" ? producer["holdSeconds"] * 1000 : 0;
       this.world.insert("messages", {
         kind,
         status: empty(to) ? "skipped" : "queued",
         to_address: empty(to) ? null : to,
-        language: after["language"] ?? null,
-        order_id: table === "orders" ? after.id : null,
-        enquiry_id: table === "enquiries" ? after.id : null,
+        language: about["language"] ?? null,
+        order_id: aboutTable === "orders" ? about.id : null,
+        enquiry_id: aboutTable === "enquiries" ? about.id : null,
         customer_id: customer?.id ?? null,
         due: iso(this.now + hold),
         created_at: iso(this.now),
@@ -538,13 +555,66 @@ export class Engine {
     for (const message of this.world.where("messages", (m) => m["status"] === "queued")) {
       const order = message["order_id"] === null ? undefined : this.world.get("orders", Number(message["order_id"]));
       const producer = (MANIFEST_RULES.producers as readonly Record<string, unknown>[]).find((p) => p["kind"] === message["kind"]);
-      const drops = (producer?.["dropWhen"] ?? []) as readonly { column: string; in: readonly unknown[]; reason: string }[];
-      const drop = order === undefined ? undefined : drops.find((d) => d.in.includes(order[d.column]));
+      const drops = (producer?.["dropWhen"] ?? []) as readonly DropWhen[];
+      const drop = order === undefined ? undefined : drops.find((d) => dropHolds(d, order));
       if (drop !== undefined) {
         this.world.update("messages", message.id, { status: "skipped", skip_reason: drop.reason });
         continue;
       }
       if (toMs(String(message["due"])) <= this.now) this.world.update("messages", message.id, { status: "sent", sent_at: iso(this.now) });
+    }
+  }
+
+  /**
+   * Money paid online given back, as Adminium sends it back for a refund row
+   * of the kitchen's: the row written (by a person, or by Adminium itself for
+   * a cancellation), the payment's kept part and the order's figures lowered,
+   * the refund's email queued. The demo's payment service answers at once.
+   */
+  refundOnline(paymentId: Id, amount: number, how: { automatic: boolean; reason: string | null; by: string | null }): Row {
+    const payment = this.world.get("payments", paymentId);
+    if (payment === undefined || payment["method"] !== "online") throw new ApiError(404, "NOT_FOUND", "No such payment.");
+    const kept = Number(payment["kept"] ?? payment["amount"] ?? 0);
+    if (amount <= 0 || amount > kept + 0.0001) throw new ApiError(422, "VALIDATION_FAILED", "More than is left.", { fields: { amount: { code: "too-large" } } });
+    const at = iso(this.now);
+    const row = this.world.insert("payment_refunds", {
+      payment_id: paymentId,
+      order_id: payment["order_id"],
+      client_key: null,
+      method: "online",
+      amount,
+      reason: how.reason,
+      made_at: at,
+      made_by: how.by,
+      automatic: how.automatic,
+      refund_state: "done",
+      provider_ref: `demo_re_${String(paymentId)}_${String(this.now)}`,
+      counted: amount,
+    });
+    const returned = round2(Number(payment["returned"] ?? 0) + amount);
+    this.world.update("payments", paymentId, { returned, kept: round2(Number(payment["amount"] ?? 0) - returned) });
+    const order = this.world.get("orders", Number(payment["order_id"]));
+    if (order !== undefined) {
+      this.world.update("orders", order.id, {
+        paid: round2(Math.max(0, Number(order["paid"] ?? 0) - amount)),
+        online_paid: round2(Math.max(0, Number(order["online_paid"] ?? 0) - amount)),
+        online_refunded: round2(Number(order["online_refunded"] ?? 0) + amount),
+      });
+    }
+    this.produce("payment_refunds", null, row);
+    return row;
+  }
+
+  /**
+   * A paid order just cancelled: refunded by itself while the kitchen's
+   * switch is on and the cancel was the diner's own, the clock's, or made by
+   * someone who may refund. Otherwise the money waits as "Refund owed".
+   */
+  refundCancelled(id: Id, by: "customer" | "system" | "refund-right" | "other"): void {
+    if (by === "other" || this.setting("auto_refund") === false) return;
+    for (const payment of this.world.where("payments", (p) => p["order_id"] === id && p["method"] === "online")) {
+      const kept = Number(payment["kept"] ?? 0);
+      if (kept > 0) this.refundOnline(payment.id, kept, { automatic: true, reason: null, by: null });
     }
   }
 
@@ -566,6 +636,19 @@ export class Engine {
   minutesNow(): number {
     return venueMinutes(this.now, this.world.zone);
   }
+}
+
+type DropWhen = { column: string; in?: readonly unknown[]; eq?: unknown; isNull?: boolean; gte?: number; lte?: number; reason: string };
+
+/** Whether a row meets a producer's `dropWhen` condition, as the outbox judges it. */
+function dropHolds(d: DropWhen, row: Row): boolean {
+  const value = row[d.column];
+  if (d.in !== undefined) return d.in.includes(value);
+  if (d.eq !== undefined) return value === d.eq || (typeof d.eq === "number" && Number(value) === d.eq && !empty(value));
+  if (d.isNull !== undefined) return empty(value) === d.isNull;
+  if (d.gte !== undefined) return !empty(value) && Number(value) >= d.gte;
+  if (d.lte !== undefined) return !empty(value) && Number(value) <= d.lte;
+  return false;
 }
 
 /** A table's formulas, worked out over the row in the order they read each other. */

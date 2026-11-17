@@ -2,16 +2,22 @@
  * The queue: today's orders in four columns — New, Confirmed, Preparing,
  * Ready — each card with its lines, notes, a chip that says in words how
  * the time stands, and the one button that moves it on.
+ *
+ * An order paid online reaches the board when its payment is in, as a new
+ * order with a "Paid" chip; one still waiting for its diner's payment is not
+ * on it. A paid order cancelled whose money has not gone back yet is listed
+ * above the columns as "Refund owed", for everyone in the kitchen to see.
  */
 import { useEffect, useState } from "react";
 
 import { Icon, type IconName } from "../components/Icon.tsx";
 import type { OrderWithLines } from "../data/ports.ts";
+import type { Row } from "../data/wire.ts";
 import { useNow } from "../data/sources.ts";
 import { useI18n, type TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { storedOptionsText } from "../lib/menu.ts";
-import { BOARD, NEXT, dayOf, kToday, num, owed, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
+import { BOARD, NEXT, dayOf, kToday, num, owed, owedOrders, refundOwed, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
 import { useUi } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 import { advance, undo, useRecentMove } from "./moves.ts";
@@ -90,6 +96,20 @@ export function LineList({ order, size }: { order: OrderWithLines; size: "card" 
   );
 }
 
+/** Paid in full before the counter, online: nothing to collect at the hand-over. */
+export const paidOnline = (o: Row): boolean => num(o["online_paid"]) > 0 && owed(o) <= 0;
+
+/** "Paid": an order paid online, on its card and its ticket. */
+export function PaidTag() {
+  const { t } = useI18n();
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 999, background: "var(--pos-soft)", color: "var(--pos)", fontSize: 10.5, fontWeight: 800 }}>
+      <Icon name="check-circle-2" size={11} />
+      {t("kpay.paid")}
+    </span>
+  );
+}
+
 export function PhoneTag() {
   const { t } = useI18n();
   return (
@@ -134,6 +154,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
         </button>
         {isNew && <span style={{ padding: "3px 8px", borderRadius: 999, background: "var(--accent)", color: "var(--accent-fg)", fontSize: 10, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase" }}>{t("kitchen.new")}</span>}
         {o["channel"] === "phone" && <PhoneTag />}
+        {paidOnline(o) && <PaidTag />}
         <span style={{ marginInlineStart: "auto", display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 9px", borderRadius: 999, background: tone[0], color: tone[1], fontSize: 11.5, fontWeight: 800, whiteSpace: "nowrap" }}>
           <Icon name={chip.icon} size={12} />
           <span>{chip.text}</span>
@@ -163,7 +184,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
           </button>
         )}
         <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 12, fontWeight: 600, color: "var(--fg-muted)" }}>
-          {fmt.money(owed(o))}
+          {fmt.money(paidOnline(o) ? o["total"] : owed(o))}
         </span>
       </div>
       <button className="jn-btn" onClick={go} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 9, height: 46, borderRadius: 12, border: "none", background: column === "ready" ? "var(--pos)" : "var(--accent)", color: column === "ready" ? (theme === "dark" ? "#0f0f14" : "#ffffff") : "var(--accent-fg)", fontSize: 14.5, fontWeight: 800, cursor: "pointer" }}>
@@ -174,12 +195,45 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
   );
 }
 
+/** Paid orders cancelled whose money has not gone back yet: one row each, for everyone in the kitchen; the ticket has Refund. */
+function RefundOwed() {
+  const { t } = useI18n();
+  const fmt = useKFmt();
+  const now = useNow();
+  const orders = useKitchen((s) => s.orders);
+  const on = useKitchen((s) => s.payments.on);
+  const owed = owedOrders(orders, kToday(now));
+  if (!on || owed.length === 0) return null;
+  return (
+    <section aria-label={t("kpay.owed")} style={{ display: "flex", flexDirection: "column", gap: 8, marginBlockEnd: "clamp(12px,1.6vw,18px)", padding: "12px 14px", borderRadius: 14, background: "var(--warn-soft)", border: "1px solid var(--warn-soft)" }}>
+      {owed.map((order) => {
+        const o = order.order;
+        return (
+          <div key={o.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", color: "var(--warn)", fontSize: 13, fontWeight: 700 }}>
+            <Icon name="alert-circle" size={15} />
+            <span style={{ fontWeight: 800 }}>{t("kpay.owed")}</span>
+            <span className="jk-mono">{t("confirm.number", { number: String(o["number"]) })}</span>
+            <bdi>{String(o["name"] ?? "")}</bdi>
+            <span className="jk-mono">{fmt.money(refundOwed(order))}</span>
+            {o["cancelled_at"] ? <span>{t("kpay.cancelledAt", { time: fmt.time(String(o["cancelled_at"])) })}</span> : null}
+            <button className="jn-gi" onClick={() => useKitchen.setState({ ticket: o.id })} style={{ marginInlineStart: "auto", height: 34, paddingInline: 12, borderRadius: 9, border: "1px solid currentColor", background: "transparent", color: "inherit", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+              {t("kpay.openOrder")}
+            </button>
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export function Board() {
   const { t } = useI18n();
   const fmt = useKFmt();
   const board = useBoard();
   const width = useWidth();
   return (
+    <>
+    <RefundOwed />
     <div style={{ display: "grid", gridTemplateColumns: width < 760 ? "1fr" : width < 1120 ? "repeat(2,minmax(0,1fr))" : "repeat(4,minmax(0,1fr))", gap: "clamp(12px,1.6vw,18px)", alignItems: "start" }}>
       {BOARD.map((column) => {
         const list = board.filter((o) => o.order["status"] === column).sort((a, b) => Date.parse(String(a.order["pickup_at"])) - Date.parse(String(b.order["pickup_at"])) || num(a.order["number"]) - num(b.order["number"]));
@@ -201,5 +255,6 @@ export function Board() {
         );
       })}
     </div>
+    </>
   );
 }

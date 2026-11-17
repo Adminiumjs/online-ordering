@@ -135,6 +135,26 @@ export interface OrderReply extends Partial<Priced> {
   replayed?: true;
   /** The order's own link, answered once, on the first create (never on a replay). */
   link?: { key: string; token: string };
+  /**
+   * Where the diner pays for an order placed to pay now: Adminium's pay page.
+   * Null when the kitchen cannot take the payment right now (and on a
+   * replay); absent for an order placed to pay at pickup.
+   */
+  payUrl?: string | null;
+}
+
+/**
+ * Where an order's newest online payment stands, as Adminium tells the diner
+ * back from the pay page: none started, a page still open (the service has
+ * not said yet), the bank confirming, paid, didn't finish, or the time to pay
+ * on the service's page ran out. One word, nothing else.
+ */
+export type PaymentState = "none" | "open" | "confirming" | "paid" | "failed" | "expired";
+
+/** Whether the kitchen takes payments online right now; `test` while someone who manages payments rehearses the checkout here. */
+export interface OnlinePayments {
+  online: boolean;
+  test: boolean;
 }
 
 /** A dry run's reply: every figure a save would write, and how the limits it takes from stand. */

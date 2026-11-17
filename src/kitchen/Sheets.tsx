@@ -2,8 +2,15 @@
  * What opens over the kitchen: an order's ticket (with Print), cancelling it
  * with a reason the diner reads, handing it over with how it was paid, and
  * tomorrow's pre-orders.
+ *
+ * An order paid online says so on its ticket ("Online · Stripe") and needs no
+ * payment step at the hand-over. Someone who may refund sees Refund on it:
+ * two steps (the amount and why, then one sentence), written as the kitchen's
+ * own refund row, which Adminium sends back through the service the payment
+ * came by. A paid order cancelled whose money is still held shows "Refund
+ * owed". Nobody else sees anything extra.
  */
-import { useId } from "react";
+import { useId, useRef } from "react";
 
 import { Icon, type IconName } from "../components/Icon.tsx";
 import { Modal } from "../components/Modal.tsx";
@@ -15,10 +22,33 @@ import { useI18n, type TFunction } from "../i18n/index.tsx";
 import { firstName, maskEmail, telHref, type Formatter } from "../lib/format.ts";
 import { storedOptionsText, type MenuModel } from "../lib/menu.ts";
 import { addDays, venueDay } from "../lib/venueTime.ts";
-import { BOARD, NEXT, cancelOrder, dayOf, handOff, kToday, markSoldOut, num, useKitchen, type BoardState, type CancelDraft, NO_CARD, checkHandoffCard, owed, setHandoffCard, takeHandoffCard } from "../state/kitchen.ts";
+import {
+  BOARD,
+  NEXT,
+  cancelOrder,
+  confirmRefund,
+  dayOf,
+  editRefund,
+  handOff,
+  kToday,
+  markSoldOut,
+  nextRefundStep,
+  num,
+  onlinePayment,
+  refundOwed,
+  startRefund,
+  useKitchen,
+  type BoardState,
+  type CancelDraft,
+  NO_CARD,
+  checkHandoffCard,
+  owed,
+  setHandoffCard,
+  takeHandoffCard,
+} from "../state/kitchen.ts";
 import { mailable } from "../lib/plainText.ts";
 import { toast, useUi } from "../state/ui.ts";
-import { LineList, PhoneTag } from "./Board.tsx";
+import { LineList, PaidTag, PhoneTag, paidOnline } from "./Board.tsx";
 import { useKFmt } from "./fmt.ts";
 import { advance, sayRefused, word } from "./moves.ts";
 
@@ -52,7 +82,7 @@ function printTicket(t: TFunction, fmt: Formatter, order: OrderWithLines, venue:
     })
     .join("");
   const dir = document.documentElement.dir === "rtl" ? "rtl" : "ltr";
-  const html = `<!doctype html><html lang="${esc(document.documentElement.lang)}" dir="${dir}"><head><meta charset="utf-8"><title>#${esc(o["number"])}</title><style>@page{margin:6mm}body{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;margin:0;padding:8px;width:280px;color:#000}h1{font-size:30px;margin:0}td{vertical-align:top;padding:4px 0}.q{width:36px;font-weight:700}.n{font-weight:700}div{margin-top:2px}hr{border:0;border-top:1px dashed #000;margin:10px 0}</style></head><body><div>${esc(venue)}${o["channel"] === "phone" ? ` · ${esc(t("kitchen.phone"))}` : ""}</div><h1>#${esc(o["number"])}</h1><div><b>${esc(o["name"])}</b></div><div>${esc(t("kitchen.pickup"))} ${esc(fmt.time(String(o["pickup_at"])))} · ${esc(dayLine(t, fmt, String(o["pickup_at"]), today))}</div><div>${esc(t("kitchen.ticket.placed"))} ${esc(fmt.time(String(o["placed_at"] ?? "")))}</div>${o["note"] ? `<hr><div class="n">${esc(o["note"])}</div>` : ""}<hr><table>${lines}</table><hr><div><b>${esc(num(o["paid"], 0) > 0 ? t("kitchen.collect") : t("totals.total"))} ${esc(fmt.money(owed(o)))}</b> · ${esc(num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup"))}</div></body></html>`;
+  const html = `<!doctype html><html lang="${esc(document.documentElement.lang)}" dir="${dir}"><head><meta charset="utf-8"><title>#${esc(o["number"])}</title><style>@page{margin:6mm}body{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;margin:0;padding:8px;width:280px;color:#000}h1{font-size:30px;margin:0}td{vertical-align:top;padding:4px 0}.q{width:36px;font-weight:700}.n{font-weight:700}div{margin-top:2px}hr{border:0;border-top:1px dashed #000;margin:10px 0}</style></head><body><div>${esc(venue)}${o["channel"] === "phone" ? ` · ${esc(t("kitchen.phone"))}` : ""}</div><h1>#${esc(o["number"])}</h1><div><b>${esc(o["name"])}</b></div><div>${esc(t("kitchen.pickup"))} ${esc(fmt.time(String(o["pickup_at"])))} · ${esc(dayLine(t, fmt, String(o["pickup_at"]), today))}</div><div>${esc(t("kitchen.ticket.placed"))} ${esc(fmt.time(String(o["placed_at"] ?? "")))}</div>${o["note"] ? `<hr><div class="n">${esc(o["note"])}</div>` : ""}<hr><table>${lines}</table><hr><div><b>${esc(num(o["paid"], 0) > 0 && !paidOnline(o) ? t("kitchen.collect") : t("totals.total"))} ${esc(fmt.money(paidOnline(o) ? o["total"] : owed(o)))}</b> · ${esc(paidOnline(o) ? t("kpay.paidOnline") : num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup"))}</div></body></html>`;
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText = "position:fixed;inset-inline-end:0;bottom:0;width:0;height:0;border:0;";
@@ -82,9 +112,17 @@ export function Ticket() {
   const order = useKitchen((s) => s.orders.find((o) => o.order.id === s.ticket));
   const menu = useKitchen((s) => s.menu);
   const venue = String(useKitchen((s) => s.settings?.["venue_name"]) ?? "");
+  const payments = useKitchen((s) => s.payments);
+  const refundButton = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   if (id === null || order === undefined) return null;
   const o = order.order;
+  // Paid online: the payment that still holds money, what is owed back of a cancelled order, and whether this person may refund.
+  const online = onlinePayment(order);
+  const onlineAny = (order.payments ?? []).find((p) => p["method"] === "online") ?? null;
+  const owedBack = refundOwed(order);
+  const mayRefund = payments.on && payments.refund && online !== null;
+  const refunds = (order.refunds ?? []).filter((r) => r["method"] === "online");
   const status = String(o["status"]);
   const today = kToday(now);
   const close = () => useKitchen.setState({ ticket: null });
@@ -113,6 +151,13 @@ export function Ticket() {
         </h2>
         <StatusChip status={status} />
         {o["channel"] === "phone" && <PhoneTag />}
+        {paidOnline(o) && <PaidTag />}
+        {payments.on && owedBack > 0 && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 999, background: "var(--warn-soft)", color: "var(--warn)", fontSize: 11.5, fontWeight: 800 }}>
+            <Icon name="alert-circle" size={12} />
+            {t("kpay.owedAmount", { amount: fmt.money(owedBack) })}
+          </span>
+        )}
         <button className="jn-gi jk-iconbtn is-sm" onClick={close} aria-label={t("shell.close")} style={{ marginInlineStart: "auto" }}>
           <Icon name="x" size={16} />
         </button>
@@ -187,13 +232,39 @@ export function Ticket() {
             </div>
           </>
         )}
-        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBlockStart: 18, paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>{num(o["paid"], 0) > 0 ? t("kitchen.collect") : t("totals.total")}</span>
-          <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 16, fontWeight: 600 }}>
-            {fmt.money(owed(o))}
-          </span>
-          <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>· {num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup")}</span>
-        </div>
+        {onlineAny !== null ? (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBlockStart: 18, paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 13, fontWeight: 800 }}>{t("totals.total")}</span>
+            <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 16, fontWeight: 600 }}>
+              {fmt.money(o["total"])}
+            </span>
+            <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>· {t("kpay.online")}</span>
+            <ProviderChip provider={onlineAny["provider"]} />
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBlockStart: 18, paddingBlockStart: 14, borderBlockStart: "1px solid var(--border)" }}>
+            <span style={{ fontSize: 13, fontWeight: 800 }}>{num(o["paid"], 0) > 0 ? t("kitchen.collect") : t("totals.total")}</span>
+            <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 16, fontWeight: 600 }}>
+              {fmt.money(owed(o))}
+            </span>
+            <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>· {num(o["paid"], 0) > 0 && owed(o) <= 0 ? t("kitchen.handoff.paidAll") : t("kitchen.ticket.payAtPickup")}</span>
+          </div>
+        )}
+        {refunds.map((r) => (
+          <div key={r.id} style={{ display: "flex", flexDirection: "column", gap: 3, marginBlockStart: 10, padding: "11px 13px", borderRadius: 12, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 8, fontSize: 13, fontWeight: 800 }}>
+              <Icon name="rotate-ccw" size={13} style={{ color: "var(--fg-muted)" }} />
+              {r["refund_state"] === "not-sent" ? t("kpay.notSent") : r["refund_state"] === "done" ? t("kpay.refunded") : t("kpay.pending")}
+              <span className="jk-mono" style={{ marginInlineStart: "auto", fontWeight: 600 }}>
+                −{fmt.money(r["amount"])}
+              </span>
+            </span>
+            <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+              {t("kpay.refundMeta", { time: r["made_at"] ? fmt.time(String(r["made_at"])) : "", who: r["automatic"] === true || r["automatic"] === 1 ? t("kpay.automatic") : String(r["made_by"] ?? "") })}
+            </span>
+            {r["reason"] ? <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>{t("kpay.refundWhy", { why: String(r["reason"]) })}</span> : null}
+          </div>
+        ))}
       </div>
       <div style={{ flex: "none", display: "flex", flexDirection: "column", gap: 10, padding: "16px 20px 20px", borderBlockStart: "1px solid var(--border)", background: "var(--surface-2)" }}>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -208,11 +279,163 @@ export function Ticket() {
             </button>
           )}
         </div>
-        {onBoard && (
-          <button className="jn-gi" onClick={() => useKitchen.setState({ cancel: { id: o.id, reason: null, dish: null, dishId: null, note: "", markSold: true, busy: false } })} style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 7, height: 38, paddingInline: 14, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-            <Icon name="circle-slash" size={14} />
-            {t("kitchen.ticket.cancel")}
+        {(onBoard || mayRefund) && (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {onBoard && (
+              <button className="jn-gi" onClick={() => useKitchen.setState({ cancel: { id: o.id, reason: null, dish: null, dishId: null, note: "", markSold: true, busy: false } })} style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, paddingInline: 14, borderRadius: 10, border: "1px solid var(--border)", background: "transparent", color: "var(--danger)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
+                <Icon name="circle-slash" size={14} />
+                {t("kitchen.ticket.cancel")}
+              </button>
+            )}
+            {mayRefund && (
+              <button ref={refundButton} className="jn-gi" onClick={() => startRefund(order)} style={{ display: "inline-flex", alignItems: "center", gap: 7, height: 38, paddingInline: 14, borderRadius: 10, border: "1px solid var(--border-strong)", background: "var(--surface)", color: "var(--fg)", fontSize: 12.5, fontWeight: 800, cursor: "pointer" }}>
+                <Icon name="rotate-ccw" size={14} />
+                {t("kpay.refund")}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      <RefundSheet order={order} back={refundButton} />
+    </Modal>
+  );
+}
+
+/** "Online · Stripe": how an order was paid online, by the service's own name, plain. */
+function ProviderChip({ provider }: { provider: unknown }) {
+  const { t } = useI18n();
+  const name = typeof provider === "string" && provider.trim() !== "" ? provider.trim() : null;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 999, background: "var(--info-soft)", color: "var(--info)", fontSize: 11.5, fontWeight: 800 }}>
+      <Icon name="globe" size={11} />
+      {name === null ? t("kpay.online") : t("kpay.chip", { provider: name })}
+    </span>
+  );
+}
+
+/**
+ * Giving back what a diner paid online, in two steps: the amount (up to what
+ * the payment still holds) and a line of why; then one sentence that says
+ * what will happen, and Refund. Escape closes it, and the focus goes back to
+ * the button that opened it.
+ */
+function RefundSheet({ order, back }: { order: OrderWithLines; back: React.RefObject<HTMLButtonElement | null> }) {
+  const { t } = useI18n();
+  const fmt = useKFmt();
+  const r = useKitchen((s) => s.refund);
+  const titleId = useId();
+  const amountId = useId();
+  const reasonId = useId();
+  if (r === null || r.orderId !== order.order.id) return null;
+  const payment = (order.payments ?? []).find((p) => p.id === r.paymentId);
+  const max = num(payment?.["kept"], num(payment?.["amount"]));
+  const provider = typeof payment?.["provider"] === "string" && payment["provider"] !== "" ? String(payment["provider"]) : t("kpay.service");
+  const close = () => {
+    useKitchen.setState({ refund: null });
+    requestAnimationFrame(() => back.current?.focus());
+  };
+  const go = async () => {
+    const done = await confirmRefund();
+    if (done.ok) {
+      toast(t("kpay.refundedToast", { amount: fmt.money(done.amount) }));
+      requestAnimationFrame(() => back.current?.focus());
+    }
+  };
+  const amountText = fmt.money(Number(r.amount.replace(",", ".")));
+  return (
+    <Modal labelledBy={titleId} width={440} z={600} onClose={close}>
+      <div style={{ padding: "22px 22px 6px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <h2 id={titleId} style={{ margin: 0, fontSize: 21, fontWeight: 800, letterSpacing: "-.03em" }}>
+            {t("kpay.refundTitle", { number: String(order.order["number"]) })}
+          </h2>
+          <button className="jn-gi jk-iconbtn is-sm" onClick={close} aria-label={t("shell.close")} style={{ marginInlineStart: "auto" }}>
+            <Icon name="x" size={16} />
           </button>
+        </div>
+        {r.step === 1 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBlockStart: 16 }}>
+            <div>
+              <label htmlFor={amountId} style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBlockEnd: 7 }}>
+                {t("kpay.amount")}
+              </label>
+              <input
+                id={amountId}
+                className="jn-fld jk-mono"
+                inputMode="decimal"
+                dir="ltr"
+                value={r.amount}
+                onChange={(e) => editRefund({ amount: e.target.value })}
+                aria-invalid={r.error?.amount === true}
+                aria-describedby={`${amountId}-msg`}
+                style={{ width: "100%", height: 44, paddingInline: 13, borderRadius: 11, border: `1px solid ${r.error?.amount === true ? "var(--danger)" : "var(--border-strong)"}`, background: "var(--surface-2)", color: "var(--fg)", fontSize: 15 }}
+              />
+              {r.error?.amount === true ? (
+                <span id={`${amountId}-msg`} role="alert" style={{ display: "block", marginBlockStart: 7, fontSize: 12, fontWeight: 600, color: "var(--danger)" }}>
+                  {t("kpay.errAmount", { min: fmt.money(0.01), max: fmt.money(max) })}
+                </span>
+              ) : (
+                <span id={`${amountId}-msg`} style={{ display: "block", marginBlockStart: 7, fontSize: 12, color: "var(--fg-subtle)" }}>
+                  {t("kpay.amountHelp", { amount: fmt.money(max) })}
+                </span>
+              )}
+            </div>
+            <div>
+              <label htmlFor={reasonId} style={{ display: "block", fontSize: 12.5, fontWeight: 700, marginBlockEnd: 7 }}>
+                {t("kpay.reason")}
+              </label>
+              <input
+                id={reasonId}
+                className="jn-fld"
+                value={r.reason}
+                maxLength={120}
+                placeholder={t("kpay.reasonPlaceholder")}
+                onChange={(e) => editRefund({ reason: e.target.value.slice(0, 120) })}
+                aria-invalid={r.error?.reason === true}
+                aria-describedby={r.error?.reason === true ? `${reasonId}-msg` : undefined}
+                style={{ width: "100%", height: 44, paddingInline: 13, borderRadius: 11, border: `1px solid ${r.error?.reason === true ? "var(--danger)" : "var(--border-strong)"}`, background: "var(--surface-2)", color: "var(--fg)", fontSize: 14 }}
+              />
+              {r.error?.reason === true && (
+                <span id={`${reasonId}-msg`} role="alert" style={{ display: "block", marginBlockStart: 7, fontSize: 12, fontWeight: 600, color: "var(--danger)" }}>
+                  {t("kpay.errReason")}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBlockStart: 16 }}>
+            <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.55, fontWeight: 700, textWrap: "pretty" }}>
+              {t("kpay.confirm", { amount: amountText, name: String(order.order["name"] ?? ""), provider, why: r.reason.trim() })}
+            </p>
+            <p style={{ margin: 0, fontSize: 13, color: "var(--fg-muted)" }}>{t("kpay.cantUndo")}</p>
+            {r.error?.refused !== undefined && (
+              <p role="alert" style={{ margin: 0, fontSize: 12.5, fontWeight: 700, color: "var(--danger)" }}>
+                {r.error.refused === "PAYMENT_REFUND_NOT_ALLOWED" ? t("kpay.err.notAllowed") : t("kpay.err.failed")}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", padding: "16px 22px 20px", marginBlockStart: 14, borderBlockStart: "1px solid var(--border)", background: "var(--surface-2)" }}>
+        {r.step === 1 ? (
+          <>
+            <button className="jn-gi jk-btn-ghost" onClick={close} style={{ height: 46, padding: "0 18px", borderRadius: 12, fontSize: 14 }}>
+              {t("kpay.cancel")}
+            </button>
+            <button className="jn-btn jk-btn-primary" onClick={() => nextRefundStep(max)} style={{ flex: 1, height: 46, borderRadius: 12, fontSize: 14 }}>
+              {t("kpay.next")}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="jn-gi jk-btn-ghost" onClick={() => editRefund({ step: 1 })} disabled={r.busy} style={{ height: 46, padding: "0 18px", borderRadius: 12, fontSize: 14 }}>
+              {t("kpay.back")}
+            </button>
+            <button className="jn-btn" onClick={() => void go()} disabled={r.busy} aria-busy={r.busy} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, height: 46, borderRadius: 12, border: "none", background: "var(--danger)", color: "var(--on-danger)", fontSize: 14, fontWeight: 800, cursor: r.busy ? "wait" : "pointer" }}>
+              <Icon name="rotate-ccw" size={16} />
+              {t("kpay.refundGo", { amount: amountText })}
+            </button>
+          </>
         )}
       </div>
     </Modal>
@@ -248,10 +471,14 @@ export function CancelSheet() {
   const fmt = useKFmt();
   const c = useKitchen((s) => s.cancel);
   const order = useKitchen((s) => s.orders.find((o) => o.order.id === s.cancel?.id));
+  const payments = useKitchen((s) => s.payments);
+  const autoRefund = useKitchen((s) => s.settings?.["auto_refund"] !== false && s.settings?.["auto_refund"] !== 0);
   const titleId = useId();
   const dishLabel = useId();
   if (c === null || order === undefined) return null;
   const o = order.order;
+  // Paid online: the money goes back by itself when this person may refund and the kitchen's switch is on; else it is owed.
+  const paidBack = payments.on ? num(o["online_paid"]) : 0;
   const name = firstName(o["name"]);
   const set = (patch: Partial<CancelDraft>) => useKitchen.setState({ cancel: { ...c, ...patch } });
   const close = () => useKitchen.setState({ cancel: null });
@@ -284,6 +511,12 @@ export function CancelSheet() {
           </button>
         </div>
         <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: "var(--fg-muted)" }}>{o["email"] ? t("kitchen.cancel.why", { name }) : t("kitchen.cancel.whyCall", { name })}</p>
+        {paidBack > 0 && (
+          <div className="jk-notice" style={{ marginBlockStart: 12, background: "var(--info-soft)", color: "var(--info)", fontSize: 12.5, fontWeight: 700 }}>
+            <Icon name="info" size={14} style={{ marginBlockStart: 1 }} />
+            <span>{autoRefund && payments.refund ? t("kpay.cancel.auto", { amount: fmt.money(paidBack) }) : t("kpay.cancel.owed", { amount: fmt.money(paidBack) })}</span>
+          </div>
+        )}
         <div role="radiogroup" aria-label={t("kitchen.cancel.reason")} style={{ display: "flex", flexWrap: "wrap", gap: 7, marginBlockStart: 16 }}>
           {REASONS.map((r) => (
             <button key={r.id} className="jn-chip jk-chip" role="radio" aria-checked={c.reason === r.id} onClick={() => set({ reason: r.id })} style={{ height: 36 }}>
@@ -370,15 +603,25 @@ export function HandOffSheet() {
   const cardId = useId();
   if (h === null || order === undefined) return null;
   const o = order.order;
-  // What gift cards paid, and what is left for the counter: Adminium's figures, read with the order.
+  // What gift cards (and a payment online) paid, and what is left for the counter: Adminium's figures, read with the order.
   const cardsPaid = num(o["paid"], 0);
   const left = owed(o);
+  // Paid online, all of it: no payment step. Some of it by a gift card beside: said as paid so far.
+  const online = num(o["online_paid"]);
+  const onlineAll = online > 0 && left <= 0;
+  const onlineRow = (order.payments ?? []).find((p) => p["method"] === "online") ?? null;
   const close = () => useKitchen.setState({ handoff: null });
   const go = async () => {
     const result = await handOff();
     if (result.ok) {
       const said = { number: String(o["number"]), name: firstName(o["name"]), total: fmt.money(result.collected) };
-      toast(result.paid === "gift_card" ? t("kitchen.handoff.doneGift", said) : t((result.paid === "mixed" ? h.paid : result.paid) === "card" ? "kitchen.handoff.doneCard" : "kitchen.handoff.doneCash", said));
+      toast(
+        result.paid === "online"
+          ? t("kpay.handedOver", said)
+          : result.paid === "gift_card"
+            ? t("kitchen.handoff.doneGift", said)
+            : t((result.paid === "mixed" ? h.paid : result.paid) === "card" ? "kitchen.handoff.doneCard" : "kitchen.handoff.doneCash", said),
+      );
     } else if (result.result.ok === false && result.result.kind === "disagrees") toast(t("kitchen.handoff.changed"));
     else sayRefused(t, fmt, result.result, String(o["number"]), String(o["name"] ?? ""));
   };
@@ -421,13 +664,29 @@ export function HandOffSheet() {
             );
           })}
         </div>
+        {onlineAll ? (
+          <div role="status" style={{ display: "flex", flexDirection: "column", gap: 8, marginBlockStart: 16, padding: "14px 15px", borderRadius: 13, background: "var(--pos-soft)", color: "var(--pos)" }}>
+            <span style={{ display: "flex", alignItems: "baseline", gap: 10, fontSize: 15, fontWeight: 800 }}>
+              <Icon name="check-circle-2" size={16} />
+              {t("kpay.handover")}
+              <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 24, fontWeight: 600 }}>
+                {fmt.money(o["total"])}
+              </span>
+            </span>
+            <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <ProviderChip provider={onlineRow?.["provider"]} />
+              {cardsPaid - online > 0 && <span style={{ fontSize: 12.5, fontWeight: 700 }}>{t("kpay.handover.card", { amount: fmt.money(cardsPaid - online) })}</span>}
+            </span>
+          </div>
+        ) : (
         <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBlockStart: 16 }}>
           <span style={{ fontSize: 15, fontWeight: 800 }}>{t("kitchen.collect")}</span>
           <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 30, fontWeight: 600, letterSpacing: "-.02em" }}>
             {fmt.money(left)}
           </span>
         </div>
-        {cardsPaid > 0 && (
+        )}
+        {cardsPaid > 0 && !onlineAll && (
           <div role="status" className="jk-notice" style={{ marginBlockStart: 12, background: "var(--pos-soft)", color: "var(--pos)", fontSize: 12.5, fontWeight: 700 }}>
             <Icon name="gift" size={14} style={{ marginBlockStart: 1 }} />
             <span>{left > 0 ? t("kitchen.handoff.paidSoFar", { amount: fmt.money(cardsPaid), due: fmt.money(left) }) : t("kitchen.handoff.paidAll")}</span>

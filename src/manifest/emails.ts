@@ -18,6 +18,10 @@
  * Only the online confirmation carries the order's own link: a code is sent
  * only to the person it opens the order for, and the ready, cancelled and
  * receipt emails have no need of it.
+ *
+ * A payment made online reads "Paid online" and its amount, never a card's
+ * brand or digits (the pay page took them, and keeps them); money given back
+ * of it "goes back to the card or PayPal account you paid with".
  */
 import type { Tag } from "./labels.ts";
 import type { Kind } from "./outbox.ts";
@@ -45,12 +49,17 @@ export type EmailWords = Record<Kind, Words> & {
   giftCardRow: string;
   /** In place of "Pay at pickup" when a gift card paid it all. */
   prepaidBox: string;
+  /** In place of "Pay at pickup" when it was paid online: "Paid online · $23.27". */
+  paidBox: string;
+  /** What was paid online, as a row beside a gift card's. */
+  onlineRow: string;
   /** The footer of an email about an order, and of one about an enquiry. */
   orderFoot: string;
   enquiryFoot: string;
 };
 
 const NOTHING_CHARGED = "Nothing was charged — you pay at pickup, and nothing was picked up.";
+const MONEY_BACK = "The {{order.online_taken.money}} you paid online goes back to the card or PayPal account you paid with. We'll email you when it's on its way.";
 const CALL_US = "Call us on {{practice.phone}} if you'd like to order again.";
 
 export const EMAIL_EN: EmailWords = {
@@ -61,6 +70,8 @@ export const EMAIL_EN: EmailWords = {
   toPay: "To pay at pickup",
   giftCardRow: "Gift card ending {{row.card_last4}}",
   prepaidBox: "Paid by gift card. Nothing to pay at the counter.",
+  paidBox: "Paid online · {{order.online_taken.money}}",
+  onlineRow: "Paid online",
   orderFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you ordered from us.",
   enquiryFoot: "{{appName}} · {{practice.address}} · {{practice.phone}}. You're getting this because you sent us a large-order enquiry.",
   "order-confirmation": {
@@ -156,14 +167,51 @@ export const EMAIL_EN: EmailWords = {
   "card-money-returned": {
     name: "Gift card money returned",
     subject: "Your gift card got its money back",
-    preheader: "#{{order.number}} · {{order.paid.money}} back on your gift card",
-    paras: ["{{order.paid.money}} went back to your gift card for order #{{order.number}}."],
+    preheader: "#{{order.number}} · {{order.card_paid.money}} back on your gift card",
+    paras: ["{{order.card_paid.money}} went back to your gift card for order #{{order.number}}."],
   },
   "card-money-kept": {
     name: "Gift card money kept",
     subject: "About your order #{{order.number}}",
     preheader: "#{{order.number}} was not collected",
-    paras: ["Your gift card paid {{order.paid.money}} for order #{{order.number}}, which was not collected.", "Ask at the counter, or call us on {{practice.phone}}."],
+    paras: ["Your gift card paid {{order.card_paid.money}} for order #{{order.number}}, which was not collected.", "Ask at the counter, or call us on {{practice.phone}}."],
+  },
+  "order-confirmation-paid": {
+    name: "Order confirmation (paid online)",
+    subject: "Your order #{{order.number}} is in",
+    preheader: "Pickup {{order.pickup_at.relative_day}} at {{order.pickup_at.time}} · paid online",
+    heading: "Thanks, {{recipient.first_name}}.",
+    paras: ["We've got your order #{{order.number}} for {{order.pickup_at.relative_day}}, {{order.pickup_at.day_month}} at {{order.pickup_at.time}}."],
+    button: "Follow your order",
+  },
+  "order-ready-paid": {
+    name: "Order ready (paid online)",
+    subject: "#{{order.number}} is on the shelf",
+    preheader: "On the shelf now · nothing to pay",
+    heading: "#{{order.number}} is ready.",
+    paras: ["Come on in — it's waiting for you, filed by number.", "{{practice.directions}}", "Paid online · Nothing to pay at the counter."],
+  },
+  "order-cancelled-paid": {
+    name: "Cancelled after paying online",
+    subject: "We had to cancel #{{order.number}}",
+    preheader: "{{order.online_taken.money}} goes back to you",
+    heading: "Sorry, {{recipient.first_name}}.",
+    paras: ["Why: {{order.cancel_code.label}}.", MONEY_BACK, CALL_US],
+  },
+  "order-cancelled-paid-by-you": {
+    name: "Cancelled by the customer after paying online",
+    subject: "You cancelled #{{order.number}}",
+    preheader: "{{order.online_taken.money}} goes back to you",
+    paras: ["You cancelled #{{order.number}} at {{order.cancelled_at.time}}.", MONEY_BACK, "If you didn't cancel it, call us on {{practice.phone}}."],
+  },
+  "order-refunded": {
+    name: "Money paid online refunded",
+    subject: "A refund for #{{order.number}}",
+    preheader: "{{order.online_refunded.money}} on its way back",
+    paras: [
+      "{{order.online_refunded.money}} of order #{{order.number}} is on its way back to the card or PayPal account you paid with.",
+      "It can take a few days to show.",
+    ],
   },
   "enquiry-received": {
     name: "Large order enquiry received",
@@ -210,15 +258,25 @@ const cardPayments = (all: EmailWords): Block => ({
   block: "email.rows",
   id: "card-payments",
   data: {
-    from: { link: "order", table: "payments", via: "order_id", orderBy: "made_at", limit: 10 },
+    from: { link: "order", table: "payments", via: "order_id", orderBy: "made_at", limit: 10, where: { column: "method", in: ["gift_card"] } },
     row: { title: all.giftCardRow, amount: "−{{row.kept.money}}" },
   },
 });
 
+/** What was paid online, as it still stands. */
+const onlinePayments = (all: EmailWords): Block => ({
+  block: "email.rows",
+  id: "online-payments",
+  data: {
+    from: { link: "order", table: "payments", via: "order_id", orderBy: "made_at", limit: 10, where: { column: "method", in: ["online"] } },
+    row: { title: all.onlineRow, amount: "−{{row.kept.money}}" },
+  },
+});
+
 /** The emails that list what was ordered and what it costs. */
-const WITH_LINES: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-phone", "order-confirmation-prepaid"]);
+const WITH_LINES: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-phone", "order-confirmation-prepaid", "order-confirmation-paid"]);
 /** The confirmations of an online order: they carry the order's own link. */
-const WITH_LINK: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-prepaid"]);
+const WITH_LINK: ReadonlySet<Kind> = new Set(["order-confirmation", "order-confirmation-prepaid", "order-confirmation-paid"]);
 
 function layout(kind: Kind, all: EmailWords) {
   const w = all[kind];
@@ -241,9 +299,15 @@ function layout(kind: Kind, all: EmailWords) {
       },
     });
     blocks.push(cardPayments(all));
-    // Always there: with no gift card it repeats the total (a block can be left out for an empty value, and "paid" is 0, never empty).
-    blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay.money}}" }] } });
-    blocks.push({ block: "email.box", id: "pay", data: { label: kind === "order-confirmation-prepaid" ? all.prepaidBox : all.payAtPickup } });
+    if (kind === "order-confirmation-paid") {
+      // Paid online: the receipt of that payment, beside what a gift card paid. Nothing is left to pay at the counter.
+      blocks.push(onlinePayments(all));
+      blocks.push({ block: "email.box", id: "pay", data: { label: all.paidBox } });
+    } else {
+      // Always there: with no gift card it repeats the total (a block can be left out for an empty value, and "paid" is 0, never empty).
+      blocks.push({ block: "email.tax-breakdown", id: "to-pay", data: { lines: [{ label: all.toPay, amount: "{{order.to_pay.money}}" }] } });
+      blocks.push({ block: "email.box", id: "pay", data: { label: kind === "order-confirmation-prepaid" ? all.prepaidBox : all.payAtPickup } });
+    }
     blocks.push({ block: "email.contact", id: "where", data: { name: "{{practice.address}}" } });
     blocks.push(para("directions", "{{practice.directions}}"));
   }

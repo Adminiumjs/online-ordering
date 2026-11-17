@@ -8,10 +8,14 @@
  * its writable columns; the refusals are the public API's own codes. The
  * sign-in email is the demo's: its code is 284716 and its link opens at once.
  *
+ * Paying online is the demo's too: "Pay now" places the order waiting for its
+ * payment, as Adminium does, and the pay page is a moment's hand-off that
+ * pays it at once (`demoPay`). No money moves, and no card is asked for.
+ *
  * DEMO BUILD ONLY — nothing in a real build imports it.
  */
-import type { DinerPort, Menu, OrderWithLines } from "../data/ports.ts";
-import { ApiError, type ClaimReply, type DishState, type Id, type OrderBody, type OrderReply, type QuoteReply, type Row, type SlotTime, type StockWord } from "../data/wire.ts";
+import type { DinerPort, Menu, OrderDoor, OrderWithLines } from "../data/ports.ts";
+import { ApiError, type ClaimReply, type DishState, type Id, type OnlinePayments, type OrderBody, type PaymentState, type OrderReply, type QuoteReply, type Row, type SlotTime, type StockWord } from "../data/wire.ts";
 import { toMs } from "../lib/venueTime.ts";
 import { Engine, refusedValue, refusedWrite, treeRefused, type Writer } from "./engine.ts";
 import { columnOf, LINE_NOTE_RULE, linkFreeText, ruleOf, type PlainTextColumn } from "../lib/plainText.ts";
@@ -25,6 +29,12 @@ const GUEST: Writer = { origin: "public", name: null, roles: [] };
 
 /** The code and link of the demo's sign-in email. */
 export const DEMO_SIGN_IN = { code: "284716", token: "demo-sign-in-link" };
+
+/** The demo's pay page: no page at all, a moment's hand-off that pays the order (`DemoDiner.demoPay`). */
+export const DEMO_PAY_URL = "demo:pay";
+
+/** Who records a payment made online: Adminium itself, as the payment. */
+const PAYMENT: Writer = { origin: "automation", name: null, roles: [] };
 
 /** The customer key's entry for a table and method (and the `link` key's with `key`). */
 function entry(table: string, method: "GET" | "POST" | "PATCH", key?: string): Entry {
@@ -79,6 +89,8 @@ export class DemoDiner implements DinerPort {
   private readonly keys = new Map<string, Id>();
   /** A fault the demo card arms for the next placing (the network drops, the slot fills, a price moves). */
   fault: "offline" | null = null;
+  /** Whether the demo's kitchen takes payments online: on, so Pay now shows (no money moves). */
+  payOnline = true;
   /** Something the demo card makes happen just before the next placing lands (another diner takes the time, a price moves). */
   beforePlace: ((body: OrderBody) => void) | null = null;
 
@@ -96,14 +108,17 @@ export class DemoDiner implements DinerPort {
       let back = 0;
       for (const payment of this.world.all("payments")) {
         const kept = Number(payment["kept"] ?? 0);
-        if (payment["order_id"] !== id || kept <= 0) continue;
+        // What was paid online goes back through the payment service, not to a card (`Engine.refundCancelled`).
+        if (payment["order_id"] !== id || kept <= 0 || payment["method"] === "online") continue;
         this.cards.giveBack(String(payment["card_code"]), kept);
         this.world.update("payments", payment.id, { returned: Number(payment["returned"] ?? 0) + kept, kept: 0 });
         back += kept;
       }
       if (back === 0) return;
       const order = this.world.get("orders", id);
-      if (order !== undefined) this.world.update("orders", id, { paid: 0, due: Number(order["total"] ?? 0), to_pay: Number(order["total"] ?? 0), prepaid: 0 });
+      // What was paid online stays paid until it is refunded.
+      const online = Number(order?.["online_paid"] ?? 0);
+      if (order !== undefined) this.world.update("orders", id, { paid: online, due: Number(order["total"] ?? 0) - online, to_pay: Number(order["total"] ?? 0) - online, prepaid: 0, card_paid: 0 });
     };
   }
 
@@ -235,13 +250,15 @@ export class DemoDiner implements DinerPort {
     };
   }
 
-  async place(body: OrderBody, clientKey: string): Promise<OrderReply> {
+  async place(body: OrderBody, clientKey: string, opts: { payNow?: boolean } = {}): Promise<OrderReply> {
     await this.wait(this.latency.write);
     if (this.fault === "offline") {
       // The request went, the answer did not: the order may be in.
       this.fault = null;
       throw new ApiError(0, "PUBLIC_NETWORK_UNAVAILABLE", "could not reach the kitchen");
     }
+    // The pay-now door is open only while the kitchen takes payments online.
+    if (opts.payNow === true && !this.payOnline) throw new ApiError(403, "PUBLIC_SWITCHED_OFF", "This is switched off.");
     const first = this.beforePlace;
     this.beforePlace = null;
     first?.(body);
@@ -277,7 +294,9 @@ export class DemoDiner implements DinerPort {
     // The tick is the diner's yes to the kitchen's news, as Adminium keeps it (here with no consent log); unticked takes nothing back.
     if (tree.order["opt_in"] === true) this.world.update("customers", customer.id, { opt_in: true });
     const token = mintToken();
-    const { order } = this.engine.writeOrder(tree, GUEST, { customer_id: customer.id, email, link_token: token });
+    // Placed to pay now: made waiting for its payment, as the pay entry's own default makes it.
+    const starts = opts.payNow === true ? { status: "paying" } : {};
+    const { order } = this.engine.writeOrder(tree, GUEST, { customer_id: customer.id, email, link_token: token, ...starts });
     this.keys.set(clientKey, order.id);
     this.linkSession = { orderId: order.id };
     // The codes the order keeps, and the card's payment: taken off the card now, as the save takes it.
@@ -288,7 +307,84 @@ export class DemoDiner implements DinerPort {
       this.cards.spend(card.code, card.amount);
       this.world.insert("payments", { order_id: order.id, card_code: card.code, card_id: null, card_last4: card.code.replace(/[^0-9A-Za-z]/g, "").slice(-4).toUpperCase(), amount: card.amount, card_balance_after: this.cards.balance(card.code), returned: null, kept: card.amount, made_at: new Date(this.engine.now).toISOString(), made_by: "customer", client_key: null });
     }
-    return { ...this.reply(order.id), link: { key: "link", token }, applied: tree.priced.applied, told: tree.priced.told, payment: tree.priced.payment };
+    return {
+      ...this.reply(order.id),
+      link: { key: "link", token },
+      applied: tree.priced.applied,
+      told: tree.priced.told,
+      payment: tree.priced.payment,
+      ...(opts.payNow === true ? { payUrl: this.payOnline ? DEMO_PAY_URL : null } : {}),
+    };
+  }
+
+  // ── paying online ───────────────────────────────────────────────────────────
+
+  async payments(): Promise<OnlinePayments> {
+    await this.wait(this.latency.read);
+    return { online: this.payOnline, test: false };
+  }
+
+  /** The order an order door reaches: its own link's, or one of the signed-in diner's. */
+  private reached(door: OrderDoor, id: Id): Row {
+    const order = this.world.get("orders", id);
+    const mine = door === "link" ? this.linkSession?.orderId === id : this.signIn !== null && order?.["customer_id"] === this.signIn.customerId;
+    if (order === undefined || !mine) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such order.");
+    return order;
+  }
+
+  async payLink(door: OrderDoor, id: Id): Promise<string> {
+    await this.wait(this.latency.write);
+    const order = this.reached(door, id);
+    if (order["status"] !== "paying" || !this.payOnline) throw new ApiError(409, "PUBLIC_PAY_REFUSED", "This order cannot be paid now.", { reason: order["status"] !== "paying" ? "not-now" : "off" });
+    return DEMO_PAY_URL;
+  }
+
+  /** The demo's payments land at once: an order paid online is paid, one still waiting started none. */
+  async paymentState(door: OrderDoor, id: Id): Promise<PaymentState | null> {
+    await this.wait(this.latency.read);
+    const order = this.reached(door, id);
+    return this.world.where("payments", (p) => p["order_id"] === order.id && p["method"] === "online").length > 0 ? "paid" : "none";
+  }
+
+  async payAtPickup(door: OrderDoor, id: Id): Promise<Row> {
+    await this.wait(this.latency.write);
+    const order = this.reached(door, id);
+    const e = entry("orders", "PATCH", door === "link" ? "link" : undefined);
+    const when = (e.writableWhen as Record<string, readonly string[]>)["status"]!;
+    // The window rides in the change: an order paid meanwhile, or let go, matches nothing.
+    if (order["status"] !== "paying" || !when.includes("paying")) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such order.");
+    return project(this.engine.updateOrder(id, { status: "placed" }, GUEST), e.select as readonly string[]);
+  }
+
+  /**
+   * The demo's pay page: the order waiting for its payment is paid what is
+   * left of it, at once, and made new — as Adminium records a payment made
+   * online and moves the order. Nothing else is asked, and no money moves.
+   */
+  demoPay(id: Id): void {
+    const order = this.world.get("orders", id);
+    if (order === undefined || order["status"] !== "paying") return;
+    const due = Number(order["due"] ?? order["total"] ?? 0);
+    const at = new Date(this.engine.now).toISOString();
+    const ref = `demo_${String(id)}_${String(this.engine.now)}`;
+    this.world.insert("payments", { order_id: id, method: "online", card_code: null, card_id: null, card_last4: null, amount: due, card_balance_after: null, returned: 0, refunded_elsewhere: null, kept: due, made_at: at, made_by: null, paid_at: at, payment_ref: ref, provider: "Stripe", client_key: null });
+    const paid = Number(order["paid"] ?? 0) + due;
+    const cards = Math.max(0, paid - due);
+    this.world.update("orders", id, {
+      paid,
+      due: 0,
+      to_pay: 0,
+      online_taken: due,
+      online_paid: due,
+      online_refunded: 0,
+      card_paid: cards,
+      online_used: 1,
+      paid_as: 2,
+      prepaid: 0,
+      card_used: cards > 0 ? 1 : 0,
+      confirm_as: 3,
+    });
+    this.engine.updateOrder(id, { status: "placed" }, PAYMENT);
   }
 
   /** Charges the caps for one save by a stranger: an address's rolling day, and one visitor's hour on this entry. */
@@ -372,7 +468,9 @@ export class DemoDiner implements DinerPort {
     const when = (e.writableWhen as Record<string, readonly string[]>)["status"]!;
     // The window rides in the change itself: an order the kitchen took, or one already cancelled, matches nothing.
     if (!when.includes(String(order["status"]))) throw new ApiError(404, "PUBLIC_REF_NOT_FOUND", "No such order.");
-    const row = this.engine.updateOrder(id, { status: "cancelled", ...(e.defaults as Record<string, unknown>) }, GUEST);
+    const row = this.engine.updateOrder(id, { status: "cancelled", cancel_code: "self" }, GUEST);
+    // The diner's own cancel of a paid order is refunded by itself, unless the kitchen turned that off.
+    this.engine.refundCancelled(id, "customer");
     return project(row, e.select as readonly string[]);
   }
 

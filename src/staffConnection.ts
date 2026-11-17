@@ -135,6 +135,28 @@ export interface StaffConfig {
    * a server up to 0.3.7, which does not say.
    */
   sharedTables: Record<string, string[]>;
+  /**
+   * Whether this app takes payments, and what this person may do with them:
+   * `on` — someone who manages payments switched the app on; `online` —
+   * diners can pay online right now; `test` — this person is rehearsing;
+   * `refund` — they may give money back. Null from a server that does not
+   * say: then the screens read as they did before payments.
+   */
+  payments?: StaffPayments | null;
+}
+
+export interface StaffPayments {
+  on: boolean;
+  online: boolean;
+  test: boolean;
+  refund: boolean;
+}
+
+/** `payments` as the server sent it; null when it sent none. */
+function paymentsOf(value: unknown): StaffPayments | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return null;
+  const doc = value as Record<string, unknown>;
+  return { on: doc["on"] === true, online: doc["online"] === true, test: doc["test"] === true, refund: doc["refund"] === true };
 }
 
 export interface StaffAddOn {
@@ -228,6 +250,7 @@ export async function loadStaffConfig(opts: StaffConfigOptions = {}): Promise<St
       ),
       access: accessOf(d.access),
       addOns: addOnsOf(d.addOns),
+      payments: paymentsOf(d.payments),
       sharedTables: Object.fromEntries(
         Object.entries(record(d.sharedTables))
           .map(([ref, keys]) => [ref, Array.isArray(keys) ? keys.filter((k): k is string => typeof k === "string") : []] as const)

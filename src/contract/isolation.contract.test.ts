@@ -44,7 +44,7 @@ const OWN_REFS: RefName[] = ["account", "myOrders", "myLines", "myOptions", "myP
 /** Read with `availability`, never listed. */
 const AVAILABILITY: RefName[] = ["slots", "portions", "stock"];
 /** Written, never read. */
-const WRITE_ONLY: RefName[] = ["place", "enquire"];
+const WRITE_ONLY: RefName[] = ["place", "placeToPay", "enquire"];
 
 /** The refusal a call answered, or "ANSWERED". */
 async function outcome(call: () => Promise<unknown>): Promise<string> {
@@ -187,8 +187,8 @@ describe.skipIf(why !== null)(`who sees what on a built Adminium${why === null ?
           expect(REFUSED(await outcome(() => ama.update<Row>(refs.myOrders, String(order.ama.id), values))), `signed in ${JSON.stringify(values)}`).toBe(true);
           expect(REFUSED(await outcome(() => amaLink.update<Row>(refs.linkOrder, String(order.ama.id), values))), `link ${JSON.stringify(values)}`).toBe(true);
         }
-        expect(REFUSED(await outcome(() => ama.update<Row>(refs.myOrders, String(order.ben.id), { status: "cancelled" })))).toBe(true);
-        expect(REFUSED(await outcome(() => amaLink.update<Row>(refs.linkOrder, String(order.ben.id), { status: "cancelled" })))).toBe(true);
+        expect(REFUSED(await outcome(() => ama.update<Row>(refs.myOrders, String(order.ben.id), { status: "cancelled", cancel_code: "self" })))).toBe(true);
+        expect(REFUSED(await outcome(() => amaLink.update<Row>(refs.linkOrder, String(order.ben.id), { status: "cancelled", cancel_code: "self" })))).toBe(true);
         for (const name of ["myOrders", "myLines", "linkOrder", "linkLines"] as const) {
           const who = LINK_REFS.includes(name) ? amaLink : ama;
           expect(REFUSED(await outcome(() => who.remove(refs[name], String(order.ama.id)))), `remove ${name}`).toBe(true);
@@ -196,8 +196,11 @@ describe.skipIf(why !== null)(`who sees what on a built Adminium${why === null ?
         // Nothing moved: Ben's order is as he placed it, and Ama's too.
         const rows = await stand.rows("orders");
         for (const who of ["ama", "ben"] as const) expect(rows.find((o) => o.id === order[who].id)!["status"]).toBe("placed");
+        // A cancel says its reason, which can only be hers; and a new order is not waiting for any payment.
+        expect(REFUSED(await outcome(() => amaLink.update<Row>(refs.linkOrder, String(order.ama.id), { status: "cancelled" }))), "a cancel with no reason").toBe(true);
+        expect(REFUSED(await outcome(() => amaLink.update<Row>(refs.linkOrder, String(order.ama.id), { status: "placed" }))), "new again").toBe(true);
         // Her own cancel goes, as hers.
-        const cancelled = await amaLink.update<Row>(refs.linkOrder, String(order.ama.id), { status: "cancelled" });
+        const cancelled = await amaLink.update<Row>(refs.linkOrder, String(order.ama.id), { status: "cancelled", cancel_code: "self" });
         expect([cancelled["status"], cancelled["cancel_code"]]).toEqual(["cancelled", "self"]);
       }, 180_000);
     });

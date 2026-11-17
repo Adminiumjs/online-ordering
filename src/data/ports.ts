@@ -13,7 +13,7 @@
  * carrying Adminium's code, so a screen has one path whoever answers: the
  * real server, or the demo's stand-in, which plays the same rules.
  */
-import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OrderBody, OrderReply, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
+import type { Applied, CardPayment, ClaimReply, DishState, Id, KitchenStock, LiveFrame, OnlinePayments, OrderBody, OrderReply, PaymentState, PublicConfig, QuoteReply, Row, SlotCount, SlotTime, StockWord } from "./wire.ts";
 
 /** The menu as the order page reads it: only what is on, and sold online. */
 export interface Menu {
@@ -31,10 +31,23 @@ export interface OrderWithLines {
   payments?: Row[];
   /** The reductions it was saved with, by name, where the door tells them (one order read by its diner). */
   applied?: Applied[];
+  /** What went back of its payments, oldest first: to a gift card, or online (the kitchen's door only). */
+  refunds?: Row[];
 }
 
-/** How an order was paid at the hand-over: one way, or a gift card and the rest another way. */
-export type PaidBy = "cash" | "card" | "gift_card" | "mixed";
+/** Whether the kitchen takes payments, and whether this person may give money back. */
+export interface KitchenPayments {
+  /** Switched on for the app in Adminium's Payments: the screens show the payment parts. */
+  on: boolean;
+  /** May give back what a diner paid online. */
+  refund: boolean;
+}
+
+/** How an order was paid at the hand-over: one way, a gift card and the rest another way, or all of it online before. */
+export type PaidBy = "cash" | "card" | "gift_card" | "mixed" | "online";
+
+/** Which door an order was read through: its own link, or the signed-in diner's orders. */
+export type OrderDoor = "link" | "account";
 
 export interface DinerPort {
   config(): Promise<PublicConfig>;
@@ -57,8 +70,26 @@ export interface DinerPort {
 
   /** The order priced by Adminium, written nowhere. */
   quote(body: OrderBody): Promise<QuoteReply>;
-  /** The order placed. `clientKey` makes a retry land on the same order. */
-  place(body: OrderBody, clientKey: string): Promise<OrderReply>;
+  /**
+   * The order placed. `clientKey` makes a retry land on the same order.
+   * `payNow`: placed to be paid online now — made waiting for its payment,
+   * the reply carrying the link to pay it.
+   */
+  place(body: OrderBody, clientKey: string, opts?: { payNow?: boolean }): Promise<OrderReply>;
+
+  /** Whether the kitchen takes payments online right now. Never throws: no answer is "not now". */
+  payments(): Promise<OnlinePayments>;
+  /** The link to pay an order waiting for its payment: the one already open, never a second. */
+  payLink(door: OrderDoor, id: Id): Promise<string>;
+  /** An order waiting for its payment, made new to be paid at pickup instead. */
+  payAtPickup(door: OrderDoor, id: Id): Promise<Row>;
+  /** Where the order's newest online payment stands; null when Adminium could not say. */
+  paymentState(door: OrderDoor, id: Id): Promise<PaymentState | null>;
+  /**
+   * The demo's pay page (the website's demo only): a moment's hand-off that
+   * pays the order at once. A real door has none, and goes to `payUrl`.
+   */
+  demoPay?(id: Id): void;
 
   /** Opens the order behind its own link (the code in the link's fragment). */
   openLink(token: string): Promise<ClaimReply>;
@@ -154,6 +185,17 @@ export interface KitchenPort {
 
   /** Whether a hand-over sends a receipt: Invoices & receipts installed with its receipts on. */
   receipts(): Promise<boolean>;
+
+  /** Whether the kitchen takes payments, and whether this person may refund. A door that cannot say: off. */
+  payments(): Promise<KitchenPayments>;
+  /**
+   * Money paid online given back: a refund row of the kitchen's own, which
+   * Adminium sends back through the service the payment came by. `clientKey`
+   * makes a retry the same refund.
+   */
+  refund(payment: { id: Id; orderId: Id }, amount: string, reason: string, clientKey: string): Promise<Row>;
+  /** A manager's: whether a paid order cancelled in time is refunded by itself. */
+  setAutoRefund(on: boolean): Promise<Row>;
 
   /** Whether the menu is another app's too (the till's): switching a dish off hides it there as well. */
   menuShared(): Promise<boolean>;

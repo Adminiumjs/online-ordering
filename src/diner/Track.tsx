@@ -3,6 +3,12 @@
  * placing, then Track — where it stands, each step's time, what is in it, when
  * and where to pick it up — read again every 30 seconds while it moves. The
  * diner may cancel while the kitchen has not taken it.
+ *
+ * An order paid for online as it was placed waits for its payment first: its
+ * pickup time is kept a few minutes, "Pay now" opens the same pay page again,
+ * and once back from a payment that didn't finish the diner may pay at pickup
+ * instead. Paid, Track reads as always, with "Paid online" where the counter's
+ * amount was. Cancelled after paying, it says the money goes back.
  */
 import { useEffect } from "react";
 
@@ -17,7 +23,7 @@ import { firstName, telHref } from "../lib/format.ts";
 import { storedOptionsText } from "../lib/menu.ts";
 import { venueDay } from "../lib/venueTime.ts";
 import { useDiner } from "../state/diner.ts";
-import { cancelTracked, moving, readTrack, useTrack } from "../state/track.ts";
+import { cancelTracked, moving, payAtPickupTracked, payTracked, readTrack, useTrack } from "../state/track.ts";
 import { goDiner, toast } from "../state/ui.ts";
 import { useFmt, useVenue } from "../app/venue.ts";
 import { useReorder } from "./Reorder.tsx";
@@ -25,6 +31,7 @@ import { useDay } from "./useDay.ts";
 
 type Badge = { key: string; tone: "info" | "warn" | "pos" | "neutral" | "danger"; icon: IconName };
 const BADGES: Record<string, Badge> = {
+  paying: { key: "pay.badge", tone: "neutral", icon: "hourglass" },
   placed: { key: "track.badge.placed", tone: "info", icon: "hourglass" },
   confirmed: { key: "track.badge.kitchen", tone: "warn", icon: "chef-hat" },
   preparing: { key: "track.badge.kitchen", tone: "warn", icon: "chef-hat" },
@@ -129,11 +136,14 @@ function Confirmation() {
   const toPay = o?.["to_pay"] ?? o?.["due"] ?? placed?.toPay ?? total;
   const cardPaid = Number(o?.["paid"] ?? 0) > 0 || (placed !== null && placed !== undefined && placed.toPay < placed.total);
   const allPaid = cardPaid && Number(toPay) <= 0;
+  const paidOnline = Number(o?.["online_paid"] ?? 0) > 0 && Number(toPay) <= 0;
   const big: React.CSSProperties = { fontFamily: "var(--mono)", unicodeBidi: "plaintext", fontSize: 20, fontWeight: 600 };
   const facts = [
     { label: t("confirm.order"), value: t("confirm.number", { number }), style: big, sub: null },
     { label: t("confirm.pickup"), value: pickup === "" ? "" : fmt.time(pickup), style: big, sub: pickup === "" ? null : dayWord(pickup) },
-    { label: t("confirm.pay"), value: fmt.money(toPay), style: big, sub: allPaid ? t("confirm.paidByCard") : t("confirm.cashOrCard") },
+    paidOnline
+      ? { label: t("pay.paid"), value: fmt.money(o?.["online_paid"]), style: big, sub: t("pay.nothingAtCounter") }
+      : { label: t("confirm.pay"), value: fmt.money(toPay), style: big, sub: allPaid ? t("confirm.paidByCard") : t("confirm.cashOrCard") },
     { label: t("confirm.address"), value: venue.street !== "" ? venue.street : venue.address, style: { fontSize: 15.5, fontWeight: 800, letterSpacing: "-.02em" } as React.CSSProperties, sub: venue.area },
   ];
   useEffect(() => {
@@ -250,9 +260,10 @@ function Tracking({ order }: { order: OrderWithLines }) {
 
   useEffect(() => {
     if (!moving(order)) return;
-    const timer = setInterval(() => void readTrack(), 30_000);
+    // While it waits for its payment it is read more often: the payment, or the end of its hold, comes in minutes.
+    const timer = setInterval(() => void readTrack(), status === "paying" ? 5_000 : 30_000);
     return () => clearInterval(timer);
-  }, [order]);
+  }, [order, status]);
 
   const cancel = async () => {
     const result = await cancelTracked();
@@ -263,8 +274,20 @@ function Tracking({ order }: { order: OrderWithLines }) {
 
   const selfCancel = o["cancel_code"] === "self";
   const closing = o["cancel_code"] === "closed";
-  const reason = status === "cancelled" && !selfCancel && !closing ? cancelReason(o, t) : null;
+  const unpaid = o["cancel_code"] === "unpaid";
+  const reason = status === "cancelled" && !selfCancel && !closing && !unpaid ? cancelReason(o, t) : null;
   const cancelledAt = o["cancelled_at"] ? fmt.time(String(o["cancelled_at"])) : "";
+  // What was paid online, and what of it went back: a cancelled paid order says the money goes back.
+  const onlineTaken = Number(o["online_taken"] ?? 0);
+  const onlineBack = Number(o["online_refunded"] ?? 0);
+  const autoRefund = venue.autoRefund;
+  const moneyBack =
+    onlineTaken <= 0
+      ? null
+      : onlineBack >= onlineTaken || (selfCancel && autoRefund)
+        ? t("pay.refund.auto", { amount: fmt.money(onlineTaken) })
+        : t("pay.refund.manual", { amount: fmt.money(onlineTaken - onlineBack) });
+  const paidOnline = Number(o["online_paid"] ?? 0) > 0 && Number(toPay) <= 0;
 
   return (
     <div className="jn-view jk-shell">
@@ -287,9 +310,11 @@ function Tracking({ order }: { order: OrderWithLines }) {
             <span style={{ width: 54, height: 54, borderRadius: 16, background: "var(--danger-soft)", color: "var(--danger)", display: "flex", alignItems: "center", justifyContent: "center" }}>
               <Icon name="circle-slash" size={26} />
             </span>
-            <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.028em" }}>{selfCancel ? t("track.cancelled.self", { time: cancelledAt }) : closing ? t("track.cancelled.closing") : t("track.cancelled.kitchen")}</span>
+            <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.028em", textWrap: "pretty" }}>
+              {unpaid ? t("pay.timeout.title") : selfCancel ? t("track.cancelled.self", { time: cancelledAt }) : closing ? t("track.cancelled.closing") : t("track.cancelled.kitchen")}
+            </span>
             {reason !== null && <p style={{ margin: 0, fontSize: 14.5, fontWeight: 700, lineHeight: 1.6 }}>{reason}</p>}
-            <p style={{ margin: 0, maxWidth: "48ch", fontSize: 14, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{t("track.cancelled.nothing")}</p>
+            <p style={{ margin: 0, maxWidth: "48ch", fontSize: 14, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>{unpaid ? t("pay.timeout.body") : (moneyBack ?? t("track.cancelled.nothing"))}</p>
             {cancelledAt !== "" && (
               <span className="jk-mono" style={{ alignSelf: "flex-start", display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: 9, background: "var(--surface-3)", fontSize: 12, fontWeight: 500, color: "var(--fg-muted)" }}>
                 <Icon name="clock" size={13} />
@@ -299,7 +324,7 @@ function Tracking({ order }: { order: OrderWithLines }) {
             <div style={{ display: "flex", flexWrap: "wrap", gap: 11, marginBlockStart: 6 }}>
               <button className="jn-btn jk-btn-primary" onClick={() => reorder(order)} style={{ padding: "13px 21px", fontSize: 14, borderRadius: 12 }}>
                 <Icon name="rotate-ccw" size={15} />
-                {t("track.again")}
+                {unpaid ? t("pay.again") : t("track.again")}
               </button>
               <button className="jn-gi jk-btn-ghost" onClick={() => goDiner("menu")} style={{ padding: "13px 19px", fontSize: 14, borderRadius: 12 }}>
                 <Icon name="utensils" size={15} />
@@ -331,7 +356,9 @@ function Tracking({ order }: { order: OrderWithLines }) {
           </div>
         )}
 
-        {live && (
+        {status === "paying" && <Paying order={order} />}
+
+        {live && status !== "paying" && (
           <div style={{ padding: "22px clamp(18px,3vw,26px)", borderRadius: 20, background: "var(--surface)", border: "1px solid var(--border)" }}>
             <ol style={{ margin: 0, padding: 0, listStyle: "none" }}>
               {FLOW.map((step, i) => {
@@ -420,8 +447,16 @@ function Tracking({ order }: { order: OrderWithLines }) {
                 ...((order.applied ?? []).length === 0 && Number(o["discount"] ?? 0) > 0 ? [{ key: "off", label: t("track.reductions"), value: `−${fmt.money(o["discount"])}`, big: false, off: true }] : []),
                 { key: "tax", label: t("totals.tax", { rate: fmt.percent(o["tax_rate"]) }), value: fmt.money(o["tax"]), big: false, off: false },
                 { key: "total", label: t("totals.total"), value: fmt.money(o["total"]), big: true, off: false },
-                ...(order.payments ?? []).map((one) => ({ key: `card-${String(one.id)}`, label: t("track.card", { last4: String(one["card_last4"] ?? "") }), value: `−${fmt.money(one["kept"] ?? one["amount"])}`, big: false, off: true })),
-                ...((order.payments ?? []).length > 0 ? [{ key: "due", label: t("offers.toPay"), value: fmt.money(toPay), big: false, off: false }] : []),
+                ...(order.payments ?? []).map((one) => ({
+                  key: `card-${String(one.id)}`,
+                  // A gift card's by its last four; one made online as paid online.
+                  label: one["method"] === "online" ? t("pay.row") : t("track.card", { last4: String(one["card_last4"] ?? "") }),
+                  value: `−${fmt.money(one["kept"] ?? one["amount"])}`,
+                  big: false,
+                  off: true,
+                })),
+                // What is left for the counter: said unless it was all paid online, which the card beside says.
+                ...((order.payments ?? []).length > 0 && !paidOnline ? [{ key: "due", label: t("offers.toPay"), value: fmt.money(toPay), big: false, off: false }] : []),
               ].map((r) => (
                 <div key={r.key} style={{ display: "flex", alignItems: "baseline", gap: 10, ...(r.big ? { paddingBlockStart: 10, borderBlockStart: "1px solid var(--border)" } : {}) }}>
                   <span style={{ fontSize: r.big ? 17 : 13.5, fontWeight: r.big ? 800 : 600, color: r.big ? "var(--fg)" : r.off ? "var(--pos)" : "var(--fg-muted)" }}>
@@ -445,11 +480,19 @@ function Tracking({ order }: { order: OrderWithLines }) {
               </span>
               {venue.area !== null && <span className="jk-own" style={{ fontSize: 12, color: "var(--fg-muted)" }}>{venue.area}</span>}
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderRadius: 16, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-              <Icon name="wallet" size={16} style={{ color: "var(--fg-muted)" }} />
-              <span style={{ fontSize: 13.5, fontWeight: 700 }}>{t("confirm.pay")}</span>
-              <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(toPay)}</span>
-            </div>
+            {paidOnline ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderRadius: 16, background: "var(--pos-soft)", border: "1px solid var(--pos-soft)", color: "var(--pos)" }}>
+                <Icon name="check-circle-2" size={16} />
+                <span style={{ fontSize: 13.5, fontWeight: 700, lineHeight: 1.45 }}>{t("pay.paidOnline")}</span>
+                <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(o["online_paid"])}</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "15px 18px", borderRadius: 16, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                <Icon name="wallet" size={16} style={{ color: "var(--fg-muted)" }} />
+                <span style={{ fontSize: 13.5, fontWeight: 700 }}>{t("confirm.pay")}</span>
+                <span className="jk-mono" style={{ marginInlineStart: "auto", fontSize: 15, fontWeight: 600 }}>{fmt.money(toPay)}</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -463,6 +506,69 @@ function Tracking({ order }: { order: OrderWithLines }) {
             { id: "keep", label: t("track.cancel.keep"), kind: "ghost", onClick: () => useTrack.setState({ cancelAsk: false }) },
           ]}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * An order waiting for its payment: its pickup time kept a few minutes.
+ * Waiting, "Pay now" opens the same pay page again; back from it, the page
+ * checks a few seconds; a payment that didn't finish leaves the choice to pay
+ * again or to pay at pickup instead.
+ */
+function Paying({ order }: { order: OrderWithLines }) {
+  const { t } = useI18n();
+  const fmt = useFmt();
+  const pay = useTrack((s) => s.pay);
+  const switching = useTrack((s) => s.switching);
+  const time = fmt.time(String(order.order["pickup_at"]));
+  const failed = pay === "failed" || pay === "refused" || pay === "busy";
+  const busy = pay === "going" || switching;
+  const instead = async () => {
+    const result = await payAtPickupTracked();
+    // Refused while a payment is open or paid: the line under the buttons says why.
+    if (result !== "busy") toast(result === "moved" ? t("pay.instead.done") : t("pay.instead.failed"), result === "moved" ? "ok" : "warn");
+  };
+  if (pay === "checking") {
+    return (
+      <div role="status" style={{ display: "flex", alignItems: "center", gap: 12, padding: "24px clamp(18px,3vw,26px)", borderRadius: 20, background: "var(--surface)", border: "1px solid var(--border)", fontSize: 15, fontWeight: 700 }}>
+        <span aria-hidden="true" style={{ flex: "none", width: 16, height: 16, borderRadius: 999, border: "2px solid currentColor", borderInlineEndColor: "transparent", animation: "jn-spin .75s linear infinite" }} />
+        {t("pay.checking")}
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 13, padding: "24px clamp(18px,3vw,26px)", borderRadius: 20, background: "var(--surface)", border: "1px solid var(--border)" }}>
+      <span style={{ width: 54, height: 54, borderRadius: 16, background: failed ? "var(--warn-soft)" : "var(--surface-3)", color: failed ? "var(--warn)" : "var(--fg-muted)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Icon name={failed ? "alert-circle" : "hourglass"} size={26} />
+      </span>
+      <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.028em", textWrap: "pretty" }}>
+        {pay === "refused" ? t("pay.refused") : failed ? t("pay.failed") : <Rich text={t("pay.waiting")} parts={{ time: <span className="jk-mono">{time}</span> }} />}
+      </span>
+      {failed && (
+        <p style={{ margin: 0, maxWidth: "48ch", fontSize: 14, lineHeight: 1.6, color: "var(--fg-muted)", textWrap: "pretty" }}>
+          <Rich text={t("pay.keeping")} parts={{ time: <span className="jk-mono" style={{ fontWeight: 600, color: "var(--fg)" }}>{time}</span> }} />
+        </p>
+      )}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 11, marginBlockStart: 6 }}>
+        <button className="jn-btn jk-btn-primary" onClick={() => void payTracked()} disabled={busy} aria-busy={pay === "going"} style={{ padding: "13px 21px", fontSize: 14, borderRadius: 12 }}>
+          <Icon name="lock" size={15} />
+          {pay === "going" ? t("pay.taking") : t("pay.now")}
+        </button>
+        {failed && (
+          <button className="jn-gi jk-btn-ghost" onClick={() => void instead()} disabled={busy} aria-busy={switching} style={{ padding: "13px 19px", fontSize: 14, borderRadius: 12 }}>
+            <Icon name="wallet" size={15} />
+            {t("pay.instead")}
+          </button>
+        )}
+      </div>
+      {pay === "busy" ? (
+        <span role="status" style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5, color: "var(--warn)" }}>
+          {t("pay.instead.busy")}
+        </span>
+      ) : (
+        <span style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}>{t("pay.now.sub")}</span>
       )}
     </div>
   );

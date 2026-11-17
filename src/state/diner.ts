@@ -10,7 +10,7 @@
  */
 import { create } from "zustand";
 
-import type { OrderBody, QuoteReply, Row, SlotTime, DishState, Id, StockWord } from "../data/wire.ts";
+import type { OnlinePayments, OrderBody, QuoteReply, Row, SlotTime, DishState, Id, StockWord } from "../data/wire.ts";
 import { ApiError, isApiError, refusedLine } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
 import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
@@ -48,7 +48,8 @@ export type LineAlert =
   | { kind: "note" }
   | { kind: "gone"; name: string; dish: boolean };
 
-export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed";
+/** `payOff`: placed to pay now just as the kitchen stopped taking payments online: nothing was made. */
+export type PlaceError = "stopped" | "toomany" | "offline" | "pending" | "limit" | "busy" | "failed" | "payOff";
 
 /**
  * Why a typed code was not taken, as Adminium said it. `invalid` is every
@@ -78,6 +79,12 @@ export interface Placed {
   /** What is left for the counter once a gift card paid; the total when none did. */
   toPay: number;
   replayed: boolean;
+  /**
+   * Placed to pay now: where the diner pays it (Adminium's pay page), or
+   * null when the kitchen could not take the payment just then. Absent for
+   * an order placed to pay at pickup.
+   */
+  payUrl?: string | null;
 }
 
 interface Loaded {
@@ -105,8 +112,15 @@ interface DinerState {
   drawer: boolean;
   quote: { key: string; state: "busy" | "ok" | "err"; reply: QuoteReply | null } | null;
   alerts: Record<string, LineAlert>;
-  /** `optIn`: "Email me news and offers", the diner's own tick, off until they tick it. */
-  form: { name: string; email: string; phone: string; note: string; optIn: boolean };
+  /**
+   * `optIn`: "Email me news and offers", the diner's own tick, off until they tick it.
+   * `pay`: how they pay, when the kitchen takes payments online: now (the default) or at pickup.
+   */
+  form: { name: string; email: string; phone: string; note: string; optIn: boolean; pay: "now" | "pickup" };
+  /** Whether the kitchen takes payments online right now; null until asked (and then "no" while unanswered). */
+  payments: OnlinePayments | null;
+  /** Placed to pay now: the moment's hand-off to the pay page ("Taking you to the secure payment page…"). */
+  taking: boolean;
   touched: Partial<Record<"name" | "email" | "phone", boolean>>;
   /** Details Adminium refused, by field, until the diner changes them. */
   fieldErrors: Partial<Record<"name" | "email" | "phone" | "note", FieldError>>;
@@ -160,7 +174,9 @@ export const useDiner = create<DinerState>(() => ({
   drawer: false,
   quote: null,
   alerts: {},
-  form: { name: "", email: "", phone: "", note: "", optIn: false },
+  form: { name: "", email: "", phone: "", note: "", optIn: false, pay: "now" },
+  payments: null,
+  taking: false,
   touched: {},
   placing: false,
   placeError: null,
@@ -260,11 +276,39 @@ export async function loadDiner(): Promise<void> {
     const p = port();
     const [config, settings, menu, hours, closures] = await Promise.all([p.config(), p.settings(), p.menu(), p.hours(), p.closures()]);
     set({ data: { zone: config.timezone, currency: config.currency ?? sources().currency, offers: config.offers === true, settings, menu: menuModel(menu), hours, closures } });
+    void readPayments();
     await refreshAvailability(sources().clock.now());
     set({ load: "ok" });
   } catch {
     set({ load: "err" });
   }
+}
+
+/** Whether the kitchen takes payments online right now: asked when the page loads and again at checkout. Never throws. */
+export async function readPayments(): Promise<OnlinePayments> {
+  const said = await port().payments().catch(() => ({ online: false, test: false }));
+  set({ payments: said });
+  return said;
+}
+
+/**
+ * Whether the order is to be paid now: the kitchen takes payments online, the
+ * diner chose it, and something is left once a gift card paid its part (an
+ * order a card pays in full has nothing to pay online).
+ */
+export function paysNow(): boolean {
+  const s = get();
+  if (s.payments?.online !== true || s.form.pay !== "now") return false;
+  const quote = freshQuote();
+  if (quote === null) return false;
+  const due = quote.payment === null || quote.payment === undefined ? Number(quote.data["total"] ?? 0) : Number(quote.payment.due);
+  return due > 0;
+}
+
+/** How the diner pays: now or at pickup. Kept while a press is unanswered, so a retry lands on the same order. */
+export function setPay(pay: "now" | "pickup"): void {
+  if (pendingRetry()) return;
+  set({ form: { ...get().form, pay } });
 }
 
 /** The slots and portions of today and tomorrow, again (after an order, a refusal, the clock moving). */
@@ -815,6 +859,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
   const s = get();
   const quote = freshQuote();
   if (s.placing || quote === null || s.pick === null) return null;
+  const payNow = paysNow();
   const clientKey = s.clientKey ?? mintKey();
   set({ placing: true, placeError: null, clientKey, slotNotice: null, priceMoved: false });
   const f = s.form;
@@ -832,7 +877,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
   const body = { ...orderBody(values), expect: { total: shownTotal ?? String(quote.data["total"]) } };
   for (let attempt = 0; ; attempt += 1) {
     try {
-      const reply = await port().place(body, clientKey);
+      const reply = await port().place(body, clientKey, payNow ? { payNow: true } : {});
       const placed: Placed = {
         id: reply.data.id,
         number: String(reply.data["number"]),
@@ -845,8 +890,9 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         // (A save sent again answers the order as it stands, with no payment beside it: its own "to pay" is read.)
         toPay: reply.payment !== null && reply.payment !== undefined ? Number(reply.payment.due) : Number(reply.data["to_pay"] ?? reply.data["due"] ?? reply.data["total"]),
         replayed: reply.replayed === true,
+        ...(payNow ? { payUrl: reply.payUrl ?? null } : {}),
       };
-      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "", optIn: false }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
+      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "", optIn: false, pay: "now" }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
       // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
       void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);
@@ -861,6 +907,12 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
       }
       // A named refusal: nothing was made, and the next press is a new order.
       set({ clientKey: null });
+      // Placed to pay now while the kitchen had just stopped taking payments online: said, and the choice goes with it.
+      if (payNow && error.code === "PUBLIC_SWITCHED_OFF" && (await readPayments()).online === false && rulesOf().online) {
+        set({ placeError: "payOff" });
+        scheduleQuote();
+        return null;
+      }
       if (error.code === "PUBLIC_LIMIT_REACHED") set({ placeError: "limit" });
       else if (error.code === "PUBLIC_RATE_LIMITED") set({ placeError: "busy" });
       else if (!(await readRefusal(error, "place").catch(() => false))) set({ placeError: "failed" });

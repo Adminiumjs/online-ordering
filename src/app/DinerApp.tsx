@@ -10,14 +10,14 @@ import { useI18n } from "../i18n/index.tsx";
 import { useNow } from "../data/sources.ts";
 import { loadDiner, refreshAvailability, useDiner } from "../state/diner.ts";
 import { openSignInLink, resumeDelete, signedIn } from "../state/account.ts";
-import { openTrack, useTrack } from "../state/track.ts";
+import { openTrack, resumeFromPay, useTrack } from "../state/track.ts";
 import { goDiner, useUi, type DinerView } from "../state/ui.ts";
 import { DinerShell } from "../diner/Shell.tsx";
 import { Home } from "../diner/Home.tsx";
 import { MenuPage } from "../diner/Menu.tsx";
 import { CartDrawer, CartPage } from "../diner/Cart.tsx";
 import { DishSheet } from "../diner/Sheet.tsx";
-import { Checkout } from "../diner/Checkout.tsx";
+import { Checkout, TestBand } from "../diner/Checkout.tsx";
 import { NotFound, TrackPage } from "../diner/Track.tsx";
 import { FindPage, OrdersPage } from "../diner/Account.tsx";
 import { LargePage } from "../diner/Large.tsx";
@@ -53,7 +53,11 @@ export default function DinerApp({ link }: { link: BootLink | null }) {
         goDiner(ok ? "orders" : "find");
         if (ok) resumeDelete();
       });
-    else signedIn().catch(() => undefined);
+    else {
+      signedIn().catch(() => undefined);
+      // Back from the pay page, on the order page's own address with no code: the order this tab sent there.
+      if (useUi.getState().dinerView === "track" && useTrack.getState().token === null) void resumeFromPay();
+    }
   }, [link]);
 
   // The kitchen's clock moved: what is free now, and where the followed order stands.
@@ -76,6 +80,7 @@ export default function DinerApp({ link }: { link: BootLink | null }) {
       <a className="jn-sr jk-skip" href="#main">
         {t("shell.skip")}
       </a>
+      <TestBand />
       <DinerShell>
         <Screen key={view} />
       </DinerShell>

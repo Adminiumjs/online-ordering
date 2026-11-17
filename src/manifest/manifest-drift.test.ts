@@ -121,11 +121,24 @@ describe("a diner reads nothing of anyone else's, and nothing the kitchen keeps"
 
 describe("the diner's writes are the few the page needs", () => {
   const post = () => manifest.publicAccess.find((e) => e.table === "orders" && e.methods.includes("POST"))!;
+  const posts = () => manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("POST"));
 
   it("places an order only while the kitchen takes online orders — the switch binds the diner, never the kitchen's phone orders", () => {
-    expect(post()["requireSetting"]).toEqual([{ table: "settings", column: "online_on" }]);
-    const others = manifest.publicAccess.filter((e) => e !== post() && e["requireSetting"] !== undefined);
+    // Placed to pay at pickup, or to pay now: the same switch on both.
+    expect(posts()).toHaveLength(2);
+    for (const entry of posts()) expect(entry["requireSetting"]).toEqual([{ table: "settings", column: "online_on" }]);
+    const others = manifest.publicAccess.filter((e) => !posts().includes(e) && e["requireSetting"] !== undefined);
     expect(others).toEqual([]);
+  });
+
+  it("places an order to pay now as the same order, made waiting for its payment, with the link to pay it in the reply", () => {
+    const [atPickup, now] = posts() as unknown as [Json, Json];
+    const { defaults, pay, requirePayments, ...same } = now;
+    // …open only while the kitchen takes payments online.
+    expect([defaults, pay, requirePayments]).toEqual([{ status: "paying" }, true, "on"]);
+    expect(same).toEqual(atPickup);
+    // The second entry comes after every older one, so each older entry keeps its name.
+    expect(manifest.publicAccess.at(-1)).toBe(now);
   });
 
   it("caps what nobody signed in for may send, and keeps what a stranger types plain text", () => {
@@ -134,13 +147,19 @@ describe("the diner's writes are the few the page needs", () => {
     expect((enquiry["anonymous"] as Json)["plainText"]).toEqual(["name", { column: "notes", digits: 4, max: 200 }]);
   });
 
-  it("lets a diner cancel their own order only to cancelled, only while it is new, and marks the reason as theirs", () => {
-    for (const entry of manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("PATCH"))) {
-      expect(entry["writable"]).toEqual(["status"]);
-      expect(entry["writableValues"]).toEqual({ status: ["cancelled"] });
-      expect(entry["writableWhen"]).toEqual({ status: ["placed"] });
-      expect(entry["defaults"]).toEqual({ cancel_code: "self" });
+  it("lets a diner cancel their own order while it is new, as theirs — or pay at pickup instead of online, while it waits for its payment", () => {
+    const patches = manifest.publicAccess.filter((e) => e.table === "orders" && e.methods.includes("PATCH"));
+    expect(patches).toHaveLength(2);
+    for (const entry of patches) {
+      expect(entry["writable"]).toEqual(["status", "cancel_code"]);
+      expect(entry["writableValues"]).toEqual({ status: ["cancelled", "placed"], cancel_code: ["self"] });
+      expect(entry["writableWhen"]).toEqual({ status: ["placed", "paying"] });
+      expect(entry["defaults"]).toBeUndefined();
     }
+    // The move to new from waiting for a payment never carries a cancel's reason; new → new is refused (strict).
+    // …nor while a payment for it is on its way: that money would land on an order no longer waiting for it.
+    expect(states().moves["paying"]).toContainEqual({ to: "placed", requires: { where: [{ column: "cancel_code", isNull: true }], noPaymentInFlight: true } });
+    expect(states()["strict"]).toBe(true);
   });
 });
 
@@ -152,7 +171,20 @@ describe("the order's life is Adminium's", () => {
     expect(states()["children"]).toEqual({
       order_items: { via: "order_id", lock: true },
       order_codes: { via: "order_id", lock: true },
-      payments: { via: "order_id", createIn: ["placed", "confirmed", "preparing", "ready"] },
+      // …and a payment made online lands while the order waits for it.
+      payments: { via: "order_id", createIn: ["paying", "placed", "confirmed", "preparing", "ready"] },
+    });
+  });
+
+  it("holds an order paid for online a few minutes, and cancels it unpaid — never while its payment lands", () => {
+    expect(states()["starts"]).toEqual(["paying"]);
+    expect(states()["initial"]).toBe("placed");
+    expect(states()["timed"]).toContainEqual({
+      from: "paying",
+      to: "cancelled",
+      at: { column: "placed_at", plus: { minutes: { table: "settings", column: "pay_hold_minutes" } } },
+      set: { cancel_code: "unpaid" },
+      waitsForPayment: true,
     });
   });
 
@@ -259,7 +291,10 @@ describe("the kitchen writes only what running the day needs", () => {
       expect([key, reads.includes("card_code"), reads.includes("card_last4"), reads.includes("amount")]).toEqual([key, false, true, true]);
     }
     expect((role("kitchen").limits!["payments"] as { creatable: string[] }).creatable).toEqual(["order_id", "card_code", "client_key"]);
-    expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual([]);
+    // The kitchen sees what went back of an order, and gives nothing back itself.
+    expect(role("kitchen").permissions.filter((p) => p.includes("@payment_refunds:"))).toEqual(["table:@payment_refunds:read"]);
+    expect(role("kitchen").permissions).not.toContain("payments:@:refund");
+    expect(role("manager").permissions).toContain("payments:@:refund");
   });
 
   it("switches dishes and options and sets portions, and never touches the settings, hours, closures or customers", () => {
@@ -288,5 +323,51 @@ describe("the Overview's links", () => {
     const hrefs = overview.config!.layout!.items.flatMap((item) => [item.config["href"], item.config["viewAllHref"]]).filter((h): h is string => typeof h === "string");
     expect(hrefs.length).toBeGreaterThan(10);
     expect(hrefs.map((h) => /^\/p\/([^?]+)/.exec(h)?.[1]).filter((ref) => ref === undefined || !refs.has(ref))).toEqual([]);
+  });
+});
+
+describe("paying online, as the manifest asks Adminium", () => {
+  type Payable = Record<string, unknown> & { payments: Record<string, unknown>; refunds: Record<string, unknown>; refundOn: Record<string, unknown> };
+  const payable = () => ((manifest as Json)["payments"] as { payables: Payable[] }).payables;
+
+  it("makes an order payable only while it waits for its payment, by ways that settle at once, and the payment makes it new", () => {
+    expect(payable().map((p) => p["table"])).toEqual(["orders"]);
+    const p = payable()[0]!;
+    expect([p["payableWhen"], p["status"], p["instantOnly"], p["receipt"], p["returnTo"]]).toEqual([
+      [{ column: "status", eq: "paying" }],
+      { column: "status", paid: "placed", from: ["paying"] },
+      true,
+      "app",
+      "/o",
+    ]);
+    // Gift cards and online payments in one table, so "paid" stays one figure with one cap.
+    expect([p.payments["table"], p.payments["link"], p.payments["method"], p.payments["reference"]]).toEqual(["payments", "order_id", { column: "method", values: { "*": "online" } }, "payment_ref"]);
+    expect(rules("orders", "paid")["rollup"]).toMatchObject({ from: "payments", sum: "kept", balance: { column: "due", of: "total" }, cap: true });
+  });
+
+  it("keeps refunds as rows of its own, sends back only the online ones, and posts to a gift card only a gift card's", () => {
+    const p = payable()[0]!;
+    expect(p.refunds).toMatchObject({ model: "rows", table: "payment_refunds", payment: "payment_id", when: [{ column: "method", eq: "online" }], auto: { values: { method: "online", automatic: true } } });
+    const postings = (ref: string) => (manifest.requiredSchema.tables.find((t) => t.ref === ref) as unknown as { postings: Json[] }).postings;
+    // Judged on what the writer sends (a column's default is not there yet): a card's code, and a refund that says online.
+    expect(postings("payments").map((x) => x["only"])).toEqual([{ column: "card_code", set: true }]);
+    expect(postings("payment_refunds").map((x) => x["unlessSet"])).toEqual(["method"]);
+    // A payment before online payments was a gift card's; a refund that names no way went back to a card, as every one did.
+    expect(column("payments", "method")["default"]).toBe("gift_card");
+    expect([column("payment_refunds", "method")["default"], column("payment_refunds", "method")["nullable"]]).toEqual([undefined, true]);
+  });
+
+  it("refunds a free cancel by itself only for the diner, the clock or someone who may refund, behind the kitchen's switch; never 'not collected'", () => {
+    const p = payable()[0]!;
+    expect(p.refundOn).toEqual({
+      moves: [{ from: ["placed", "confirmed", "preparing", "ready"], to: "cancelled", by: ["customer", "system", "refund-right"] }],
+      switch: { table: "settings", column: "auto_refund" },
+    });
+    expect(role("manager").permissions).toContain("payments:@:refund");
+  });
+
+  it("holds an order waiting for its payment against its slot and its portions, as any order still wanted", () => {
+    const tables = manifest.requiredSchema.tables as unknown as { ref: string; capacity?: { countWhere: { values: string[] } } }[];
+    for (const ref of ["orders", "order_items"]) expect(tables.find((t) => t.ref === ref)!.capacity!.countWhere.values).toContain("paying");
   });
 });

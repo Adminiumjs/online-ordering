@@ -10,7 +10,7 @@
  */
 import { create } from "zustand";
 
-import type { KitchenPerson, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
+import type { KitchenPayments, KitchenPerson, Menu, OrderWithLines, PaidBy } from "../data/ports.ts";
 import type { ApiError, CardPayment, Id, KitchenStock, OrderBody, QuoteReply, Row, SlotCount } from "../data/wire.ts";
 import { isApiError } from "../data/wire.ts";
 import { sources } from "../data/sources.ts";
@@ -97,6 +97,10 @@ interface KitchenState {
   handoff: { id: Id; paid: "cash" | "card" | "gift" | null; busy: boolean; card: HandoffCard } | null;
   /** Whether gift cards are taken here (Offers & gift cards is in use for the app). */
   giftCards: boolean;
+  /** Whether the kitchen takes payments online, and whether this person may give money back. */
+  payments: KitchenPayments;
+  /** Giving back what a diner paid online: the amount and why (step 1), then the one sentence (step 2). */
+  refund: RefundDraft | null;
   tomorrow: boolean;
   phone: PhoneDraft | null;
   askStop: boolean;
@@ -135,6 +139,8 @@ export const useKitchen = create<KitchenState>(() => ({
   cancel: null,
   handoff: null,
   giftCards: false,
+  payments: { on: false, refund: false },
+  refund: null,
   tomorrow: false,
   phone: null,
   askStop: false,
@@ -182,8 +188,8 @@ export async function loadKitchen(): Promise<void> {
   try {
     const p = port();
     const [person, config, settings, hours, closures, menu, holidays, receipts, menuShared] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts(), p.menuShared()]);
-    // Whether gift cards are taken here; a door that cannot say takes none.
-    set({ giftCards: await p.giftCards().catch(() => false) });
+    // Whether gift cards are taken here; a door that cannot say takes none. Likewise payments, and the right to refund them.
+    set({ giftCards: await p.giftCards().catch(() => false), payments: await p.payments().catch(() => ({ on: false, refund: false })) });
     set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, menuShared, signedOut: false });
     await Promise.all([readOrders(true), readSlots(), readCounts()]);
     set({ load: "ok" });
@@ -198,7 +204,8 @@ let ordersShown = 0;
 async function readOrders(first = false): Promise<void> {
   const today = kToday();
   const asked = ++ordersAsked;
-  const orders = await port().orders(today, addDays(today, 6));
+  // An order waiting for its diner's payment is not the kitchen's yet: it reaches the board when the payment makes it new.
+  const orders = (await port().orders(today, addDays(today, 6))).filter((o) => o.order["status"] !== "paying");
   // An older read that answers last is never shown over a newer one.
   if (asked < ordersShown) return;
   ordersShown = asked;
@@ -242,6 +249,8 @@ const QUERIES: Record<string, (() => Promise<void>)[]> = {
   orders: [() => readOrders(), readSlots, readCounts],
   order_items: [() => readOrders(), readCounts],
   order_item_modifiers: [() => readOrders()],
+  // Money given back of an order (by a manager, or by itself for a cancellation): its card reads again.
+  payment_refunds: [() => readOrders()],
   slot_pauses: [readSlots],
   menu_items: [readMenu, readCounts],
   modifiers: [readMenu],
@@ -399,7 +408,9 @@ export async function handOff(): Promise<{ ok: true; order: OrderWithLines; paid
   const rest = h.paid === "cash" || h.paid === "card" ? h.paid : null;
   // How it was paid is said by a person unless gift cards paid all of it: also for an order that comes to nothing.
   if ((left > 0 || cards <= 0) && rest === null) return { ok: false, result: { ok: false, kind: "failed" } };
-  const paid: PaidBy = cards > 0 ? (left > 0 ? "mixed" : "gift_card") : (rest ?? "cash");
+  // Paid in full before the counter with something of it online: "paid online", whatever a gift card paid beside it.
+  const online = Number(order.order["online_paid"] ?? 0);
+  const paid: PaidBy = cards > 0 ? (left > 0 ? "mixed" : online > 0 ? "online" : "gift_card") : (rest ?? "cash");
   set({ handoff: { ...h, busy: true } });
   try {
     await port().handOff(h.id, paid, paid === "mixed" ? (rest ?? undefined) : undefined);
@@ -612,6 +623,86 @@ export const setHours = (id: Id, values: { open?: boolean; opens?: string; close
 export const addClosure = (values: { from_date: string; to_date: string; reason: string | null }) => managerWrite(() => port().addClosure(values), ["closures"]);
 export const setClosure = (id: Id, active: boolean) => managerWrite(() => port().setClosure(id, active), ["closures"]);
 export const setOnline = (on: boolean) => managerWrite(() => port().setOnline(on), ["settings"]);
+export const setAutoRefund = (on: boolean) => managerWrite(() => port().setAutoRefund(on), ["settings"]);
+
+// ── money paid online ───────────────────────────────────────────────────────
+
+export interface RefundDraft {
+  orderId: Id;
+  paymentId: Id;
+  /** As typed; what may be given back is the payment's kept part. */
+  amount: string;
+  reason: string;
+  step: 1 | 2;
+  busy: boolean;
+  /** Step 1's refusals, by field; step 2's, the server's. */
+  error: { amount?: boolean; reason?: boolean; refused?: string } | null;
+  /** Minted at the confirm for that amount: pressing Refund again after a lost answer is the same refund. */
+  key: string | null;
+}
+
+/** The payment made online that still holds money, of an order: what a refund gives back. */
+export function onlinePayment(order: OrderWithLines): Row | null {
+  return (order.payments ?? []).find((p) => p["method"] === "online" && num(p["kept"], num(p["amount"])) > 0) ?? null;
+}
+
+/** What a cancelled order paid online still holds: "Refund owed" until someone gives it back. Nothing for any other order. */
+export function refundOwed(order: OrderWithLines): number {
+  return String(order.order["status"]) === "cancelled" ? num(order.order["online_paid"]) : 0;
+}
+
+/** Today's cancelled orders that still hold money paid online: the board's band. */
+export function owedOrders(orders: readonly OrderWithLines[], today: Day): OrderWithLines[] {
+  return orders.filter((o) => dayOf(o) === today && refundOwed(o) > 0).sort((a, b) => num(a.order["number"]) - num(b.order["number"]));
+}
+
+export function startRefund(order: OrderWithLines): void {
+  const payment = onlinePayment(order);
+  if (payment === null) return;
+  const kept = num(payment["kept"], num(payment["amount"]));
+  set({ refund: { orderId: order.order.id, paymentId: payment.id, amount: kept.toFixed(2), reason: "", step: 1, busy: false, error: null, key: null } });
+}
+
+export function editRefund(patch: Partial<Pick<RefundDraft, "amount" | "reason" | "step">>): void {
+  const r = get().refund;
+  if (r !== null) set({ refund: { ...r, ...patch, error: null, ...(patch.amount !== undefined && patch.amount !== r.amount ? { key: null } : {}) } });
+}
+
+/** Step 1 to step 2: an amount from a cent to what the payment holds, and a line of why. */
+export function nextRefundStep(max: number): boolean {
+  const r = get().refund;
+  if (r === null) return false;
+  const amount = Number(r.amount.replace(",", "."));
+  const badAmount = !Number.isFinite(amount) || amount < 0.01 || amount > max + 0.0001;
+  const badReason = r.reason.trim() === "";
+  if (badAmount || badReason) {
+    set({ refund: { ...r, error: { ...(badAmount ? { amount: true } : {}), ...(badReason ? { reason: true } : {}) } } });
+    return false;
+  }
+  set({ refund: { ...r, step: 2, error: null } });
+  return true;
+}
+
+/** The refund made: a refund row of the kitchen's, which Adminium sends back through the service the payment came by. */
+export async function confirmRefund(): Promise<{ ok: true; amount: number } | { ok: false }> {
+  const r = get().refund;
+  if (r === null || r.busy) return { ok: false };
+  const key = r.key ?? mintKey();
+  const amount = Number(r.amount.replace(",", "."));
+  set({ refund: { ...r, busy: true, key, error: null } });
+  try {
+    await port().refund({ id: r.paymentId, orderId: r.orderId }, amount.toFixed(2), r.reason.trim(), key);
+    set({ refund: null });
+    return { ok: true, amount };
+  } catch (error) {
+    signedOutBy(error);
+    const code = isApiError(error) ? error.code : "failed";
+    set({ refund: { ...r, busy: false, key, error: { refused: code } } });
+    return { ok: false };
+  } finally {
+    await refreshNow(["orders", "payment_refunds"]);
+  }
+}
 
 // ── the phone order ─────────────────────────────────────────────────────────
 
