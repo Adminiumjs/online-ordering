@@ -682,7 +682,8 @@ export const TABLES: Table[] = [
         post: { on: { create: true } },
         reverse: { on: { to: ["cancelled"] } },
         map: { card: "card_id", amount: "amount", due: { parent: "due" }, balance_after: "card_balance_after" },
-        only: { column: "method", eq: "gift_card" },
+        // Only a card's payment: one that names a card's code as it is written. A payment made online names none.
+        only: { column: "card_code", set: true },
       },
     ],
     columns: [
@@ -699,7 +700,8 @@ export const TABLES: Table[] = [
         lookup: { from: "card_code", table: { addOn: "offers", table: "gift_cards" }, column: "code", where: [{ column: "status", eq: "active" }] },
       }),
       text("card_last4", 4, "Card ending", { ...opt, rules: { codeLast4: { of: "card_code" } } }),
-      amount("amount", "Paid"),
+      // What it paid: the card's answer, or the money taken online. A card's payment with Offers & gift cards away has none, and is not saved.
+      { ...amount("amount", "Paid"), rules: { required: true } },
       amount("card_balance_after", "Left on the card"),
       // What went back of it: refunds the kitchen made, and money Adminium says went back another way (at the service, a dispute lost).
       money("returned", "Given back", { rollup: { from: "payment_refunds", via: "payment_id", sum: "counted" } }),
@@ -728,7 +730,8 @@ export const TABLES: Table[] = [
         needs: "gift-cards",
         post: { on: { create: true } },
         map: { amount: "amount", against_table: { value: "ordering:payments" }, against_row: "payment_id" },
-        only: { column: "method", eq: "gift_card" },
+        // Money given back online is no card's: the refund says so as it is written.
+        unlessSet: "method",
       },
     ],
     columns: [
@@ -737,9 +740,9 @@ export const TABLES: Table[] = [
       text("client_key", 64, "Retry key", { ...opt, unique: true }),
       // The order of the payment it gives back, whoever writes it (Adminium's own refund of a cancellation names only the payment).
       fk("order_id", "orders", "Order", { rules: { copy: { via: "payment_id", from: "order_id", mode: "always" } } }),
-      // Back to a gift card, or online: said by whoever writes it, as the payment it gives back was made. Every refund before
-      // online payments went back to a card.
-      choice("method", "Given back", { gift_card: "To the gift card", online: "Online" }, { default: "gift_card" }),
+      // Online, said by whoever writes a refund of a payment made online (and by Adminium for its own); empty, it goes back to
+      // the gift card, as every refund before online payments did.
+      choice("method", "Given back", { online: "Online" }, opt),
       { ref: "amount", type: "decimal", scale: "currency", label: l("Amount"), rules: { validation: { min: 0.01 } } },
       text("reason", 120, "Reason", opt),
       at("made_at", "Made", { ...opt, rules: stamp("now", onCreate) }),

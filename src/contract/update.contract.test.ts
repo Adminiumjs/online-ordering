@@ -70,7 +70,7 @@ const PREFIX = "ordering_";
 /**
  * What this build adds to 0.3.0's tables, from the manifest: a diner's language and the newsletter's yes, the
  * tick an order was placed with (0.3.1); and what paying online needs (0.3.3) — the kitchen's two payment
- * settings, an order's online money, a payment's online reference and service, a refund's state — with the
+ * settings, an order's online money, a payment's online reference and service, a refund's way and state — with the
  * values four lists gain. The update's plan must be exactly this.
  */
 const NEW_TABLES: string[] = [];
@@ -94,7 +94,7 @@ const FILLED: Record<string, string[]> = {
   settings: ["auto_refund", "pay_hold_minutes"],
   orders: ["card_paid", "online_used", "paid_as"],
   payments: ["method"],
-  payment_refunds: ["automatic", "counted", "method"],
+  payment_refunds: ["automatic", "counted"],
 };
 /** A no as each engine spells a yes/no column's value read straight from the database. */
 const NO = ["0", "false", "f"];

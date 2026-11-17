@@ -347,10 +347,12 @@ describe("paying online, as the manifest asks Adminium", () => {
     const p = payable()[0]!;
     expect(p.refunds).toMatchObject({ model: "rows", table: "payment_refunds", payment: "payment_id", when: [{ column: "method", eq: "online" }], auto: { values: { method: "online", automatic: true } } });
     const postings = (ref: string) => (manifest.requiredSchema.tables.find((t) => t.ref === ref) as unknown as { postings: Json[] }).postings;
-    expect(postings("payments").map((x) => x["only"])).toEqual([{ column: "method", eq: "gift_card" }]);
-    expect(postings("payment_refunds").map((x) => x["only"])).toEqual([{ column: "method", eq: "gift_card" }]);
-    // A payment before online payments was a gift card's, and every refund before them went back to a card.
-    for (const ref of ["payments", "payment_refunds"]) expect(column(ref, "method")["default"]).toBe("gift_card");
+    // Judged on what the writer sends (a column's default is not there yet): a card's code, and a refund that says online.
+    expect(postings("payments").map((x) => x["only"])).toEqual([{ column: "card_code", set: true }]);
+    expect(postings("payment_refunds").map((x) => x["unlessSet"])).toEqual(["method"]);
+    // A payment before online payments was a gift card's; a refund that names no way went back to a card, as every one did.
+    expect(column("payments", "method")["default"]).toBe("gift_card");
+    expect([column("payment_refunds", "method")["default"], column("payment_refunds", "method")["nullable"]]).toEqual([undefined, true]);
   });
 
   it("refunds a free cancel by itself only for the diner, the clock or someone who may refund, behind the kitchen's switch; never 'not collected'", () => {

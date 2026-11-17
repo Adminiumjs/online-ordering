@@ -232,9 +232,9 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
         const payments = await rows("payments");
         const refunds = await rows("payment_refunds");
         expect(payments.map((p) => [p.id, p["method"], p["card_id"], cents(p["amount"]), p["payment_ref"]])).toEqual(before.payments.map((p) => [p.id, "gift_card", p["card_id"], cents(p["amount"]), null]));
-        // What each kept is what it kept: a refund to a card counts as it always did.
+        // What each kept is what it kept: a refund to a card (one that names no way: every one before) counts as it always did.
         expect(payments.map((p) => [p.id, cents(p["returned"]), cents(p["kept"])])).toEqual(before.payments.map((p) => [p.id, cents(p["returned"]), cents(p["kept"])]));
-        expect(refunds.map((r) => [r.id, r["method"], cents(r["amount"]), r["refund_state"], r["automatic"] === true || r["automatic"] === 1])).toEqual(before.refunds.map((r) => [r.id, "gift_card", cents(r["amount"]), null, false]));
+        expect(refunds.map((r) => [r.id, r["method"], cents(r["amount"]), r["refund_state"], r["automatic"] === true || r["automatic"] === 1])).toEqual(before.refunds.map((r) => [r.id, null, cents(r["amount"]), null, false]));
         const orders = await rows("orders");
         // What the update wrote into the new columns of the rows that were there, for the update contract to hold to.
         const filled: Record<string, Record<string, unknown[]>> = {};

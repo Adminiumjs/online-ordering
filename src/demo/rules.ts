@@ -292,7 +292,6 @@ export const MANIFEST_RULES = {
     },
     "payment_refunds": {
       "method": [
-        "gift_card",
         "online"
       ],
       "refund_state": [

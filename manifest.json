@@ -5622,8 +5622,8 @@
               "balance_after": "card_balance_after"
             },
             "only": {
-              "column": "method",
-              "eq": "gift_card"
+              "column": "card_code",
+              "set": true
             }
           }
         ],
@@ -5805,6 +5805,9 @@
               "ar-EG": "مدفوع",
               "zh-CN": "已付款",
               "zh-TW": "已付款"
+            },
+            "rules": {
+              "required": true
             }
           },
           {
@@ -6046,10 +6049,7 @@
               },
               "against_row": "payment_id"
             },
-            "only": {
-              "column": "method",
-              "eq": "gift_card"
-            }
+            "unlessSet": "method"
           }
         ],
         "columns": [
@@ -6117,7 +6117,6 @@
             "ref": "method",
             "type": "enum",
             "enum": [
-              "gift_card",
               "online"
             ],
             "label": {
@@ -6130,20 +6129,10 @@
               "zh-CN": "已退回",
               "zh-TW": "已退回"
             },
-            "default": "gift_card",
+            "nullable": true,
             "rules": {
               "enumLabels": {
                 "labels": {
-                  "gift_card": {
-                    "en-US": "To the gift card",
-                    "de-DE": "Auf die Geschenkkarte",
-                    "fr-FR": "Sur la carte cadeau",
-                    "da-DK": "Til gavekortet",
-                    "cs-CZ": "Na dárkovou kartu",
-                    "ar-EG": "إلى بطاقة الهدية",
-                    "zh-CN": "退回礼品卡",
-                    "zh-TW": "退回禮品卡"
-                  },
                   "online": {
                     "en-US": "Online",
                     "de-DE": "Online",
