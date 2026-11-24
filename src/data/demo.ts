@@ -22,7 +22,12 @@ let demo: DemoAdminium | null = null;
 
 /** The one demo Adminium of this page. */
 export function demoAdminium(): DemoAdminium {
-  demo ??= new DemoAdminium({ latency: DEMO_LATENCY });
+  if (demo === null) {
+    const made = new DemoAdminium({ latency: DEMO_LATENCY });
+    // The clock stands still between the card's moves; a ready text's wait for the Undo is over in real time.
+    made.engine.onHeldText = (id, ms) => void setTimeout(() => made.engine.settleText(id), ms);
+    demo = made;
+  }
   return demo;
 }
 

@@ -32,6 +32,8 @@ import {
   setOptIn,
   setPay,
   takeOff,
+  textBoxShown,
+  textsOffered,
   touch,
   useDiner,
   validPick,
@@ -47,6 +49,8 @@ import { Totals, useLineAmount, useLineStates } from "./cartParts.tsx";
 import { OfferFields, PriceMoved } from "./offerParts.tsx";
 import { Tile } from "./dish.tsx";
 import { useDay } from "./useDay.ts";
+import { TextBox } from "./TextBox.tsx";
+import { textReadable } from "../lib/textPhone.ts";
 
 export const NAME_MAX = 80;
 export const EMAIL_MAX = 254;
@@ -126,7 +130,7 @@ function useBlock(): string | null {
   return null;
 }
 
-function Field({ id, label, optional, hint, error, children }: { id: string; label: string; optional?: boolean; hint: string; error: string | null; children: React.ReactNode }) {
+function Field({ id, label, optional, hint, error, warn = null, children, after }: { id: string; label: string; optional?: boolean; hint: string; error: string | null; warn?: string | null; children: React.ReactNode; after?: React.ReactNode }) {
   const { t } = useI18n();
   return (
     <div>
@@ -140,11 +144,18 @@ function Field({ id, label, optional, hint, error, children }: { id: string; lab
           <Icon name="alert-circle" size={13} />
           {error}
         </span>
+      ) : warn !== null ? (
+        // Asked, never refused: the order goes as it is.
+        <span id={`${id}-msg`} aria-live="polite" style={{ display: "flex", alignItems: "center", gap: 6, marginBlockStart: 7, fontSize: 12, fontWeight: 600, color: "var(--warn)" }}>
+          <Icon name="triangle-alert" size={13} />
+          {warn}
+        </span>
       ) : (
-        <span id={`${id}-msg`} style={{ display: "block", marginBlockStart: 7, fontSize: 12, lineHeight: 1.45, color: "var(--fg-subtle)" }}>
+        <span id={`${id}-msg`} aria-live="polite" style={{ display: "block", marginBlockStart: 7, fontSize: 12, lineHeight: 1.45, color: "var(--fg-subtle)" }}>
           {hint}
         </span>
       )}
+      {after}
     </div>
   );
 }
@@ -167,6 +178,8 @@ export function Checkout() {
   const nameErr = (s.touched.name === true && f.name.trim().length < 2) || s.fieldErrors.name !== undefined;
   const emailErr = (s.touched.email === true && !EMAIL.test(f.email.trim())) || s.fieldErrors.email !== undefined;
   const phoneErr = (f.phone.trim().length > 3 && phoneBad(f.phone)) || s.fieldErrors.phone !== undefined;
+  // The box for texts ticked, for a number it can be for: the hint says the kitchen will text too.
+  const texting = f.textsOk && textsOffered(s.data?.settings) && textBoxShown(f.phone);
   const pick = validPick(day.now);
   const pickWord = pick === null ? t("co.pickATime") : t("co.pickup", { day: pick.day === day.today ? t("pick.today") : pick.day === day.tomorrow ? t("pick.tomorrow") : fmt.weekday(pick.day), time: fmt.wall(pick.day, pick.time) });
   const total = fresh === null ? null : fmt.money(fresh.data["total"]);
@@ -225,7 +238,15 @@ export function Checkout() {
                 <Field id="jn-co-email" label={t("co.email")} hint={t("co.email.hint")} error={emailErr ? t("co.email.error") : null}>
                   <input id="jn-co-email" className="jn-fld" type="email" autoComplete="email" dir="ltr" value={f.email} maxLength={EMAIL_MAX} onChange={(e) => setField("email", e.target.value)} onBlur={() => touch("email")} placeholder={t("co.email.placeholder")} aria-invalid={emailErr} aria-describedby="jn-co-email-msg" style={fieldStyle(emailErr)} />
                 </Field>
-                <Field id="jn-co-phone" label={t("co.phone")} optional hint={t("co.phone.hint")} error={phoneErr ? t("co.phone.error") : null}>
+                <Field
+                  id="jn-co-phone"
+                  label={t("co.phone")}
+                  optional
+                  hint={texting ? t("co.phone.hint.texts") : t("co.phone.hint")}
+                  error={phoneErr ? t("co.phone.error") : null}
+                  warn={texting && !textReadable(f.phone) ? t("co.texts.check") : null}
+                  after={<TextBox />}
+                >
                   <input id="jn-co-phone" className="jn-fld" type="tel" autoComplete="tel" dir="ltr" value={f.phone} maxLength={PHONE_MAX} onChange={(e) => setField("phone", asciiDigits(e.target.value))} placeholder={t("co.phone.placeholder")} aria-invalid={phoneErr} aria-describedby="jn-co-phone-msg" style={fieldStyle(phoneErr)} />
                 </Field>
                 <div style={{ gridColumn: "1/-1" }}>

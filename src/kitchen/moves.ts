@@ -10,6 +10,7 @@ import type { TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { firstName } from "../lib/format.ts";
 import { moveOrder, useKitchen, type MoveResult } from "../state/kitchen.ts";
+import { textOutcome } from "./textState.ts";
 import { toast } from "../state/ui.ts";
 
 export const UNDO_MS = 10_000;
@@ -90,7 +91,10 @@ export async function undo(t: TFunction, fmt: Formatter): Promise<void> {
   useRecentMove.setState({ id: null, until: 0 });
   const order = useKitchen.getState().orders.find((o) => o.order.id === recent.id);
   const number = String(order?.order["number"] ?? "");
+  // A "ready" taken back while its text waited: the text is dropped with it, and the toast says nothing went.
+  const offered = useKitchen.getState().settings?.["ready_text_on"] === true;
+  const textHeld = recent.to === "ready" && order !== undefined && textOutcome(order.order, order.texts, { offered }) === "waiting";
   const result = await moveOrder(recent.id, recent.to, recent.from);
-  if (result.ok) toast(t("kitchen.move.undone", { number, state: word(t, recent.from) }));
+  if (result.ok) toast(t(textHeld ? "kitchen.move.undoneNoText" : "kitchen.move.undone", { number, state: word(t, recent.from) }));
   else sayRefused(t, fmt, result, number, String(order?.order["name"] ?? ""));
 }

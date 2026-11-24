@@ -3,15 +3,16 @@
  *
  *   kitchen   the kitchen's own screens, never the dashboard. Reads the menu,
  *             the orders (with the diner's phone and email, to call them), the
- *             hours, closures and paused slots. Moves an order along, cancels it
+ *             hours, closures and paused slots, and whether an order's ready
+ *             text went (never to whom). Moves an order along, cancels it
  *             with a reason, hands it over with how it was paid; takes a phone
  *             order; pauses and reopens slots; switches dishes and options on
  *             and off and sets today's portions. Never the settings, the hours,
  *             the closures or the customers;
  *   manager   everything: the dashboard section, the settings, the hours and
  *             closures, whether online orders are taken, the enquiries, the
- *             menu, the customers, the emails; and giving back what a diner
- *             paid online.
+ *             menu, the customers, the emails; giving back what a diner
+ *             paid online; and reading and answering what diners text back.
  *
  * A one-person kitchen is simply the workspace's admin.
  *
@@ -64,8 +65,17 @@ const LINE_TYPED = ["order_id", "position", "menu_item_id", "qty", "note", "name
 
 /** What an add-on's answer fills on an order: nobody's to write, whatever their role. */
 const DECIDED_ON_ORDERS: ReadonlySet<string> = new Set(["discount", "due", "customer_proved"]);
-/** What only the diner gives, on their own order: the tick for the kitchen's news. No role writes it on their behalf. */
-export const DINERS_OWN: Readonly<Record<string, readonly string[]>> = { orders: ["opt_in"] };
+/**
+ * What only the diner gives, on their own order: the tick for the kitchen's news, and the box for the ready
+ * text. No role writes either on their behalf.
+ */
+export const DINERS_OWN: Readonly<Record<string, readonly string[]>> = { orders: ["opt_in", "texts_ok"] };
+
+/**
+ * What the board reads of the outbox: whether an order's ready text went, and why not. Never who it went to,
+ * nor the diner it is linked to — only the order, and Adminium's fixed sentence, which holds no number.
+ */
+export const KITCHEN_MESSAGE_READS = ["id", "kind", "status", "order_id", "due", "sent_at", "error", "skip_reason"];
 /** Every column of an order a manager writes: never one Adminium works out, Offers & gift cards decides, or the diner gives. */
 const MANAGER_ORDERS = TABLES.find((t) => t.ref === "orders")!
   .columns.filter((c) => c.ref !== "id" && !DECIDED_ON_ORDERS.has(c.ref) && !DINERS_OWN["orders"]!.includes(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined)
@@ -80,6 +90,8 @@ export const ROLES = [
       "app:@:staff",
       ...KITCHEN_READS.flatMap((table) => grant(table, "read")),
       pii("orders"),
+      // The ready text's outcome on the board ("Text sent", "Not sent: no number"…).
+      ...grant("messages", "read"),
       // A phone order: the order with its lines and options, in one write.
       ...grant("orders", "create", "update"),
       ...grant("order_items", "create"),
@@ -110,6 +122,7 @@ export const ROLES = [
       modifiers: { writable: ["available"] },
       // The card's code and the order it pays: what the card gives is never the kitchen's to type.
       payments: { readable: PAYMENT_READS, creatable: ["order_id", "card_code", "client_key"] },
+      messages: { readable: KITCHEN_MESSAGE_READS },
     },
     tables: KITCHEN_ADD_ON_TABLES,
   },
@@ -126,6 +139,9 @@ export const ROLES = [
       ...["orders", "customers", "enquiries", "messages"].map(pii),
       // Gives back what diners paid online for the kitchen's own orders (the install review shows it, and may untick it).
       "payments:@:refund",
+      // Reads and answers what diners text back to the kitchen's texts, on Adminium's Texts page.
+      "texts:@:read",
+      "texts:@:reply",
     ],
     limits: {
       // "Cancelled by the customer" and "not ready by closing" are the diner's and the clock's to give, never a person's here.

@@ -35,10 +35,13 @@ const WORDS_PAGE = 60;
 
 type Table =
   | "settings" | "menu_categories" | "menu_items" | "modifier_groups" | "modifiers" | "hours" | "closures" | "slot_pauses"
-  | "orders" | "order_items" | "order_item_modifiers" | "payments" | "payment_refunds";
+  | "orders" | "order_items" | "order_item_modifiers" | "payments" | "payment_refunds" | "messages";
 
 /** The tables whose changes the kitchen hears: every one it reads (a channel it may not read refuses the whole stream). */
-const LIVE: readonly Table[] = ["orders", "order_items", "order_item_modifiers", "slot_pauses", "menu_items", "modifiers", "modifier_groups", "menu_categories", "settings", "hours", "closures", "payment_refunds"];
+const LIVE: readonly Table[] = ["orders", "order_items", "order_item_modifiers", "slot_pauses", "menu_items", "modifiers", "modifier_groups", "menu_categories", "settings", "hours", "closures", "payment_refunds", "messages"];
+
+/** The outbox kind the board reads: the ready text, for the orders whose diner asked for one. */
+const READY_TEXT = "order-ready-text";
 
 /** The transport's refusal as the screens read one: its status, its code, what it said beside. */
 function asApiError(error: unknown): unknown {
@@ -127,6 +130,10 @@ export class AdminiumKitchen implements KitchenPort {
     for (const column of MOMENTS[table] ?? []) if (column in out) out[column] = momentOf(out[column], this.serverZone);
     for (const column of YES_NO[table] ?? []) if (column in out) out[column] = yesNo(out[column]);
     return out;
+  }
+  /** Whether this person's staff config says they may read a table (a config that says nothing: yes). */
+  private mayRead(table: Table): boolean {
+    return this.cfg.access === null || this.cfg.access.tables[table]?.includes("read") === true;
   }
   private async run<T>(work: () => Promise<T>): Promise<T> {
     try {
@@ -244,10 +251,16 @@ export class AdminiumKitchen implements KitchenPort {
     const payments = carded.length === 0 ? [] : await this.listIn("payments", "order_id", carded, "made_at.asc");
     // …and what went back of them, for the orders that had something paid.
     const refunds = payments.length === 0 ? [] : await this.listIn("payment_refunds", "payment_id", payments.map((p) => p.id), "made_at.asc").catch(() => [] as Row[]);
+    // …and how each ready text went, for the orders whose diner asked for one. A role that may not read the outbox sees none.
+    const texting = orders.filter((o) => yesNo(o["texts_ok"]) === true && o["status"] !== "placed" && o["status"] !== "paying").map((o) => o.id);
+    const readable = this.mayRead("messages");
+    const texts = texting.length === 0 || !readable ? [] : ((await this.listIn("messages", "order_id", texting).catch(() => null)) ?? null)?.filter((m) => m["kind"] === READY_TEXT) ?? null;
     return orders.map((order) => ({
       order,
       payments: payments.filter((p) => p["order_id"] === order.id),
       refunds: refunds.filter((r) => r["order_id"] === order.id),
+      // Unread (a role without the outbox, or a read that failed): the board says nothing of the text.
+      ...(!readable || texts === null ? {} : { texts: texts.filter((m) => m["order_id"] === order.id) }),
       lines: lines
         .filter((l) => l["order_id"] === order.id)
         .sort(byPosition)

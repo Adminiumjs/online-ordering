@@ -44,6 +44,8 @@ export function demoRulesText(manifest: Json): string {
     roles,
     producers: outbox["producers"],
     kinds: outbox["kinds"],
+    // The kinds sent as texts: each goes to a mobile, not an address.
+    channels: outbox["channels"] ?? {},
   };
   return [
     "/**",

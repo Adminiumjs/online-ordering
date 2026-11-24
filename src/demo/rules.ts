@@ -330,7 +330,8 @@ export const MANIFEST_RULES = {
         "order-ready-paid",
         "order-cancelled-paid",
         "order-cancelled-paid-by-you",
-        "order-refunded"
+        "order-refunded",
+        "order-ready-text"
       ],
       "status": [
         "queued",
@@ -396,6 +397,9 @@ export const MANIFEST_RULES = {
     "customers": {
       "email": {
         "format": "email"
+      },
+      "phone": {
+        "format": "phone"
       }
     },
     "orders": {
@@ -902,6 +906,7 @@ export const MANIFEST_RULES = {
         "columns": [
           "email",
           "name",
+          "phone",
           "opt_in"
         ],
         "stamp": "forgotten_at",
@@ -1214,7 +1219,8 @@ export const MANIFEST_RULES = {
         "prep_minutes",
         "max_items",
         "online_on",
-        "auto_refund"
+        "auto_refund",
+        "ready_text_on"
       ],
       "pictures": [
         "photo_hero",
@@ -1272,7 +1278,8 @@ export const MANIFEST_RULES = {
         "pickup_at",
         "note",
         "client_key",
-        "opt_in"
+        "opt_in",
+        "texts_ok"
       ],
       "requires": [
         "name",
@@ -1295,7 +1302,8 @@ export const MANIFEST_RULES = {
         "link": "customer_id",
         "fill": {
           "name": "name",
-          "language": "language"
+          "language": "language",
+          "phone": "phone"
         }
       },
       "consent": {
@@ -1312,6 +1320,24 @@ export const MANIFEST_RULES = {
             "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
             "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
             "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
+        }
+      },
+      "textConsent": {
+        "column": "texts_ok",
+        "phone": "phone",
+        "class": "service",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Text me when my order is ready\nOne text when it's ready to collect.\nOptional. You can stop at any time; each text tells you how.",
+            "de-DE": "SMS, wenn meine Bestellung fertig ist\nEine SMS, sobald sie abholbereit ist.\nFreiwillig. Sie können jederzeit abbestellen; jede SMS sagt Ihnen, wie.",
+            "fr-FR": "M’envoyer un SMS quand ma commande est prête\nUn seul SMS, quand elle est prête à retirer.\nFacultatif. Vous pouvez arrêter à tout moment ; chaque SMS vous indique comment.",
+            "da-DK": "Send mig en sms, når min bestilling er klar\nÉn sms, når den er klar til afhentning.\nFrivilligt. Du kan stoppe når som helst; hver sms fortæller dig hvordan.",
+            "cs-CZ": "Pošlete mi SMS, až bude objednávka hotová\nJedna SMS, až bude připravená k vyzvednutí.\nNepovinné. Odhlásit se můžete kdykoli; každá SMS vám řekne jak.",
+            "ar-EG": "أرسلوا لي رسالة عندما يكون طلبي جاهزًا\nرسالة واحدة عندما يصبح جاهزًا للاستلام.\nاختياري. يمكنك الإيقاف في أي وقت، وكل رسالة توضح لك الطريقة.",
+            "zh-CN": "订单备好后短信通知我\n备好可取餐时发送一条短信。\n可选。您可随时退订，每条短信都会说明退订方式。",
+            "zh-TW": "餐點備妥後以簡訊通知我\n備妥可取餐時傳送一則簡訊。\n可選。您可隨時退訂，每則簡訊都會說明退訂方式。"
           }
         }
       },
@@ -1693,7 +1719,8 @@ export const MANIFEST_RULES = {
         "pickup_at",
         "note",
         "client_key",
-        "opt_in"
+        "opt_in",
+        "texts_ok"
       ],
       "requires": [
         "name",
@@ -1716,7 +1743,8 @@ export const MANIFEST_RULES = {
         "link": "customer_id",
         "fill": {
           "name": "name",
-          "language": "language"
+          "language": "language",
+          "phone": "phone"
         }
       },
       "consent": {
@@ -1733,6 +1761,24 @@ export const MANIFEST_RULES = {
             "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
             "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
             "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
+        }
+      },
+      "textConsent": {
+        "column": "texts_ok",
+        "phone": "phone",
+        "class": "service",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Text me when my order is ready\nOne text when it's ready to collect.\nOptional. You can stop at any time; each text tells you how.",
+            "de-DE": "SMS, wenn meine Bestellung fertig ist\nEine SMS, sobald sie abholbereit ist.\nFreiwillig. Sie können jederzeit abbestellen; jede SMS sagt Ihnen, wie.",
+            "fr-FR": "M’envoyer un SMS quand ma commande est prête\nUn seul SMS, quand elle est prête à retirer.\nFacultatif. Vous pouvez arrêter à tout moment ; chaque SMS vous indique comment.",
+            "da-DK": "Send mig en sms, når min bestilling er klar\nÉn sms, når den er klar til afhentning.\nFrivilligt. Du kan stoppe når som helst; hver sms fortæller dig hvordan.",
+            "cs-CZ": "Pošlete mi SMS, až bude objednávka hotová\nJedna SMS, až bude připravená k vyzvednutí.\nNepovinné. Odhlásit se můžete kdykoli; každá SMS vám řekne jak.",
+            "ar-EG": "أرسلوا لي رسالة عندما يكون طلبي جاهزًا\nرسالة واحدة عندما يصبح جاهزًا للاستلام.\nاختياري. يمكنك الإيقاف في أي وقت، وكل رسالة توضح لك الطريقة.",
+            "zh-CN": "订单备好后短信通知我\n备好可取餐时发送一条短信。\n可选。您可随时退订，每条短信都会说明退订方式。",
+            "zh-TW": "餐點備妥後以簡訊通知我\n備妥可取餐時傳送一則簡訊。\n可選。您可隨時退訂，每則簡訊都會說明退訂方式。"
           }
         }
       },
@@ -1972,6 +2018,18 @@ export const MANIFEST_RULES = {
             "order_id",
             "card_code",
             "client_key"
+          ]
+        },
+        "messages": {
+          "readable": [
+            "id",
+            "kind",
+            "status",
+            "order_id",
+            "due",
+            "sent_at",
+            "error",
+            "skip_reason"
           ]
         }
       }
@@ -2335,6 +2393,40 @@ export const MANIFEST_RULES = {
       ]
     },
     {
+      "kind": "order-ready-text",
+      "link": "order_id",
+      "gate": {
+        "setting": {
+          "table": "settings",
+          "column": "ready_text_on"
+        }
+      },
+      "onChange": {
+        "table": "orders",
+        "column": "status",
+        "to": "ready",
+        "where": {
+          "column": "texts_ok",
+          "eq": true
+        }
+      },
+      "holdSeconds": 20,
+      "dropWhen": [
+        {
+          "column": "status",
+          "in": [
+            "placed",
+            "confirmed",
+            "preparing",
+            "picked_up",
+            "cancelled",
+            "not_collected"
+          ],
+          "reason": "no-longer-needed"
+        }
+      ]
+    },
+    {
       "kind": "order-cancelled-ran-out",
       "link": "order_id",
       "onChange": {
@@ -2610,6 +2702,10 @@ export const MANIFEST_RULES = {
     "order-ready-paid": "ordering-order-ready-paid",
     "order-cancelled-paid": "ordering-order-cancelled-paid",
     "order-cancelled-paid-by-you": "ordering-order-cancelled-paid-by-you",
-    "order-refunded": "ordering-order-refunded"
+    "order-refunded": "ordering-order-refunded",
+    "order-ready-text": "ordering-order-ready-text"
+  },
+  "channels": {
+    "order-ready-text": "sms"
   }
 } as const;

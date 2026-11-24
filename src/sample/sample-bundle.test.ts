@@ -62,7 +62,16 @@ describe("every row is one the product could have made", () => {
   it("mails nobody real: every address is on a reserved .example domain", () => {
     const addresses = [...JSON.stringify(bundle).matchAll(/"(?:email|to_address)":\s*"([^"]+)"/g)].map((m) => m[1]!);
     expect(addresses.length).toBeGreaterThan(20);
-    for (const address of addresses) expect(address, address).toMatch(/\.example$/);
+    for (const address of addresses.filter((a) => !a.startsWith("+"))) expect(address, address).toMatch(/\.example$/);
+  });
+
+  it("texts nobody real: every number is on the 555 area code, which no one is given", () => {
+    const numbers = [...JSON.stringify(bundle).matchAll(/"(?:phone|to_address)":\s*"([^"]+)"/g)].map((m) => m[1]!).filter((n) => !n.includes("@"));
+    expect(numbers.length).toBeGreaterThan(20);
+    for (const number of numbers) expect(number.replace(/\D/g, ""), number).toMatch(/^1?555\d{7}$/);
+    // The ready text the sample holds went to its order's own number.
+    const texts = rowsOf("messages").filter((m) => m["kind"] === "order-ready-text");
+    expect(texts.map((m) => m["to_address"])).toEqual(["+15550183392"]);
   });
 
   it("spells its numbers with an S and off the running series, so a kitchen's own #1001 is never one of them", () => {

@@ -251,6 +251,8 @@ const QUERIES: Record<string, (() => Promise<void>)[]> = {
   order_item_modifiers: [() => readOrders()],
   // Money given back of an order (by a manager, or by itself for a cancellation): its card reads again.
   payment_refunds: [() => readOrders()],
+  // A ready text sent, or not: the card says how it went.
+  messages: [() => readOrders()],
   slot_pauses: [readSlots],
   menu_items: [readMenu, readCounts],
   modifiers: [readMenu],

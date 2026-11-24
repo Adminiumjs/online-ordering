@@ -504,9 +504,11 @@ export class Engine {
 
   /** Queues what the producers queue for a write (a create when `before` is null). */
   produce(table: Table, before: Row | null, after: Row): void {
-    // A row the sample added is sample data: no email is ever about it.
-    if (this.world.isSample(table, after.id)) return;
+    // A row the sample added is sample data: no email is ever about it. The demo's kitchen is its sample, though,
+    // and the board shows how a ready text went: those it plays as Juniper's own provider would send them.
+    const sample = this.world.isSample(table, after.id);
     for (const producer of MANIFEST_RULES.producers as readonly Record<string, unknown>[]) {
+      if (sample && (MANIFEST_RULES.channels as Record<string, string>)[String(producer["kind"])] !== "sms") continue;
       const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; via?: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
       if (source.table !== table) continue;
       if (producer["onCreate"] !== undefined && before !== null) continue;
@@ -529,9 +531,11 @@ export class Engine {
       if (this.world.where("messages", sent).length > 0) continue;
       const recipient = producer["recipient"] as { column: string } | undefined;
       const customer = aboutTable === "orders" && !empty(about["customer_id"]) ? this.world.get("customers", Number(about["customer_id"])) : undefined;
-      const to = recipient !== undefined ? about[recipient.column] : (customer?.["email"] ?? about["email"]);
+      // A text goes to the diner's own mobile, as Adminium reads it: their account's, or the one typed on an order linked to nobody.
+      const text = (MANIFEST_RULES.channels as Record<string, string>)[kind] === "sms";
+      const to = text ? (customer !== undefined ? customer["phone"] : about["phone"]) : recipient !== undefined ? about[recipient.column] : (customer?.["email"] ?? about["email"]);
       const hold = typeof producer["holdSeconds"] === "number" ? producer["holdSeconds"] * 1000 : 0;
-      this.world.insert("messages", {
+      const message = this.world.insert("messages", {
         kind,
         status: empty(to) ? "skipped" : "queued",
         to_address: empty(to) ? null : to,
@@ -542,12 +546,32 @@ export class Engine {
         due: iso(this.now + hold),
         created_at: iso(this.now),
         sent_at: null,
-        error: null,
-        skip_reason: empty(to) ? "no-longer-needed" : null,
+        // A text with no number to go to says so, as Adminium's sentence does.
+        error: empty(to) && text ? "No mobile number on file" : null,
+        skip_reason: empty(to) && !text ? "no-longer-needed" : null,
         repeat_key: repeatKey,
       });
+      if (text && !empty(to) && hold > 0) this.onHeldText?.(message.id, hold);
     }
     this.sendDue();
+  }
+
+  /**
+   * The demo's clock stands still until its card moves it, so a text held for
+   * the Undo would wait for ever: the browser's demo settles one when its wait
+   * is over in real time (`settleText`). Tests leave it unset.
+   */
+  onHeldText: ((id: Id, ms: number) => void) | undefined;
+
+  /** A held text whose wait is over: dropped if its "ready" was taken back, else sent by the demo's provider. */
+  settleText(id: Id): void {
+    const message = this.world.get("messages", id);
+    if (message === undefined || message["status"] !== "queued") return;
+    const order = message["order_id"] === null ? undefined : this.world.get("orders", Number(message["order_id"]));
+    const producer = (MANIFEST_RULES.producers as readonly Record<string, unknown>[]).find((p) => p["kind"] === message["kind"]);
+    const drop = order === undefined ? undefined : ((producer?.["dropWhen"] ?? []) as readonly DropWhen[]).find((d) => dropHolds(d, order));
+    if (drop !== undefined) this.world.update("messages", id, { status: "skipped", skip_reason: drop.reason });
+    else this.world.update("messages", id, { status: "sent", sent_at: iso(this.now) });
   }
 
   /** Sends what has come due; a waiting message whose row meets its producer's `dropWhen` is dropped. */

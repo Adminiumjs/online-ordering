@@ -285,11 +285,12 @@ export class DemoDiner implements DinerPort {
         applied: tree.priced.applied,
       });
     }
-    // The person the order is for, found by the address typed, or made with the order's name and language.
+    // The person the order is for, found by the address typed, or made with the order's name, language and mobile.
     let customer = this.world.all("customers").find((c) => String(c["email"] ?? "").toLowerCase() === email);
     if (customer === undefined) {
       const language = tree.order["language"];
-      customer = this.world.insert("customers", { email, name: tree.order["name"], language: language === undefined || language === "" ? null : language, opt_in: false, forgotten_at: null, created_at: new Date(this.engine.now).toISOString() });
+      const phone = tree.order["phone"];
+      customer = this.world.insert("customers", { email, name: tree.order["name"], phone: phone === undefined || phone === "" ? null : phone, language: language === undefined || language === "" ? null : language, opt_in: false, forgotten_at: null, created_at: new Date(this.engine.now).toISOString() });
     }
     // The tick is the diner's yes to the kitchen's news, as Adminium keeps it (here with no consent log); unticked takes nothing back.
     if (tree.order["opt_in"] === true) this.world.update("customers", customer.id, { opt_in: true });

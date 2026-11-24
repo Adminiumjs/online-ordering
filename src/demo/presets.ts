@@ -10,7 +10,8 @@ import { instantOf, venueDay, addDays } from "../lib/venueTime.ts";
 import { afterClosing, fillSlot, moveOn, sellOut } from "./shortcuts.ts";
 import { DEMO_SIGN_IN } from "./diner.ts";
 import { openSignInLink, useAccount } from "../state/account.ts";
-import { applyCard, applyCode, type CartLine, lineKey, openSheet, placeOrder, replaceCart, runQuote, setField, toggleOption, useDiner } from "../state/diner.ts";
+import { applyCard, applyCode, type CartLine, lineKey, openSheet, placeOrder, replaceCart, runQuote, setField, setOptIn, setTextsOk, toggleOption, useDiner } from "../state/diner.ts";
+import { UNDO_MS, useRecentMove } from "../kitchen/moves.ts";
 import { freshPhone, addPhoneLine, setPhone, useKitchen, NO_CARD, loadKitchen } from "../state/kitchen.ts";
 import { setLarge, useLarge } from "../state/large.ts";
 import { useReorderAsk } from "../state/reorder.ts";
@@ -82,6 +83,27 @@ async function signedInAsKwame(): Promise<void> {
   await demo().diner.requestSignIn("kwame.b@mail.example");
   await openSignInLink(DEMO_SIGN_IN.token);
   goDiner("orders");
+}
+
+/** Kwame at checkout with a mobile typed: the box for texts shows under it. */
+async function textsCheckout(phone: string, tick = false): Promise<void> {
+  kwameCart();
+  setField("name", "Kwame");
+  setField("email", "kwame.b@mail.example");
+  setField("phone", phone);
+  if (tick) setTextsOk(true);
+  await quoted();
+  goDiner("checkout");
+}
+
+/** An order of today's board made ready a while ago, its diner having asked for a text, and how that text went. */
+function readyWithText(number: string, minutesAgo: number, outcome: { status: string; error: string | null } | null): void {
+  const o = numbered(number);
+  const when = new Date(demo().now - minutesAgo * 60_000).toISOString();
+  demo().world.update("orders", o.id, { status: "ready", texts_ok: true, confirmed_at: o["confirmed_at"] ?? when, preparing_at: o["preparing_at"] ?? when, ready_at: when, ready_by: "Sam" });
+  if (outcome !== null) {
+    demo().world.insert("messages", { kind: "order-ready-text", status: outcome.status, to_address: null, language: "en-US", order_id: o.id, enquiry_id: null, customer_id: null, due: when, created_at: when, sent_at: outcome.status === "sent" ? when : null, error: outcome.error, skip_reason: null, repeat_key: null });
+  }
 }
 
 const sample = { heads: 30, headsText: "30", other: "", notes: "Office party — mostly pizza, a few vegan bowls", name: "Maya Chen", phone: "(555) 010-4471", email: "maya@riverside-studio.example" };
@@ -230,6 +252,33 @@ const PRESETS: Record<string, Preset> = {
     },
   },
   "history-empty": { ui: () => { useAccount.setState({ person: { email: "new.diner@mail.example", name: null, at: new Date(demo().now).toISOString() }, orders: [] }); goDiner("orders"); } },
+  // Juniper Kitchen Texts — the box for texts at checkout, under the mobile field
+  "j01-no-number": { ui: () => textsCheckout("") },
+  "j02-number": { ui: () => textsCheckout("(555) 019-2205") },
+  "j03-ticked": { ui: () => textsCheckout("(555) 019-2205", true) },
+  "j04-newsletter": { ui: async () => { await textsCheckout("(555) 019-2205"); setOptIn(true); } },
+  "j05-china": { ui: () => textsCheckout("+86 138 0013 8000") },
+  "j06-unreadable": { ui: () => textsCheckout("018 224", true) },
+  // …and on the board: the wait for the Undo, then how each text went
+  "j07-held": {
+    kitchen: true,
+    ui: async () => {
+      const id = numbered("2114").id;
+      await demo().kitchen.move(id, "preparing", "ready");
+      useRecentMove.setState({ id, from: "preparing", to: "ready", until: Date.now() + UNDO_MS });
+      await loadKitchen();
+    },
+  },
+  "j10-results": {
+    kitchen: true,
+    world: () => {
+      readyWithText("2114", 2, { status: "sent", error: null });
+      readyWithText("2115", 3, { status: "skipped", error: "No mobile number on file" });
+      readyWithText("2116", 4, { status: "skipped", error: "Not sent: this person replied STOP" });
+      readyWithText("2117", 5, { status: "skipped", error: "Not sent: the daily text limit is reached" });
+      readyWithText("2113", 6, { status: "sent", error: "Unknown: check with the provider before resending" });
+    },
+  },
   // States 6 — the kitchen board
   "k-board": { kitchen: true },
   "k-1150": { time: "11:50", kitchen: true },

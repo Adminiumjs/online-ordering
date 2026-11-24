@@ -18,7 +18,7 @@
     "hospitality"
   ],
   "compatibility": {
-    "minAdminiumVersion": "0.3.62",
+    "minAdminiumVersion": "0.3.76",
     "engines": [
       "sqlite",
       "postgres",
@@ -814,6 +814,21 @@
               "ar-EG": "إرسال الإيصال بالبريد عند الاستلام",
               "zh-CN": "取餐时邮件发送收据",
               "zh-TW": "取餐時郵件寄送收據"
+            }
+          },
+          {
+            "ref": "ready_text_on",
+            "type": "bool",
+            "default": false,
+            "label": {
+              "en-US": "Offer a text when an order is ready",
+              "de-DE": "SMS anbieten, wenn eine Bestellung fertig ist",
+              "fr-FR": "Proposer un SMS quand une commande est prête",
+              "da-DK": "Tilbyd en sms, når en bestilling er klar",
+              "cs-CZ": "Nabídnout SMS, když je objednávka hotová",
+              "ar-EG": "عرض رسالة نصية عند جاهزية الطلب",
+              "zh-CN": "提供订单备好短信通知",
+              "zh-TW": "提供訂單備妥簡訊通知"
             }
           },
           {
@@ -2069,6 +2084,27 @@
               "zh-TW": "姓名"
             },
             "nullable": true
+          },
+          {
+            "ref": "phone",
+            "type": "text",
+            "maxLength": 32,
+            "label": {
+              "en-US": "Phone",
+              "de-DE": "Telefon",
+              "fr-FR": "Téléphone",
+              "da-DK": "Telefon",
+              "cs-CZ": "Telefon",
+              "ar-EG": "الهاتف",
+              "zh-CN": "电话",
+              "zh-TW": "電話"
+            },
+            "nullable": true,
+            "rules": {
+              "validation": {
+                "format": "phone"
+              }
+            }
           },
           {
             "ref": "language",
@@ -4985,6 +5021,21 @@
               "zh-CN": "我们的消息",
               "zh-TW": "我們的消息"
             }
+          },
+          {
+            "ref": "texts_ok",
+            "type": "bool",
+            "default": false,
+            "label": {
+              "en-US": "Text when ready",
+              "de-DE": "SMS, wenn fertig",
+              "fr-FR": "SMS quand c’est prêt",
+              "da-DK": "Sms, når den er klar",
+              "cs-CZ": "SMS, až bude hotovo",
+              "ar-EG": "رسالة نصية عند الجاهزية",
+              "zh-CN": "备好时短信通知",
+              "zh-TW": "備妥時簡訊通知"
+            }
           }
         ]
       },
@@ -6813,7 +6864,8 @@
               "order-ready-paid",
               "order-cancelled-paid",
               "order-cancelled-paid-by-you",
-              "order-refunded"
+              "order-refunded",
+              "order-ready-text"
             ],
             "label": {
               "en-US": "Kind",
@@ -7027,6 +7079,16 @@
                     "ar-EG": "استرداد مبلغ مدفوع عبر الإنترنت",
                     "zh-CN": "在线付款已退款",
                     "zh-TW": "線上付款已退款"
+                  },
+                  "order-ready-text": {
+                    "en-US": "Order ready (text)",
+                    "de-DE": "Bestellung fertig (SMS)",
+                    "fr-FR": "Commande prête (SMS)",
+                    "da-DK": "Bestilling klar (sms)",
+                    "cs-CZ": "Objednávka připravena (SMS)",
+                    "ar-EG": "الطلب جاهز (رسالة نصية)",
+                    "zh-CN": "订单已备好（短信）",
+                    "zh-TW": "訂單已備妥（簡訊）"
                   }
                 }
               }
@@ -9820,6 +9882,10 @@
                 {
                   "column": "receipt_email_on",
                   "control": "toggle-row"
+                },
+                {
+                  "column": "ready_text_on",
+                  "control": "toggle-row"
                 }
               ]
             }
@@ -9849,6 +9915,7 @@
         "table:@closures:read",
         "table:@slot_pauses:read",
         "table:@orders:read_pii",
+        "table:@messages:read",
         "table:@orders:create",
         "table:@orders:update",
         "table:@order_items:create",
@@ -9945,6 +10012,18 @@
             "order_id",
             "card_code",
             "client_key"
+          ]
+        },
+        "messages": {
+          "readable": [
+            "id",
+            "kind",
+            "status",
+            "order_id",
+            "due",
+            "sent_at",
+            "error",
+            "skip_reason"
           ]
         }
       },
@@ -10138,7 +10217,9 @@
         "table:@customers:read_pii",
         "table:@enquiries:read_pii",
         "table:@messages:read_pii",
-        "payments:@:refund"
+        "payments:@:refund",
+        "texts:@:read",
+        "texts:@:reply"
       ],
       "limits": {
         "orders": {
@@ -10414,6 +10495,7 @@
         "columns": [
           "email",
           "name",
+          "phone",
           "opt_in"
         ],
         "stamp": "forgotten_at",
@@ -10726,7 +10808,8 @@
         "prep_minutes",
         "max_items",
         "online_on",
-        "auto_refund"
+        "auto_refund",
+        "ready_text_on"
       ],
       "pictures": [
         "photo_hero",
@@ -10784,7 +10867,8 @@
         "pickup_at",
         "note",
         "client_key",
-        "opt_in"
+        "opt_in",
+        "texts_ok"
       ],
       "requires": [
         "name",
@@ -10807,7 +10891,8 @@
         "link": "customer_id",
         "fill": {
           "name": "name",
-          "language": "language"
+          "language": "language",
+          "phone": "phone"
         }
       },
       "consent": {
@@ -10824,6 +10909,24 @@
             "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
             "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
             "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
+        }
+      },
+      "textConsent": {
+        "column": "texts_ok",
+        "phone": "phone",
+        "class": "service",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Text me when my order is ready\nOne text when it's ready to collect.\nOptional. You can stop at any time; each text tells you how.",
+            "de-DE": "SMS, wenn meine Bestellung fertig ist\nEine SMS, sobald sie abholbereit ist.\nFreiwillig. Sie können jederzeit abbestellen; jede SMS sagt Ihnen, wie.",
+            "fr-FR": "M’envoyer un SMS quand ma commande est prête\nUn seul SMS, quand elle est prête à retirer.\nFacultatif. Vous pouvez arrêter à tout moment ; chaque SMS vous indique comment.",
+            "da-DK": "Send mig en sms, når min bestilling er klar\nÉn sms, når den er klar til afhentning.\nFrivilligt. Du kan stoppe når som helst; hver sms fortæller dig hvordan.",
+            "cs-CZ": "Pošlete mi SMS, až bude objednávka hotová\nJedna SMS, až bude připravená k vyzvednutí.\nNepovinné. Odhlásit se můžete kdykoli; každá SMS vám řekne jak.",
+            "ar-EG": "أرسلوا لي رسالة عندما يكون طلبي جاهزًا\nرسالة واحدة عندما يصبح جاهزًا للاستلام.\nاختياري. يمكنك الإيقاف في أي وقت، وكل رسالة توضح لك الطريقة.",
+            "zh-CN": "订单备好后短信通知我\n备好可取餐时发送一条短信。\n可选。您可随时退订，每条短信都会说明退订方式。",
+            "zh-TW": "餐點備妥後以簡訊通知我\n備妥可取餐時傳送一則簡訊。\n可選。您可隨時退訂，每則簡訊都會說明退訂方式。"
           }
         }
       },
@@ -11205,7 +11308,8 @@
         "pickup_at",
         "note",
         "client_key",
-        "opt_in"
+        "opt_in",
+        "texts_ok"
       ],
       "requires": [
         "name",
@@ -11228,7 +11332,8 @@
         "link": "customer_id",
         "fill": {
           "name": "name",
-          "language": "language"
+          "language": "language",
+          "phone": "phone"
         }
       },
       "consent": {
@@ -11245,6 +11350,24 @@
             "ar-EG": "راسلوني بالبريد الإلكتروني بأخبار {venue} وعروضه\nكل رسالة فيها رابط لإيقاف هذه الرسائل.",
             "zh-CN": "通过邮件给我发送{venue}的消息和优惠\n每封邮件都附有停止接收的链接。",
             "zh-TW": "以電子郵件寄送{venue}的消息與優惠給我\n每封郵件都附有停止接收的連結。"
+          }
+        }
+      },
+      "textConsent": {
+        "column": "texts_ok",
+        "phone": "phone",
+        "class": "service",
+        "wording": {
+          "version": 1,
+          "text": {
+            "en-US": "Text me when my order is ready\nOne text when it's ready to collect.\nOptional. You can stop at any time; each text tells you how.",
+            "de-DE": "SMS, wenn meine Bestellung fertig ist\nEine SMS, sobald sie abholbereit ist.\nFreiwillig. Sie können jederzeit abbestellen; jede SMS sagt Ihnen, wie.",
+            "fr-FR": "M’envoyer un SMS quand ma commande est prête\nUn seul SMS, quand elle est prête à retirer.\nFacultatif. Vous pouvez arrêter à tout moment ; chaque SMS vous indique comment.",
+            "da-DK": "Send mig en sms, når min bestilling er klar\nÉn sms, når den er klar til afhentning.\nFrivilligt. Du kan stoppe når som helst; hver sms fortæller dig hvordan.",
+            "cs-CZ": "Pošlete mi SMS, až bude objednávka hotová\nJedna SMS, až bude připravená k vyzvednutí.\nNepovinné. Odhlásit se můžete kdykoli; každá SMS vám řekne jak.",
+            "ar-EG": "أرسلوا لي رسالة عندما يكون طلبي جاهزًا\nرسالة واحدة عندما يصبح جاهزًا للاستلام.\nاختياري. يمكنك الإيقاف في أي وقت، وكل رسالة توضح لك الطريقة.",
+            "zh-CN": "订单备好后短信通知我\n备好可取餐时发送一条短信。\n可选。您可随时退订，每条短信都会说明退订方式。",
+            "zh-TW": "餐點備妥後以簡訊通知我\n備妥可取餐時傳送一則簡訊。\n可選。您可隨時退訂，每則簡訊都會說明退訂方式。"
           }
         }
       },
@@ -11421,9 +11544,11 @@
       "language": {
         "column": "language"
       },
+      "phone": "phone",
       "fallback": {
         "via": "order_id",
         "email": "email",
+        "phone": "phone",
         "name": "name",
         "language": "language"
       }
@@ -11457,7 +11582,8 @@
       "order-ready-paid": "ordering-order-ready-paid",
       "order-cancelled-paid": "ordering-order-cancelled-paid",
       "order-cancelled-paid-by-you": "ordering-order-cancelled-paid-by-you",
-      "order-refunded": "ordering-order-refunded"
+      "order-refunded": "ordering-order-refunded",
+      "order-ready-text": "ordering-order-ready-text"
     },
     "classes": {
       "order-confirmation": "service",
@@ -11479,8 +11605,15 @@
       "order-ready-paid": "service",
       "order-cancelled-paid": "service",
       "order-cancelled-paid-by-you": "service",
-      "order-refunded": "service"
+      "order-refunded": "service",
+      "order-ready-text": "service"
     },
+    "channels": {
+      "order-ready-text": "sms"
+    },
+    "waiting": [
+      "order-ready-text"
+    ],
     "producers": [
       {
         "kind": "order-confirmation",
@@ -11677,6 +11810,40 @@
           "where": {
             "column": "paid_as",
             "eq": 2
+          }
+        },
+        "holdSeconds": 20,
+        "dropWhen": [
+          {
+            "column": "status",
+            "in": [
+              "placed",
+              "confirmed",
+              "preparing",
+              "picked_up",
+              "cancelled",
+              "not_collected"
+            ],
+            "reason": "no-longer-needed"
+          }
+        ]
+      },
+      {
+        "kind": "order-ready-text",
+        "link": "order_id",
+        "gate": {
+          "setting": {
+            "table": "settings",
+            "column": "ready_text_on"
+          }
+        },
+        "onChange": {
+          "table": "orders",
+          "column": "status",
+          "to": "ready",
+          "where": {
+            "column": "texts_ok",
+            "eq": true
           }
         },
         "holdSeconds": 20,
@@ -11957,6 +12124,7 @@
       "table": "customers",
       "kind": "people",
       "email": "email",
+      "phone": "phone",
       "name": "name",
       "firstName": "firstWordOfName",
       "language": "language",
@@ -20372,6 +20540,48 @@
       }
     }
   ],
+  "textTemplates": [
+    {
+      "key": "ordering-order-ready-text",
+      "name": {
+        "en-US": "Order ready (text)",
+        "de-DE": "Bestellung fertig (SMS)",
+        "fr-FR": "Commande prête (SMS)",
+        "da-DK": "Bestilling klar (sms)",
+        "cs-CZ": "Objednávka připravena (SMS)",
+        "ar-EG": "الطلب جاهز (رسالة نصية)",
+        "zh-CN": "订单已备好（短信）",
+        "zh-TW": "訂單已備妥（簡訊）"
+      },
+      "locales": {
+        "en-US": {
+          "body": "{{appName}}: your order #{{order.number}} is ready to collect."
+        },
+        "de-DE": {
+          "body": "{{appName}}: Deine Bestellung #{{order.number}} ist abholbereit."
+        },
+        "fr-FR": {
+          "body": "{{appName}} : votre commande #{{order.number}} vous attend au comptoir."
+        },
+        "da-DK": {
+          "body": "{{appName}}: Din bestilling #{{order.number}} er klar til afhentning."
+        },
+        "cs-CZ": {
+          "body": "{{appName}}: objednávka #{{order.number}} je připravena k vyzvednutí."
+        },
+        "ar-EG": {
+          "body": "{{appName}}: طلبك رقم {{order.number}} جاهز للاستلام."
+        },
+        "zh-CN": {
+          "body": "{{appName}}：您的订单 #{{order.number}} 已备好，可以取餐了。"
+        },
+        "zh-TW": {
+          "body": "{{appName}}：您的餐點 #{{order.number}} 已備妥，可以取餐了。"
+        }
+      }
+    }
+  ],
+  "textReplies": "on",
   "payments": {
     "payables": [
       {

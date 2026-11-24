@@ -14,7 +14,7 @@ import { diner } from "../i18n/strings/diner.ts";
 import { mailClassOf } from "../testing/manifest/mail-class.ts";
 import { buildManifest } from "./build.ts";
 import { LOCALES } from "./labels.ts";
-import { KINDS } from "./outbox.ts";
+import { ALL_KINDS } from "./outbox.ts";
 import { TICK_KEYS } from "./people.ts";
 
 type Json = Record<string, unknown>;
@@ -40,6 +40,7 @@ describe("the kitchen's diners", () => {
         table: "customers",
         kind: "people",
         email: "email",
+        phone: "phone",
         name: "name",
         firstName: "firstWordOfName",
         language: "language",
@@ -54,8 +55,8 @@ describe("the kitchen's diners", () => {
         ],
       },
     ]);
-    // 0.3.38 first read the diners; the floor has since moved on (0.3.62, orders paid online).
-    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.62");
+    // 0.3.38 first read the diners; the floor has since moved on (0.3.76, their mobile and the ready text).
+    expect(manifest.compatibility["minAdminiumVersion"]).toBe("0.3.76");
   });
 
   it("have one address: the outbox's, the one they sign in with, and the one the checkout finds them by", () => {
@@ -67,9 +68,12 @@ describe("the kitchen's diners", () => {
     expect([checkout().identity!["table"], checkout().identity!["email"]]).toEqual([person["table"], "email"]);
   });
 
-  it("keep a language with the same eight choices as an order's, filled by the order that makes them", () => {
+  it("keep a language with the same eight choices as an order's, and a mobile as an order's, filled by the order that makes them", () => {
     expect(column("customers", "language")).toEqual(column("orders", "language"));
-    expect(checkout().identity!["fill"]).toEqual({ name: "name", language: "language" });
+    expect(column("customers", "phone")).toEqual(column("orders", "phone"));
+    expect(checkout().identity!["fill"]).toEqual({ name: "name", language: "language", phone: "phone" });
+    // The mobile a text goes to is the diner's own: the outbox's and the people's are one column.
+    expect([manifest.outbox.recipient["phone"], manifest.people[0]!["phone"]]).toEqual(["phone", "phone"]);
   });
 
   it("say yes to the news in a yes/no that starts at no, on the diner and on each order", () => {
@@ -96,10 +100,10 @@ describe("the tables the law keeps", () => {
   });
 });
 
-describe("the kitchen's emails", () => {
+describe("the kitchen's emails and its text", () => {
   it("are every one service mail: the do-not-email list stops none", () => {
-    expect(Object.keys(manifest.outbox.classes).sort()).toEqual([...KINDS].sort());
-    for (const kind of KINDS) expect([kind, mailClassOf(manifest as never, { outboxKind: kind })]).toEqual([kind, "service"]);
+    expect(Object.keys(manifest.outbox.classes).sort()).toEqual([...ALL_KINDS].sort());
+    for (const kind of ALL_KINDS) expect([kind, mailClassOf(manifest as never, { outboxKind: kind })]).toEqual([kind, "service"]);
   });
 });
 
@@ -138,9 +142,12 @@ describe("the checkout's tick", () => {
   it("is the only yes the diner's side can give: their own account cannot set the newsletter by hand", () => {
     const account = manifest.publicAccess.find((e) => e.table === "customers" && e.claim !== undefined)!;
     expect(account.writable).toEqual(["name"]);
+    expect(manifest.publicAccess.filter((e) => e.table === "customers" && (e.writable ?? []).includes("phone"))).toEqual([]);
     expect(manifest.publicAccess.filter((e) => e.table === "customers" && (e.writable ?? []).includes("opt_in"))).toEqual([]);
     // Deleting their details still empties it: Adminium records the withdrawal first.
     expect((account["forget"] as { columns: string[] }).columns).toContain("opt_in");
+    // …and their mobile, which a text would go to.
+    expect((account["forget"] as { columns: string[] }).columns).toContain("phone");
   });
 
   it("is the diner's own: no role writes it on an order, in the kitchen or as the manager", () => {

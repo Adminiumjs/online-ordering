@@ -266,6 +266,7 @@ const EMAIL_KINDS: Record<string, string> = {
   "order-cancelled-paid": "Cancelled after paying online",
   "order-cancelled-paid-by-you": "Cancelled by the customer after paying online",
   "order-refunded": "Money paid online refunded",
+  "order-ready-text": "Order ready (text)",
 };
 
 const menuItems = posTable("menu_items");
@@ -310,6 +311,9 @@ export const TABLES: Table[] = [
       bool("online_on", "Taking online orders", true),
       bool("ready_email_on", "Email when an order is ready", true),
       bool("receipt_email_on", "Email a receipt at pickup", true),
+      // Whether checkout offers "Text me when my order is ready": off until the kitchen has texts set up in Adminium,
+      // so no diner asks for a text that cannot come.
+      bool("ready_text_on", "Offer a text when an order is ready", false),
       // Paying online, once the kitchen takes payments: how long an order waits for its payment, its
       // slot held, and whether a paid order the diner or the kitchen cancels is refunded by itself.
       int("pay_hold_minutes", "Minutes an order waits for its payment", { default: 10, rules: { validation: { min: 3, max: 30 } } }),
@@ -371,6 +375,8 @@ export const TABLES: Table[] = [
       id,
       text("email", 254, "Email", { ...opt, unique: true, semantic: "email", rules: { normalize: "email", validation: { format: "email" } } }),
       text("name", 80, "Name", opt),
+      // The mobile their first order gave: where a text they asked for goes. A later order never changes it.
+      text("phone", 32, "Phone", { ...opt, rules: { validation: { format: "phone" } } }),
       // The language of the order that made them: what the kitchen writes to them in, beyond an order of theirs.
       language("language"),
       // The newsletter's yes, kept in step with Adminium's consent log: set by the tick at checkout, never by the diner's own hand.
@@ -588,6 +594,9 @@ export const TABLES: Table[] = [
       text("client_key", 64, "Retry key", { ...opt, unique: true }),
       // The tick the diner gave at checkout ("Email me news and offers"): theirs, written by nobody else.
       bool("opt_in", "News from us", false),
+      // "Text me when my order is ready": the diner's own box at checkout, beside the newsletter's and never the same.
+      // Off until they tick it, never needed to order, and written by nobody else.
+      bool("texts_ok", "Text when ready", false),
     ],
   },
   {

@@ -25,12 +25,17 @@
  * it is set by a tick, and cleared by an unsubscribe or by deleting their
  * details.
  *
+ * The box "Text me when my order is ready" is the diner's yes to one text
+ * when the order is ready, for the mobile typed beside it (`textConsent`):
+ * apart from the newsletter's tick, off until they tick it, never needed to
+ * order, and kept in Adminium's text consent log with the lines shown.
+ *
  * What never leaves through these keys: who in the kitchen moved an order (the receipt Invoices &
  * Receipts draws names who handed it over, as a till receipt does), the exact portions
  * left (only "N left" below five), anyone else's order, the order's link code
  * and retry key.
  */
-import { NEWS_TICK } from "./people.ts";
+import { NEWS_TICK, TEXT_BOX } from "./people.ts";
 import { MENU_TABLES } from "./tables.ts";
 
 /** What a diner sees of an order: its progress, their details, what it costs. */
@@ -125,6 +130,8 @@ export const SETTINGS_SELECT = [
   "online_on",
   // Whether a paid order cancelled in time is refunded by itself: what the cancel sheet says goes back.
   "auto_refund",
+  // Whether checkout offers the box "Text me when my order is ready".
+  "ready_text_on",
 ];
 const VENUE_PHOTOS = ["photo_hero", "photo_street", "photo_closed", "photo_store"];
 
@@ -161,14 +168,17 @@ const PLACE = {
   humanCheck: true,
   level: "verified",
   select: PLACED_SELECT,
-  writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key", "opt_in"],
+  writable: ["name", "email", "phone", "language", "pickup_at", "note", "client_key", "opt_in", "texts_ok"],
   requires: ["name", "email"],
   // The manager's switch in Hours; the kitchen's phone orders never pass here.
   requireSetting: [{ table: "settings", column: "online_on" }],
   claimedBy: { table: "customers", column: "customer_id", optional: true },
   // A diner met for the first time is made with the name and the language of this order.
-  identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name", language: "language" } },
+  // …and with its mobile: where the ready text they ask for goes. A diner already on file keeps their own.
+  identity: { table: "customers", email: "email", link: "customer_id", fill: { name: "name", language: "language", phone: "phone" } },
   consent: NEWS_TICK,
+  // "Text me when my order is ready": a box of its own, shown once a mobile is typed, never needed to order.
+  textConsent: TEXT_BOX,
   shareLink: "link_token",
   // A note may hold a few digits ("2 without onions", "table 12") and runs the length its column holds.
   anonymous: { perValue: { columns: ["email"], n: 10 }, perIpHour: 10, perKeyHour: 300, plainText: ["name", { column: "note", digits: 4, max: 140 }] },
@@ -218,7 +228,7 @@ export const PUBLIC_ACCESS = [
     claim: { verify: "email-link", email: "email" },
     humanCheck: true,
     // "Delete my details" also stops every link the diner's orders were emailed with, and takes back the newsletter (Adminium records the withdrawal first).
-    forget: { columns: ["email", "name", "opt_in"], stamp: "forgotten_at", links: true },
+    forget: { columns: ["email", "name", "phone", "opt_in"], stamp: "forgotten_at", links: true },
   },
   // Their own orders, newest first on the page; and the cancel while the kitchen has not taken it.
   { table: "orders", methods: ["GET", "PATCH"], level: "verified", claimedBy: { table: "customers", column: "customer_id" }, select: ORDER_SELECT, ...OWN_MOVES },

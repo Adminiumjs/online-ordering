@@ -12,13 +12,14 @@
 import { ADD_ONS } from "./add-ons.ts";
 import { DOCUMENTS } from "./documents.ts";
 import { emailTemplates } from "./emails.ts";
-import { KINDS, OUTBOX } from "./outbox.ts";
+import { KINDS, OUTBOX, TEXT_KINDS } from "./outbox.ts";
 import { NAV_GROUPS, pages } from "./pages.ts";
 import { PAYMENTS } from "./payments.ts";
 import { PEOPLE } from "./people.ts";
 import { PUBLIC_ACCESS, PUBLIC_KEYS } from "./public.ts";
 import { ROLES } from "./roles.ts";
 import { TABLES } from "./tables.ts";
+import { textTemplates } from "./texts.ts";
 
 /**
  * This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables (0.3.1);
@@ -39,10 +40,12 @@ export const VERSION = "0.3.3";
  * and the refund right a role holds; and (0.3.61) the order page reading where
  * a payment stands after the pay page; and (0.3.62) the move to pay at
  * pickup instead refused while a payment is on its way, and the pay-now
- * door open only while the kitchen takes payments. Written from the version
- * actually released, never guessed.
+ * door open only while the kitchen takes payments; and (0.3.76) the ready
+ * text: a text template, a kind sent as a text that may go at any hour, the
+ * diner's mobile, the checkout's box for texts, and who reads the replies.
+ * Written from the version that first reads each word, never guessed.
  */
-export const MIN_ADMINIUM = "0.3.62";
+export const MIN_ADMINIUM = "0.3.76";
 
 const ENV = {
   VITE_ADMINIUM_API_BASE_URL: { required: false, example: "https://admin.example.com" },
@@ -105,6 +108,10 @@ export function buildManifest(): Record<string, unknown> {
     outbox: OUTBOX,
     people: PEOPLE,
     emailTemplates: emailTemplates(KINDS),
+    textTemplates: textTemplates(TEXT_KINDS),
+    // A diner may answer the ready text ("running five minutes late"): a manager reads and answers it on Adminium's
+    // Texts page. The owner can switch it off.
+    textReplies: "on",
     payments: PAYMENTS,
     // Over a menu shared with Point of Sale that already holds real dishes,
     // the sample's menu and every order of it are left out.

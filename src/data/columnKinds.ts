@@ -17,14 +17,14 @@ export const MOMENTS: Readonly<Record<string, readonly string[]>> = {
 };
 
 export const YES_NO: Readonly<Record<string, readonly string[]>> = {
-  settings: ["online_on", "ready_email_on", "receipt_email_on", "auto_refund"],
+  settings: ["online_on", "ready_email_on", "receipt_email_on", "ready_text_on", "auto_refund"],
   menu_items: ["available", "featured", "online"],
   modifiers: ["available"],
   hours: ["open"],
   closures: ["active"],
   slot_pauses: ["active"],
   customers: ["opt_in"],
-  orders: ["customer_proved", "link_stopped", "opt_in"],
+  orders: ["customer_proved", "link_stopped", "opt_in", "texts_ok"],
   payment_refunds: ["automatic"],
 };
 

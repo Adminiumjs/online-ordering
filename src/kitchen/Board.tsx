@@ -7,6 +7,9 @@
  * order with a "Paid" chip; one still waiting for its diner's payment is not
  * on it. A paid order cancelled whose money has not gone back yet is listed
  * above the columns as "Refund owed", for everyone in the kitchen to see.
+ *
+ * A ready order whose diner asked for a text says, in one small line, how
+ * that text stands: held while the Undo is there, then sent or why not.
  */
 import { useEffect, useState } from "react";
 
@@ -21,6 +24,54 @@ import { BOARD, NEXT, dayOf, kToday, num, owed, owedOrders, refundOwed, useKitch
 import { useUi } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 import { advance, undo, useRecentMove } from "./moves.ts";
+import { OUTCOME_WORD, textOutcome, type TextOutcome } from "./textState.ts";
+
+const TEXT_LOOK: Record<Exclude<TextOutcome, "waiting">, { icon: IconName; color: string }> = {
+  sent: { icon: "send", color: "var(--pos)" },
+  "no-number": { icon: "circle-slash", color: "var(--fg-muted)" },
+  "opted-out": { icon: "circle-slash", color: "var(--fg-muted)" },
+  limit: { icon: "triangle-alert", color: "var(--warn)" },
+  unknown: { icon: "triangle-alert", color: "var(--warn)" },
+  "not-sent": { icon: "circle-slash", color: "var(--fg-muted)" },
+};
+
+/**
+ * How a ready order's text stands: while this screen's Undo is there, the
+ * text waits and the seconds run down; then it is on its way; then sent, or
+ * why not. Small, and never a button: nothing here stops the kitchen.
+ */
+export function TextLine({ order }: { order: OrderWithLines }) {
+  const { t } = useI18n();
+  const recent = useRecentMove();
+  const offered = useKitchen((s) => s.settings?.["ready_text_on"] === true);
+  const o = order.order;
+  const outcome = textOutcome(o, order.texts, { offered });
+  const holding = outcome === "waiting" && recent.id === o.id && recent.to === "ready" && Date.now() < recent.until;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!holding) return;
+    const timer = setInterval(() => tick((n) => n + 1), 500);
+    return () => clearInterval(timer);
+  }, [holding]);
+  if (outcome === null) return null;
+  const line = { display: "flex", alignItems: "center", gap: 6, marginBlockEnd: 11, fontSize: 12, fontWeight: 700 } as const;
+  if (outcome === "waiting") {
+    const seconds = Math.max(1, Math.ceil((recent.until - Date.now()) / 1000));
+    return (
+      <div data-text-state={holding ? "held" : "sending"} style={{ ...line, color: "var(--fg-muted)" }}>
+        <Icon name={holding ? "hourglass" : "message-square"} size={13} style={{ color: "var(--accent-ink)" }} />
+        {holding ? <span>{t("kitchen.text.wait", { seconds: String(seconds) })}</span> : <span role="status">{t("kitchen.text.sending")}</span>}
+      </div>
+    );
+  }
+  const look = TEXT_LOOK[outcome];
+  return (
+    <div data-text-state={outcome} style={{ ...line, color: look.color }}>
+      <Icon name={look.icon} size={13} />
+      <span role="status">{t(OUTCOME_WORD[outcome] as "kitchen.text.sent")}</span>
+    </div>
+  );
+}
 
 const COLUMNS: Record<BoardState, { tone: string; button: string; icon: IconName; empty: string }> = {
   placed: { tone: "info", button: "kitchen.btn.confirm", icon: "check", empty: "kitchen.empty.placed" },
@@ -169,6 +220,7 @@ function Card({ order, column }: { order: OrderWithLines; column: BoardState }) 
           <span style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}><bdi>{String(o["note"])}</bdi></span>
         </div>
       ) : null}
+      {column === "ready" && <TextLine order={order} />}
       <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap", marginBlockEnd: 11 }}>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, fontWeight: 700, color: "var(--fg-muted)" }}>
           <Icon name="timer" size={13} style={{ color: "var(--accent-ink)" }} />

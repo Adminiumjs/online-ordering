@@ -43,6 +43,16 @@
  * all. One not paid in time is cancelled without an email — the diner was on
  * its page — and a gift card it held gets its money back without one either.
  *
+ * And one text, sent from the business's own Twilio or Telnyx account:
+ *   order-ready-text           the order is on the shelf, to a diner who ticked
+ *                              "Text me when my order is ready" at checkout.
+ *                              It waits out the kitchen's Undo as the ready
+ *                              email does, and an undone "ready" drops it. The
+ *                              diner is waiting for it at the counter, so it
+ *                              may go at any hour (`waiting`). Adminium checks
+ *                              the yes, the stop list and the daily limit at
+ *                              the moment it sends, and adds the opt-out line.
+ *
  * Every kind is service mail: each is about the diner's own order, its
  * money or their own enquiry. A cancellation's "call us if you'd like to
  * order again" is said about the order that was; offers go out as
@@ -80,6 +90,13 @@ export const KINDS = [
 ] as const;
 export type Kind = (typeof KINDS)[number];
 
+/** The kinds sent as texts: each a template of its own (`texts.ts`), never an email's. */
+export const TEXT_KINDS = ["order-ready-text"] as const;
+export type TextKind = (typeof TEXT_KINDS)[number];
+
+/** Every kind of the outbox, emails first. */
+export const ALL_KINDS = [...KINDS, ...TEXT_KINDS] as const;
+
 /** The reasons an order is cancelled for, each with its own email; `self` is the diner's own. */
 const CANCELLED: Record<string, Kind> = {
   ran_out: "order-cancelled-ran-out",
@@ -115,11 +132,18 @@ const notWhilePaying = {
 const afterPaying = { holdSeconds: 5, dropWhen: [{ column: "status", in: ["cancelled"], reason: "no-longer-needed" }] };
 
 /**
+ * How long "ready" and "picked up" wait before the diner hears of them: past
+ * the kitchen screen's Undo (`UNDO_MS`), with room for an Undo pressed at its
+ * last moment to land first. The board counts the ready text down by it.
+ */
+export const HOLD_SECONDS = 20;
+
+/**
  * A message that waits a few seconds, so an Undo made at once takes it back
  * before the diner hears of a move that did not stand.
  */
 const heldWhileUndone = (states: string[]) => ({
-  holdSeconds: 20,
+  holdSeconds: HOLD_SECONDS,
   dropWhen: [{ column: "status", in: states, reason: "no-longer-needed" }],
 });
 
@@ -144,15 +168,20 @@ export const OUTBOX = {
     name: "name",
     // Written in the language the order was placed in, whatever the diner's own row says.
     language: { column: "language" },
+    // The mobile a text goes to: the diner's own, as their first order gave it.
+    phone: "phone",
     // An order nobody signed in for — and every phone order — carries its own details.
-    fallback: { via: "order_id", email: "email", name: "name", language: "language" },
+    fallback: { via: "order_id", email: "email", phone: "phone", name: "name", language: "language" },
   },
   settings: { table: "settings", name: "venue_name", phone: "phone" },
   // An order's own link opens its page on the diner's side; its code rides the fragment.
   pages: { manage: "/o", booking: "/" },
-  kinds: Object.fromEntries(KINDS.map((kind) => [kind, `ordering-${kind}`])),
-  // Every email is about a diner's own order or enquiry: none is stopped by the do-not-email list.
-  classes: Object.fromEntries(KINDS.map((kind) => [kind, "service"])),
+  kinds: Object.fromEntries(ALL_KINDS.map((kind) => [kind, `ordering-${kind}`])),
+  // Every email and text is about a diner's own order or enquiry: none is stopped by the do-not-email list.
+  classes: Object.fromEntries(ALL_KINDS.map((kind) => [kind, "service"])),
+  channels: Object.fromEntries(TEXT_KINDS.map((kind) => [kind, "sms"])),
+  // The diner is at the counter waiting for "ready": it may go outside the kitchen's sending hours.
+  waiting: ["order-ready-text"],
   producers: [
     // One decided column says which confirmation: an online order (1), one a gift card paid in full (2), one paid online (3).
     // Each once for the order (the log): an order made new again by an Undo is not confirmed twice.
@@ -172,6 +201,15 @@ export const OUTBOX = {
       ...onOrder("status", "ready", { column: "paid_as", eq: paidAs }),
       ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
     })),
+    // "Ready", by text, to a diner who asked for it on this order: after the same Undo wait as the email, and never
+    // for a "ready" taken back. Behind the kitchen's own switch for texts, never the ready email's.
+    {
+      kind: "order-ready-text",
+      link: "order_id",
+      gate: { setting: { table: "settings", column: "ready_text_on" } },
+      ...onOrder("status", "ready", { column: "texts_ok", eq: true }),
+      ...heldWhileUndone(["placed", "confirmed", "preparing", "picked_up", "cancelled", "not_collected"]),
+    },
     // Why it was cancelled, one email per reason — or, for an order paid online, the one that says its money goes back.
     ...Object.entries(CANCELLED).map(([code, kind]) => ({ kind, link: "order_id", ...onOrder("status", "cancelled", { column: "cancel_code", eq: code }), ...unlessPaidOnline() })),
     { kind: "order-cancelled-paid", link: "order_id", ...onOrder("status", "cancelled", { column: "online_used", eq: 1 }), holdSeconds: 5, dropWhen: [{ column: "cancel_code", eq: "self", reason: "no-longer-needed" }] },

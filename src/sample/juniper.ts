@@ -46,6 +46,8 @@ export const SETTINGS = {
   max_items: 12,
   online_on: true,
   ready_email_on: true,
+  // Juniper Kitchen texts its diners: the checkout offers the box, and the board says how each text went.
+  ready_text_on: true,
   receipt_email_on: true,
   first_order_number: 1001,
 };
@@ -268,9 +270,14 @@ export interface TodayOrder {
   note: string | null;
   paid: "cash" | "card" | null;
   lines: Line[];
+  /** Ticked "Text me when my order is ready" at checkout. */
+  texts?: true;
 }
 
 const BY = "Sam";
+
+/** A sample mobile as Adminium writes a text's number: `(555) 018-3392` → `+15550183392`. */
+const e164 = (phone: string): string => `+1${phone.replace(/\D/g, "")}`;
 
 export const TODAY: TodayOrder[] = [
   { number: 2107, name: "Hana K.", email: "hana.k@mail.example", phone: "(555) 018-7720", placed: "09:15", stamps: [], pickup: [1, "12:30"], status: "placed", note: null, paid: null, lines: [["bowl-grain", 1, ["base/farro", "protein/chicken", "extras/avo"]], ["drink-lemonade", 1, []]] },
@@ -279,11 +286,11 @@ export const TODAY: TodayOrder[] = [
   { number: 2110, name: "Sofia R.", email: "sofia.r@mail.example", phone: "(555) 017-8830", placed: "10:52", stamps: ["10:54", "11:02", "11:13", "11:18"], pickup: [0, "11:15"], status: "picked_up", note: null, paid: "cash", lines: BASKETS[2]! },
   { number: 2111, name: "Aiden T.", email: "aiden.t@mail.example", phone: null, placed: "11:02", stamps: ["11:04", "11:16", "11:27", "11:32"], pickup: [0, "11:30"], status: "picked_up", note: null, paid: "card", lines: BASKETS[3]! },
   { number: 2112, name: "Noor H.", email: "noor.h@mail.example", phone: "(555) 019-4408", placed: "11:06", stamps: ["11:08", "11:18", "11:28", "11:35"], pickup: [0, "11:30"], status: "picked_up", note: null, paid: "cash", lines: BASKETS[4]! },
-  { number: 2113, name: "Priya N.", email: "priya.n@mail.example", phone: "(555) 018-3392", placed: "11:12", stamps: ["11:14", "11:22", "11:34"], pickup: [0, "11:45"], status: "ready", note: null, paid: null, lines: [["pizza-marg", 2, []], ["drink-lemonade", 1, []]] },
-  { number: 2114, name: "Marcus O.", email: "marcus.o@mail.example", phone: "(555) 017-5140", placed: "11:15", stamps: ["11:17", "11:28"], pickup: [0, "11:45"], status: "preparing", note: "Extra crispy, please.", paid: null, lines: BASKETS[5]! },
+  { number: 2113, name: "Priya N.", email: "priya.n@mail.example", phone: "(555) 018-3392", placed: "11:12", stamps: ["11:14", "11:22", "11:34"], pickup: [0, "11:45"], status: "ready", note: null, paid: null, lines: [["pizza-marg", 2, []], ["drink-lemonade", 1, []]], texts: true },
+  { number: 2114, name: "Marcus O.", email: "marcus.o@mail.example", phone: "(555) 017-5140", placed: "11:15", stamps: ["11:17", "11:28"], pickup: [0, "11:45"], status: "preparing", note: "Extra crispy, please.", paid: null, lines: BASKETS[5]!, texts: true },
   { number: 2115, name: "Dana L.", email: "dana.l@mail.example", phone: "(555) 019-7761", placed: "11:18", stamps: ["11:20"], pickup: [0, "12:00"], status: "confirmed", note: null, paid: null, lines: [["bowl-grain", 1, ["base/farro", "protein/chicken", "extras/avo", "extras/egg"]], ["sweet-cookie", 2, []]] },
   { number: 2116, name: "Theo A.", email: "theo.a@mail.example", phone: null, placed: "11:24", stamps: [], pickup: [0, "12:15"], status: "placed", note: "One box, please — we're sharing.", paid: null, lines: BASKETS[13]! },
-  { number: 2117, name: "Ines V.", email: "ines.v@mail.example", phone: "(555) 019-0934", placed: "11:26", stamps: [], pickup: [0, "12:15"], status: "placed", note: null, paid: null, lines: BASKETS[7]! },
+  { number: 2117, name: "Ines V.", email: "ines.v@mail.example", phone: "(555) 019-0934", placed: "11:26", stamps: [], pickup: [0, "12:15"], status: "placed", note: null, paid: null, lines: BASKETS[7]!, texts: true },
 ];
 
 /** Kwame's older orders, for Order again: number, days before today, pickup, lines. */
@@ -441,11 +448,12 @@ export interface SampleBundle {
 export function sampleBundle(): SampleBundle {
   const customers: Row[] = [];
   const customerOf = new Map<string, string>();
-  const customer = (name: string, email: string): string => {
+  // A diner's mobile is the one their first order gave.
+  const customer = (name: string, email: string, phone: string | null = null): string => {
     const known = customerOf.get(email);
     if (known !== undefined) return known;
     const label = `customer:${email.split("@")[0]!}`;
-    customers.push({ "@label": label, email, name, created_at: { "@day": -40, "@time": "12:00" } });
+    customers.push({ "@label": label, email, name, phone, created_at: { "@day": -40, "@time": "12:00" } });
     customerOf.set(email, label);
     return label;
   };
@@ -468,7 +476,7 @@ export function sampleBundle(): SampleBundle {
       "@label": label,
       number_seq: null,
       number: `S${String(number)}`,
-      customer_id: { "@ref": customer("Kwame B.", "kwame.b@mail.example") },
+      customer_id: { "@ref": customer("Kwame B.", "kwame.b@mail.example", "(555) 019-2205") },
       name: "Kwame B.",
       email: "kwame.b@mail.example",
       phone: "(555) 019-2205",
@@ -488,7 +496,7 @@ export function sampleBundle(): SampleBundle {
       "@label": label,
       number_seq: null,
       number: `S${String(order.number)}`,
-      customer_id: { "@ref": customer(name, email) },
+      customer_id: { "@ref": customer(name, email, phone) },
       name,
       email,
       phone,
@@ -521,10 +529,11 @@ export function sampleBundle(): SampleBundle {
       "@label": label,
       number_seq: null,
       number: `S${String(order.number)}`,
-      customer_id: { "@ref": customer(order.name, order.email) },
+      customer_id: { "@ref": customer(order.name, order.email, order.phone) },
       name: order.name,
       email: order.email,
       phone: order.phone,
+      texts_ok: order.texts === true,
       language: "en-US",
       pickup_at: order.pickup[0] === 0 ? (onBoard ? ahead(order.pickup[1]) : ago(order.pickup[1])) : wall(order.pickup[0], order.pickup[1]),
       note: order.note,
@@ -543,6 +552,10 @@ export function sampleBundle(): SampleBundle {
     messages.push({ kind: "order-confirmation", status: "sent", to_address: order.email, language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.placed), sent_at: ago(order.placed) });
     if (order.stamps.length >= 3) {
       messages.push({ kind: "order-ready", status: "sent", to_address: order.email, language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.stamps[2]!), sent_at: ago(order.stamps[2]!) });
+      // The text the diner asked for, sent once the Undo's wait was over.
+      if (order.texts === true && order.phone !== null) {
+        messages.push({ kind: "order-ready-text", status: "sent", to_address: e164(order.phone), language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.stamps[2]!), sent_at: ago(order.stamps[2]!) });
+      }
     }
   }
 

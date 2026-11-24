@@ -251,7 +251,7 @@ const SPECS: PageSpec[] = [
         f("max_items", { control: "stepper" }),
         f("first_order_number", { control: "number" }),
       ],
-      [toggle("online_on"), toggle("ready_email_on"), toggle("receipt_email_on")],
+      [toggle("online_on"), toggle("ready_email_on"), toggle("receipt_email_on"), toggle("ready_text_on")],
     ),
   },
 ];

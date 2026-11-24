@@ -17,6 +17,7 @@ import { lineKey, menuModel, type MenuModel } from "../lib/menu.ts";
 import { addDays, instantOf, venueDay, venueMinutes, type Day } from "../lib/venueTime.ts";
 import { hoursOn, offeredSlots, type Slot } from "../lib/day.ts";
 import { mountKey } from "../lib/mountKey.ts";
+import { mainlandChina } from "../lib/textPhone.ts";
 
 export interface CartLine {
   /** One line per dish, options and note: the same three merge into one line. */
@@ -114,9 +115,11 @@ interface DinerState {
   alerts: Record<string, LineAlert>;
   /**
    * `optIn`: "Email me news and offers", the diner's own tick, off until they tick it.
+   * `textsOk`: "Text me when my order is ready", a box of its own shown once a mobile is typed: off until they tick
+   * it, and off again when the number is emptied or is one no text can go to.
    * `pay`: how they pay, when the kitchen takes payments online: now (the default) or at pickup.
    */
-  form: { name: string; email: string; phone: string; note: string; optIn: boolean; pay: "now" | "pickup" };
+  form: { name: string; email: string; phone: string; note: string; optIn: boolean; textsOk: boolean; pay: "now" | "pickup" };
   /** Whether the kitchen takes payments online right now; null until asked (and then "no" while unanswered). */
   payments: OnlinePayments | null;
   /** Placed to pay now: the moment's hand-off to the pay page ("Taking you to the secure payment page…"). */
@@ -174,7 +177,7 @@ export const useDiner = create<DinerState>(() => ({
   drawer: false,
   quote: null,
   alerts: {},
-  form: { name: "", email: "", phone: "", note: "", optIn: false, pay: "now" },
+  form: { name: "", email: "", phone: "", note: "", optIn: false, textsOk: false, pay: "now" },
   payments: null,
   taking: false,
   touched: {},
@@ -809,16 +812,37 @@ function freshQuoteLines(): number[] {
 
 // ── checkout ────────────────────────────────────────────────────────────────
 
-export function setField(name: Exclude<keyof DinerState["form"], "optIn">, value: string): void {
+export function setField(name: Exclude<keyof DinerState["form"], "optIn" | "textsOk">, value: string): void {
   if (pendingRetry()) return;
   const { [name as "name"]: _was, ...fieldErrors } = get().fieldErrors;
-  set({ form: { ...get().form, [name]: value }, placeError: null, fieldErrors });
+  const form = { ...get().form, [name]: value };
+  // The box for texts goes with the number it was for: emptied, or one no text can go to, it is off again.
+  if (name === "phone" && !textBoxShown(value)) form.textsOk = false;
+  set({ form, placeError: null, fieldErrors });
 }
 
 /** The tick for the kitchen's news, given or taken off before the order goes. */
 export function setOptIn(on: boolean): void {
   if (pendingRetry()) return;
   set({ form: { ...get().form, optIn: on } });
+}
+
+/** Whether the kitchen offers "Text me when my order is ready" at all: off until it has texts set up. */
+export function textsOffered(settings: Row | undefined = get().data?.settings): boolean {
+  const on = settings?.["ready_text_on"];
+  return on === true || on === 1;
+}
+
+/** Whether the box for texts can be ticked for a number: one typed, and not in mainland China. */
+export function textBoxShown(phone: string): boolean {
+  return phone.trim() !== "" && !mainlandChina(phone);
+}
+
+/** The box "Text me when my order is ready", ticked or not; only while a number it can be for is typed. */
+export function setTextsOk(on: boolean): void {
+  if (pendingRetry()) return;
+  const f = get().form;
+  set({ form: { ...f, textsOk: on && textsOffered() && textBoxShown(f.phone) } });
 }
 
 export function touch(name: "name" | "email" | "phone"): void {
@@ -872,6 +896,8 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
     client_key: clientKey,
     // Unticked writes nothing in Adminium's consent log: it takes back no yes the diner gave before.
     opt_in: f.optIn,
+    // The box for texts: a yes only for the number sent beside it, and only while the kitchen offers it.
+    texts_ok: f.textsOk && textsOffered() && textBoxShown(f.phone),
   };
   // The total the diner was shown, exactly as Adminium wrote it (a currency may have three places).
   const body = { ...orderBody(values), expect: { total: shownTotal ?? String(quote.data["total"]) } };
@@ -892,7 +918,7 @@ export async function placeOrder(language: string, shownTotal?: string): Promise
         replayed: reply.replayed === true,
         ...(payNow ? { payUrl: reply.payUrl ?? null } : {}),
       };
-      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "", optIn: false, pay: "now" }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
+      set({ placing: false, placed, cart: [], clientKey: null, quote: null, alerts: {}, priceChanged: null, pick: null, form: { ...get().form, note: "", optIn: false, textsOk: false, pay: "now" }, touched: {}, code: null, card: null, codeDraft: "", cardDraft: "", codeError: null, cardError: null, priceMoved: false });
       // A signed-in diner's own list is read again: the new order was missing from "Order again" until a reload.
       void import("./account.ts").then((account) => account.ordersAfterPlacing()).catch(() => undefined);
       refreshAvailability(sources().clock.now()).catch(() => undefined);

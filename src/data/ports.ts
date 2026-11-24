@@ -33,6 +33,11 @@ export interface OrderWithLines {
   applied?: Applied[];
   /** What went back of its payments, oldest first: to a gift card, or online (the kitchen's door only). */
   refunds?: Row[];
+  /**
+   * Its ready texts, as the outbox holds them, for an order whose diner asked for one (the kitchen's door only):
+   * whether each went, and Adminium's fixed sentence when it did not. Never who it went to.
+   */
+  texts?: Row[];
 }
 
 /** Whether the kitchen takes payments, and whether this person may give money back. */

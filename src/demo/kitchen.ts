@@ -107,6 +107,10 @@ export class DemoKitchen implements KitchenPort {
       order: { ...order },
       payments: this.world.where("payments", (p) => p["order_id"] === order.id).map((p) => ({ ...p })),
       refunds: this.world.where("payment_refunds", (r) => r["order_id"] === order.id).map((r) => ({ ...r })),
+      // Its ready texts, as the kitchen's role reads them: never who they went to.
+      texts: this.world
+        .where("messages", (m) => m["order_id"] === order.id && m["kind"] === "order-ready-text")
+        .map((m) => ({ id: m.id, kind: m["kind"], status: m["status"], order_id: m["order_id"], due: m["due"], sent_at: m["sent_at"], error: m["error"], skip_reason: m["skip_reason"] })),
       lines: this.world
         .where("order_items", (l) => l["order_id"] === order.id)
         .sort((a, b) => Number(a["position"] ?? 0) - Number(b["position"] ?? 0))

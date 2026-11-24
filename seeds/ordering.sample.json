@@ -26,6 +26,7 @@
           "max_items": 12,
           "online_on": true,
           "ready_email_on": true,
+          "ready_text_on": true,
           "receipt_email_on": true,
           "first_order_number": 1001
         }
@@ -980,6 +981,7 @@
           "@label": "customer:kwame.b",
           "email": "kwame.b@mail.example",
           "name": "Kwame B.",
+          "phone": "(555) 019-2205",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -989,6 +991,7 @@
           "@label": "customer:maya.c",
           "email": "maya.c@mail.example",
           "name": "Maya C.",
+          "phone": "(555) 010-4471",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -998,6 +1001,7 @@
           "@label": "customer:luis.p",
           "email": "luis.p@mail.example",
           "name": "Luis P.",
+          "phone": "(555) 012-3308",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1007,6 +1011,7 @@
           "@label": "customer:grace.w",
           "email": "grace.w@mail.example",
           "name": "Grace W.",
+          "phone": null,
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1016,6 +1021,7 @@
           "@label": "customer:omar.s",
           "email": "omar.s@mail.example",
           "name": "Omar S.",
+          "phone": "(555) 014-2290",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1025,6 +1031,7 @@
           "@label": "customer:elena.v",
           "email": "elena.v@mail.example",
           "name": "Elena V.",
+          "phone": "(555) 011-7713",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1034,6 +1041,7 @@
           "@label": "customer:ben.d",
           "email": "ben.d@mail.example",
           "name": "Ben D.",
+          "phone": "(555) 013-6621",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1043,6 +1051,7 @@
           "@label": "customer:hiro.t",
           "email": "hiro.t@mail.example",
           "name": "Hiro T.",
+          "phone": null,
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1052,6 +1061,7 @@
           "@label": "customer:chloe.r",
           "email": "chloe.r@mail.example",
           "name": "Chloe R.",
+          "phone": "(555) 016-0045",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1061,6 +1071,7 @@
           "@label": "customer:sam.k",
           "email": "sam.k@mail.example",
           "name": "Sam K.",
+          "phone": "(555) 015-9982",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1070,6 +1081,7 @@
           "@label": "customer:ada.n",
           "email": "ada.n@mail.example",
           "name": "Ada N.",
+          "phone": "(555) 012-7740",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1079,6 +1091,7 @@
           "@label": "customer:ravi.m",
           "email": "ravi.m@mail.example",
           "name": "Ravi M.",
+          "phone": "(555) 017-3316",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1088,6 +1101,7 @@
           "@label": "customer:lena.f",
           "email": "lena.f@mail.example",
           "name": "Lena F.",
+          "phone": null,
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1097,6 +1111,7 @@
           "@label": "customer:jonah.b",
           "email": "jonah.b@mail.example",
           "name": "Jonah B.",
+          "phone": "(555) 018-9951",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1106,6 +1121,7 @@
           "@label": "customer:mira.l",
           "email": "mira.l@mail.example",
           "name": "Mira L.",
+          "phone": "(555) 011-2276",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1115,6 +1131,7 @@
           "@label": "customer:hana.k",
           "email": "hana.k@mail.example",
           "name": "Hana K.",
+          "phone": "(555) 018-7720",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1124,6 +1141,7 @@
           "@label": "customer:rosa.m",
           "email": "rosa.m@mail.example",
           "name": "Rosa M.",
+          "phone": "(555) 018-4471",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1133,6 +1151,7 @@
           "@label": "customer:sofia.r",
           "email": "sofia.r@mail.example",
           "name": "Sofia R.",
+          "phone": "(555) 017-8830",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1142,6 +1161,7 @@
           "@label": "customer:aiden.t",
           "email": "aiden.t@mail.example",
           "name": "Aiden T.",
+          "phone": null,
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1151,6 +1171,7 @@
           "@label": "customer:noor.h",
           "email": "noor.h@mail.example",
           "name": "Noor H.",
+          "phone": "(555) 019-4408",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1160,6 +1181,7 @@
           "@label": "customer:priya.n",
           "email": "priya.n@mail.example",
           "name": "Priya N.",
+          "phone": "(555) 018-3392",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1169,6 +1191,7 @@
           "@label": "customer:marcus.o",
           "email": "marcus.o@mail.example",
           "name": "Marcus O.",
+          "phone": "(555) 017-5140",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1178,6 +1201,7 @@
           "@label": "customer:dana.l",
           "email": "dana.l@mail.example",
           "name": "Dana L.",
+          "phone": "(555) 019-7761",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1187,6 +1211,7 @@
           "@label": "customer:theo.a",
           "email": "theo.a@mail.example",
           "name": "Theo A.",
+          "phone": null,
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -1196,6 +1221,7 @@
           "@label": "customer:ines.v",
           "email": "ines.v@mail.example",
           "name": "Ines V.",
+          "phone": "(555) 019-0934",
           "created_at": {
             "@day": -40,
             "@time": "12:00"
@@ -5109,6 +5135,7 @@
           "name": "Hana K.",
           "email": "hana.k@mail.example",
           "phone": "(555) 018-7720",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@day": 1,
@@ -5132,6 +5159,7 @@
           "name": "Rosa M.",
           "email": "rosa.m@mail.example",
           "phone": "(555) 018-4471",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@ago": "PT40M"
@@ -5169,6 +5197,7 @@
           "name": "Kwame B.",
           "email": "kwame.b@mail.example",
           "phone": "(555) 019-2205",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@ago": "PT25M"
@@ -5206,6 +5235,7 @@
           "name": "Sofia R.",
           "email": "sofia.r@mail.example",
           "phone": "(555) 017-8830",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@ago": "PT25M"
@@ -5243,6 +5273,7 @@
           "name": "Aiden T.",
           "email": "aiden.t@mail.example",
           "phone": null,
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@ago": "PT10M"
@@ -5280,6 +5311,7 @@
           "name": "Noor H.",
           "email": "noor.h@mail.example",
           "phone": "(555) 019-4408",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@ago": "PT10M"
@@ -5317,6 +5349,7 @@
           "name": "Priya N.",
           "email": "priya.n@mail.example",
           "phone": "(555) 018-3392",
+          "texts_ok": true,
           "language": "en-US",
           "pickup_at": {
             "@in": "PT5M",
@@ -5351,6 +5384,7 @@
           "name": "Marcus O.",
           "email": "marcus.o@mail.example",
           "phone": "(555) 017-5140",
+          "texts_ok": true,
           "language": "en-US",
           "pickup_at": {
             "@in": "PT5M",
@@ -5381,6 +5415,7 @@
           "name": "Dana L.",
           "email": "dana.l@mail.example",
           "phone": "(555) 019-7761",
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@in": "PT20M",
@@ -5408,6 +5443,7 @@
           "name": "Theo A.",
           "email": "theo.a@mail.example",
           "phone": null,
+          "texts_ok": false,
           "language": "en-US",
           "pickup_at": {
             "@in": "PT35M",
@@ -5431,6 +5467,7 @@
           "name": "Ines V.",
           "email": "ines.v@mail.example",
           "phone": "(555) 019-0934",
+          "texts_ok": true,
           "language": "en-US",
           "pickup_at": {
             "@in": "PT35M",
@@ -9056,6 +9093,24 @@
           "kind": "order-ready",
           "status": "sent",
           "to_address": "priya.n@mail.example",
+          "language": "en-US",
+          "order_id": {
+            "@ref": "order:2113"
+          },
+          "customer_id": {
+            "@ref": "customer:priya.n"
+          },
+          "created_at": {
+            "@ago": "PT6M"
+          },
+          "sent_at": {
+            "@ago": "PT6M"
+          }
+        },
+        {
+          "kind": "order-ready-text",
+          "status": "sent",
+          "to_address": "+15550183392",
           "language": "en-US",
           "order_id": {
             "@ref": "order:2113"
