@@ -99,9 +99,11 @@ function sampleWithCards(): string {
 }
 
 /** What this build adds to 0.3.2's tables, and the lists it widens: the update's plan must be exactly this. */
+/** Each table's new columns: paying online's, and (0.3.76) the ready text's — the kitchen's switch, the diner's mobile and their box. */
 const NEW_COLUMNS: Record<string, string[]> = {
-  settings: ["auto_refund", "pay_hold_minutes"],
-  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "paid_as"],
+  settings: ["auto_refund", "pay_hold_minutes", "ready_text_on"],
+  customers: ["phone"],
+  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "paid_as", "texts_ok"],
   payments: ["method", "paid_at", "payment_ref", "provider", "refunded_elsewhere"],
   payment_refunds: ["automatic", "counted", "method", "provider_ref", "refund_state"],
 };
@@ -250,6 +252,8 @@ describe.skipIf(why !== null)(`paying online, updating ${RELEASED_TAG}${why === 
         // The settings row's new switches, as they arrive: refunds by themselves, and a ten-minute hold.
         const settings = (await rows("settings"))[0]!;
         expect([settings["auto_refund"] === true || settings["auto_refund"] === 1, Number(settings["pay_hold_minutes"])]).toEqual([true, 10]);
+        // …and the ready text arrives off: no diner is offered a text before the kitchen has texts set up.
+        expect(settings["ready_text_on"] === true || settings["ready_text_on"] === 1).toBe(false);
       }, 120_000);
 
       // ── the payable ───────────────────────────────────────────────────────
