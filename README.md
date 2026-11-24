@@ -7,9 +7,10 @@ they order; the kitchen confirms, cooks, shelves and hands over each order on
 a tablet. Adminium decides every price, total, order number, pickup slot and
 status — the pages only ask.
 
-**Pickup only.** There is no delivery, no card form and no text message
-anywhere in it. An order is handed over a counter, and paid for there or on
-Adminium's own pay page before it.
+**Pickup only.** There is no delivery and no card form anywhere in it. An
+order is handed over a counter, and paid for there or on Adminium's own pay
+page before it. The one text message it sends is "your order is ready", to a
+diner who asked for it (see [Texts](#texts)).
 
 The demo is dressed as **Juniper Kitchen**, a fictional pickup kitchen on
 Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
@@ -18,7 +19,7 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 ## What it needs
 
-- Adminium **0.3.62** or later, on SQLite, Postgres or MySQL.
+- Adminium **0.3.76** or later, on SQLite, Postgres or MySQL.
 - Nothing else. Four add-ons are offered at install, and the app is whole
   without any of them:
   - **Offers & gift cards** — diners type a code at checkout, automatic offers
@@ -42,6 +43,8 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 - Checkout with a name, an email and an optional phone. The prices, tax and
   total come from Adminium before the order is placed, and again as it is
   placed: a price that changed in between is shown, never charged blind.
+- Once a mobile is typed, and while the kitchen offers texts: a box of its
+  own, "Text me when my order is ready", unticked and never needed to order.
 - With Offers & gift cards: a code and a gift card at checkout, each priced by
   Adminium and shown as it answered; and a page to check what a gift card
   still holds. A card is taken when the order is placed, and what it took
@@ -61,7 +64,8 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 **For the kitchen** (the app's staff side, on a tablet):
 - The board: new, confirmed, preparing and ready orders, each one tap from the
-  next, with a chime for a new order.
+  next, with a chime for a new order. A ready order whose diner asked for a
+  text says, in one small line, how that text went.
 - The shelf and the hand-off: the amount to collect, and cash or card — and,
   with Offers & gift cards, a gift card for all of it or for a part.
 - Slots: how full each pickup slot is, pausing one, or stopping online orders
@@ -76,10 +80,38 @@ Junction Ave serving bowls and pizza, at 11:40 on a Tuesday lunch rush.
 
 **In the dashboard** (the Online ordering section): the Overview, the orders
 and enquiries, the menu, the hours, closures and paused slots, the customers,
-the emails sent, and the settings — the kitchen's name, words and photos, its
-tax rate, its slot size and whether it takes online orders.
+the emails and texts sent, and the settings — the kitchen's name, words and
+photos, its tax rate, its slot size, whether it takes online orders and
+whether it offers the ready text.
 
 With Point of Sale installed, the two apps can share one menu.
+
+## Texts
+
+Online Ordering sends one text: "your order is ready", from the business's own
+Twilio or Telnyx account, connected in Adminium's **Settings → Texts**.
+Adminium is never a party to it.
+
+- **Off until you switch it on.** Settings, "Offer a text when an order is
+  ready", is off on a new install, so no diner asks for a text that cannot
+  come. Connect a provider first, then switch it on.
+- **The diner's own yes.** Once a mobile is typed at checkout, a box of its
+  own appears under it: "Text me when my order is ready". It is never
+  ticked for them, never needed to order, and apart from the newsletter's
+  tick. Adminium keeps the yes in its text consent log with the words shown
+  and their version, for that number. A number in mainland China (+86) takes
+  no texts: the box is off there, and the number stays for a call.
+- **After the Undo.** Pressing Ready starts the board's Undo; the text waits
+  twenty seconds, past it, and an Undo drops it, so nothing is sent. The
+  diner is waiting at the counter, so it may go at any hour.
+- **What it says.** The kitchen's name, the order's number and that it is
+  ready — no link, no code, no offer. Adminium adds the way to stop: "Reply
+  STOP" from a number, or the kitchen's phone from a sender name. A STOP
+  stops every text from the business.
+- **On the board.** "Text sent", "Not sent: no number", "Not sent: they opted
+  out", "Not sent: today's limit reached", or "Unknown, don't send again".
+- **Replies.** A diner may answer the text; a manager reads and answers it
+  on Adminium's Texts page.
 
 ## Taking payments online
 
