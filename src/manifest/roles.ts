@@ -75,7 +75,7 @@ export const DINERS_OWN: Readonly<Record<string, readonly string[]>> = { orders:
  * What the board reads of the outbox: whether an order's ready text went, and why not. Never who it went to,
  * nor the diner it is linked to — only the order, and Adminium's fixed sentence, which holds no number.
  */
-export const KITCHEN_MESSAGE_READS = ["id", "kind", "status", "order_id", "due", "sent_at", "error", "skip_reason"];
+export const KITCHEN_MESSAGE_READS = ["id", "kind", "status", "order_id", "due", "sent_at", "error", "skip_reason", "text_reason"];
 /** Every column of an order a manager writes: never one Adminium works out, Offers & gift cards decides, or the diner gives. */
 const MANAGER_ORDERS = TABLES.find((t) => t.ref === "orders")!
   .columns.filter((c) => c.ref !== "id" && !DECIDED_ON_ORDERS.has(c.ref) && !DINERS_OWN["orders"]!.includes(c.ref) && c.rules?.["rollup"] === undefined && c.rules?.["formula"] === undefined)

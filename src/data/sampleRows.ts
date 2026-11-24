@@ -148,7 +148,7 @@ export interface Rules {
  */
 // ── written by `npm run sample` from manifest.json; do not edit by hand ──
 export const COLUMNS: Record<string, Record<string, Fill>> = {
-  settings: { venue_name: REQUIRED, headline: null, intro: null, about: null, address: REQUIRED, area: null, directions: null, phone: null, photo_hero: null, photo_street: null, photo_closed: null, photo_store: null, tax_rate: 0, slot_minutes: 15, slot_capacity: 6, lead_minutes: 20, preorder_days: 1, prep_minutes: 15, max_items: 12, online_on: true, ready_email_on: true, receipt_email_on: true, ready_text_on: false, pay_hold_minutes: 10, auto_refund: true, first_order_number: 1001 },
+  settings: { venue_name: REQUIRED, headline: null, intro: null, about: null, address: REQUIRED, area: null, directions: null, phone: null, photo_hero: null, photo_street: null, photo_closed: null, photo_store: null, tax_rate: 0, slot_minutes: 15, slot_capacity: 6, lead_minutes: 20, preorder_days: 1, prep_minutes: 15, max_items: 12, online_on: true, ready_email_on: true, receipt_email_on: true, ready_text_on: true, pay_hold_minutes: 10, auto_refund: true, first_order_number: 1001 },
   menu_categories: { slug: null, name: REQUIRED, position: 0, icon: null, tint: null },
   menu_items: { category_id: null, slug: null, name: REQUIRED, short_name: null, description: null, price: 0, image: null, available: true, featured: false, tags: null, position: 0, barcode: null, stock_today: null, stock_on: null, hue: null, allergens: null, online: true },
   modifier_groups: { item_id: REQUIRED, slug: null, name: REQUIRED, kind: "radio", min: 0, max: 1, hint: null, position: 0 },
@@ -164,7 +164,7 @@ export const COLUMNS: Record<string, Record<string, Fill>> = {
   payments: { order_id: REQUIRED, method: "gift_card", client_key: null, card_code: null, card_id: null, card_last4: null, amount: null, card_balance_after: null, returned: null, refunded_elsewhere: null, kept: null, made_at: null, made_by: null, paid_at: null, payment_ref: null, provider: null },
   payment_refunds: { payment_id: REQUIRED, client_key: null, order_id: REQUIRED, method: null, amount: REQUIRED, reason: null, made_at: null, made_by: null, automatic: false, refund_state: null, provider_ref: null, counted: null },
   enquiries: { ref_seq: null, ref: null, status: "new", heads: REQUIRED, wanted_on: REQUIRED, notes: null, name: REQUIRED, phone: REQUIRED, email: REQUIRED, language: null, staff_note: null, handled_by: null, created_at: null, client_key: null },
-  messages: { kind: REQUIRED, status: "queued", to_address: null, language: null, order_id: null, enquiry_id: null, customer_id: null, due: null, created_at: null, sent_at: null, error: null, repeat_key: null, skip_reason: null },
+  messages: { kind: REQUIRED, status: "queued", to_address: null, language: null, order_id: null, enquiry_id: null, customer_id: null, due: null, created_at: null, sent_at: null, error: null, repeat_key: null, text_reason: null, skip_reason: null },
 };
 
 export const RULES: Rules = {

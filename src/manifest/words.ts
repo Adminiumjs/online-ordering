@@ -217,6 +217,7 @@ export const WORDS: Record<string, Translation> = {
   "Payments": { "de-DE": "Zahlungen", "fr-FR": "Paiements", "da-DK": "Betalinger", "cs-CZ": "Platby", "ar-EG": "الدفعات", "zh-CN": "付款", "zh-TW": "付款" },
   "People": { "de-DE": "Personen", "fr-FR": "Personnes", "da-DK": "Personer", "cs-CZ": "Osoby", "ar-EG": "الأشخاص", "zh-CN": "人数", "zh-TW": "人數" },
   "Phone": { "de-DE": "Telefon", "fr-FR": "Téléphone", "da-DK": "Telefon", "cs-CZ": "Telefon", "ar-EG": "الهاتف", "zh-CN": "电话", "zh-TW": "電話" },
+  "Text outcome": { "de-DE": "SMS-Ergebnis", "fr-FR": "Résultat du SMS", "da-DK": "Sms-resultat", "cs-CZ": "Výsledek SMS", "ar-EG": "نتيجة الرسالة النصية", "zh-CN": "短信结果", "zh-TW": "簡訊結果" },
   "Text when ready": { "de-DE": "SMS, wenn fertig", "fr-FR": "SMS quand c’est prêt", "da-DK": "Sms, når den er klar", "cs-CZ": "SMS, až bude hotovo", "ar-EG": "رسالة نصية عند الجاهزية", "zh-CN": "备好时短信通知", "zh-TW": "備妥時簡訊通知" },
   "Picked up": { "de-DE": "Abgeholt", "fr-FR": "Retirée", "da-DK": "Hentet", "cs-CZ": "Vyzvednuto", "ar-EG": "تم الاستلام", "zh-CN": "已取餐", "zh-TW": "已取餐" },
   "Pickup": { "de-DE": "Abholung", "fr-FR": "Retrait", "da-DK": "Afhentning", "cs-CZ": "Vyzvednutí", "ar-EG": "الاستلام", "zh-CN": "取餐", "zh-TW": "取餐" },

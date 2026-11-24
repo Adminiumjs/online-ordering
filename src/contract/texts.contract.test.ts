@@ -5,11 +5,14 @@
  * added at 11:40, and no text provider connected — as most kitchens start.
  * A diner who ticks "Text me when my order is ready" with a mobile typed has
  * the box kept on their order; the kitchen marks it ready, and the ready text
- * waits out the Undo, then ends as Adminium says, here "No text provider is
- * connected", which the board says nothing of. An Undo within the wait drops
+ * waits out the Undo, then ends as Adminium says, by its code: here
+ * `not-set-up`, which the board says nothing of. Both doors hear that texts
+ * are not set up, so the order page draws no box. The text goes to the
+ * number typed on the order, so a diner already on file with no number of
+ * their own is not refused for having none. An Undo within the wait drops
  * it, and a diner who left the box empty gets no text at all. While the
- * kitchen offers no texts (its switch, off on a fresh install), nothing is
- * queued even for a ticked box.
+ * kitchen has switched its ready text off, nothing is queued even for a
+ * ticked box.
  *
  * It runs with `CONTRACT=1` (see `install.contract.test.ts`); its servers
  * take their own port block (`CONTRACT_TEXTS_PORT_BASE`).
@@ -37,6 +40,8 @@ describe.skipIf(why !== null)(`the ready text on a built Adminium${why === null 
       let stand: Stand;
       let diner: AdminiumDiner;
       let settingsId: unknown;
+      /** Each order's own retry key: a second order for the same diner is a new one. */
+      let made = 0;
 
       beforeAll(async () => {
         stand = await standUp(engine as Engine, PORT_BASE + index * PORTS_PER_ENGINE, `oo_texts_${engine}${process.env["CONTRACT_DB_SUFFIX"] ?? ""}`);
@@ -60,7 +65,7 @@ describe.skipIf(why !== null)(`the ready text on a built Adminium${why === null 
           children: { order_items: [{ values: { menu_item_id: lemonade.id, qty: 1 } }] },
         };
         const quote = await diner.quote(body);
-        const reply = await diner.place({ ...body, expect: { total: String(quote.data["total"]) } }, `texts-${who}-${engine}-0123456789abcdef`);
+        const reply = await diner.place({ ...body, expect: { total: String(quote.data["total"]) } }, `texts-${who}-${String((made += 1))}-${engine}-0123456789abcdef`);
         for (const [from, to] of [["placed", "confirmed"], ["confirmed", "preparing"]] as const) await stand.kitchen.move(reply.data.id, from, to);
         return reply.data;
       };
@@ -70,6 +75,11 @@ describe.skipIf(why !== null)(`the ready text on a built Adminium${why === null 
         const rows = await texts(id);
         return rows.length > 0 && rows.every((m) => m["status"] !== "queued") ? rows : undefined;
       }, "the ready text to end", 90_000);
+
+      it("says on both doors that texts are not set up, so the order page draws no box", async () => {
+        expect(await diner.textsReady()).toBe(false);
+        expect(await stand.kitchen.textsReady()).toBe(false);
+      }, 60_000);
 
       it("keeps the box on the order, holds the text for the Undo, and ends it as Adminium says: no provider here", async () => {
         await offer(true);
@@ -84,7 +94,7 @@ describe.skipIf(why !== null)(`the ready text on a built Adminium${why === null 
         expect(held!["status"]).toBe("queued");
         expect(Date.parse(String(held!["due"])) - Date.parse(String((await stand.order(String(order["number"])))["ready_at"]))).toBeGreaterThanOrEqual(19_000);
         const [ended] = await settled(order.id);
-        expect([ended!["status"], ended!["error"]]).toEqual(["skipped", "No text provider is connected"]);
+        expect([ended!["status"], ended!["text_reason"]]).toEqual(["skipped", "not-set-up"]);
         // …which the board says nothing of: there is no text to speak of.
         const read = await stand.kitchen.order(order.id);
         expect(textOutcome(read.order, read.texts, { offered: true })).toBeNull();
@@ -97,6 +107,18 @@ describe.skipIf(why !== null)(`the ready text on a built Adminium${why === null 
         await stand.kitchen.move(order.id, "ready", "preparing");
         const [dropped] = await settled(order.id);
         expect([dropped!["status"], dropped!["skip_reason"]]).toEqual(["skipped", "no-longer-needed"]);
+      }, 180_000);
+
+      it("goes to the number typed on the order: a diner on file with no number of their own is not refused for it", async () => {
+        await offer(true);
+        // On file from an earlier order with no mobile: their account holds none.
+        const first = await placed("returning", {});
+        expect((await stand.rows("customers")).find((c) => c.id === first["customer_id"] || c["email"] === `returning.${engine}@juniper-diners.dev`)?.["phone"] ?? null).toBeNull();
+        const again = await placed("returning", { phone: "+1 415 555 0138", texts_ok: true });
+        await stand.kitchen.move(again.id, "preparing", "ready");
+        const [ended] = await settled(again.id);
+        // Read past the number: it stops only where nothing can go out here.
+        expect([ended!["status"], ended!["text_reason"]]).toEqual(["skipped", "not-set-up"]);
       }, 180_000);
 
       it("queues no text for a diner who left the box empty, nor while the kitchen offers none", async () => {

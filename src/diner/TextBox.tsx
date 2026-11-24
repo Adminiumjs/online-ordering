@@ -2,8 +2,9 @@
  * "Text me when my order is ready": the checkout's box for the ready text,
  * under the mobile field.
  *
- * It is the diner's own and nobody else's: shown only once a number is typed
- * (and only while the kitchen offers texts), never ticked for them, never
+ * It is the diner's own and nobody else's: shown only once a number is typed,
+ * and only while Adminium has texts set up and the kitchen has not switched
+ * its ready text off; never ticked for them, never
  * needed to order, and apart from the newsletter's tick, which never ticks it.
  * Its three lines are the wording Adminium's text consent log keeps
  * (`manifest/people.ts`, `TEXT_BOX`). A number in mainland China takes no
@@ -18,7 +19,7 @@ export function TextBox() {
   const { t } = useI18n();
   const phone = useDiner((s) => s.form.phone);
   const ticked = useDiner((s) => s.form.textsOk);
-  const offered = useDiner((s) => textsOffered(s.data?.settings));
+  const offered = useDiner((s) => textsOffered(s.data));
   if (!offered || phone.trim() === "") return null;
   const china = mainlandChina(phone);
   return (

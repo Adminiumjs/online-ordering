@@ -90,7 +90,18 @@ describe("the box for the ready text", () => {
     expect([values["opt_in"], values["texts_ok"]]).toEqual([false, true]);
   });
 
-  it("is not offered while the kitchen has no texts set up", async () => {
+  it("is not offered while Adminium has no texts set up", async () => {
+    demo.diner.textsOn = false;
+    useDiner.setState(useDiner.getInitialState());
+    await loadDiner();
+    await new Promise((r) => setTimeout(r, 0));
+    await cartFor("noor.notset@mail.example");
+    setTextsOk(true);
+    expect(form().textsOk).toBe(false);
+    expect((await placeAndRead())["texts_ok"]).toBe(false);
+  });
+
+  it("is not offered while the kitchen has switched its ready text off", async () => {
     demo.world.update("settings", demo.world.settings().id, { ready_text_on: false });
     useDiner.setState(useDiner.getInitialState());
     await loadDiner();

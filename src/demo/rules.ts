@@ -2029,7 +2029,8 @@ export const MANIFEST_RULES = {
             "due",
             "sent_at",
             "error",
-            "skip_reason"
+            "skip_reason",
+            "text_reason"
           ]
         }
       }

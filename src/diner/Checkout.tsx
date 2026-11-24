@@ -179,7 +179,7 @@ export function Checkout() {
   const emailErr = (s.touched.email === true && !EMAIL.test(f.email.trim())) || s.fieldErrors.email !== undefined;
   const phoneErr = (f.phone.trim().length > 3 && phoneBad(f.phone)) || s.fieldErrors.phone !== undefined;
   // The box for texts ticked, for a number it can be for: the hint says the kitchen will text too.
-  const texting = f.textsOk && textsOffered(s.data?.settings) && textBoxShown(f.phone);
+  const texting = f.textsOk && textsOffered(s.data) && textBoxShown(f.phone);
   const pick = validPick(day.now);
   const pickWord = pick === null ? t("co.pickATime") : t("co.pickup", { day: pick.day === day.today ? t("pick.today") : pick.day === day.tomorrow ? t("pick.tomorrow") : fmt.weekday(pick.day), time: fmt.wall(pick.day, pick.time) });
   const total = fresh === null ? null : fmt.money(fresh.data["total"]);

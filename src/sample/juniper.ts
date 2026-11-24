@@ -554,7 +554,7 @@ export function sampleBundle(): SampleBundle {
       messages.push({ kind: "order-ready", status: "sent", to_address: order.email, language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.stamps[2]!), sent_at: ago(order.stamps[2]!) });
       // The text the diner asked for, sent once the Undo's wait was over.
       if (order.texts === true && order.phone !== null) {
-        messages.push({ kind: "order-ready-text", status: "sent", to_address: e164(order.phone), language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.stamps[2]!), sent_at: ago(order.stamps[2]!) });
+        messages.push({ kind: "order-ready-text", status: "sent", text_reason: "sent", to_address: e164(order.phone), language: "en-US", order_id: { "@ref": label }, customer_id: { "@ref": customer(order.name, order.email) }, created_at: ago(order.stamps[2]!), sent_at: ago(order.stamps[2]!) });
       }
     }
   }

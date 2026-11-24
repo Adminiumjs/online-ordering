@@ -89,12 +89,14 @@ export class AdminiumDiner implements DinerPort {
   private readonly customer: PublicClient;
   private readonly link: PublicClient | null;
   private config$: Promise<ClientConfig> | null = null;
+  private readonly fetchImpl: typeof fetch | undefined;
 
   constructor(served: DinerServed, options: DinerDoorOptions = {}) {
     this.served = served;
     this.refs = publicRefs(served.tables);
     this.storage = options.storage === undefined ? tabStorage() : options.storage;
     this.clock = options.clock ?? Date.now;
+    this.fetchImpl = options.fetch;
     const client = (name: string, publishableKey: string, humanCheck: PublicClientHumanCheck) =>
       createPublicClient({
         baseUrl: served.baseUrl,
@@ -305,6 +307,24 @@ export class AdminiumDiner implements DinerPort {
         ...(opts.payNow === true ? { payUrl: made.payUrl } : {}),
       };
     });
+  }
+
+  // ── texts ───────────────────────────────────────────────────────────────────
+
+  /**
+   * Whether a text can come at all, as Adminium says it (`client.texts.ready()`, 0.3.76): the box for the ready
+   * text is drawn only then. A client from before 0.3.76 has no `texts`: the same question is asked as it asks it.
+   */
+  async textsReady(): Promise<boolean> {
+    try {
+      const texts = (this.customer as unknown as { texts?: { ready(): Promise<boolean> } }).texts;
+      if (texts !== undefined) return (await texts.ready()) === true;
+      const res = await (this.fetchImpl ?? globalThis.fetch)(`${this.served.baseUrl}/api/v1/public/texts`, { headers: { authorization: `Bearer ${this.served.publishableKey}` } });
+      if (!res.ok) return false;
+      return ((await res.json()) as { data?: { ready?: unknown } }).data?.ready === true;
+    } catch {
+      return false;
+    }
   }
 
   // ── paying online ───────────────────────────────────────────────────────────

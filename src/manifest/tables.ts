@@ -311,9 +311,9 @@ export const TABLES: Table[] = [
       bool("online_on", "Taking online orders", true),
       bool("ready_email_on", "Email when an order is ready", true),
       bool("receipt_email_on", "Email a receipt at pickup", true),
-      // Whether checkout offers "Text me when my order is ready": off until the kitchen has texts set up in Adminium,
-      // so no diner asks for a text that cannot come.
-      bool("ready_text_on", "Offer a text when an order is ready", false),
+      // Whether checkout offers "Text me when my order is ready" while texts are set up in Adminium. One provider
+      // account serves every app on the server, and each text costs the business: a kitchen may choose not to.
+      bool("ready_text_on", "Offer a text when an order is ready", true),
       // Paying online, once the kitchen takes payments: how long an order waits for its payment, its
       // slot held, and whether a paid order the diner or the kitchen cancels is refunded by itself.
       int("pay_hold_minutes", "Minutes an order waits for its payment", { default: 10, rules: { validation: { min: 3, max: 30 } } }),
@@ -820,6 +820,8 @@ export const TABLES: Table[] = [
       text("error", 500, "What went wrong", opt),
       // Which hand-over a receipt was sent for, as Adminium's digest of it.
       text("repeat_key", 64, "Resend key", opt),
+      // A text's outcome as Adminium's code (`sent`, `no-number`, `stopped`, `daily-limit`…), beside its sentence in `error`.
+      text("text_reason", 40, "Text outcome", opt),
       choice("skip_reason", "Why it was skipped", {
         overtaken: "A later email took its place",
         paid: "Paid",

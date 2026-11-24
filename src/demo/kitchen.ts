@@ -110,7 +110,7 @@ export class DemoKitchen implements KitchenPort {
       // Its ready texts, as the kitchen's role reads them: never who they went to.
       texts: this.world
         .where("messages", (m) => m["order_id"] === order.id && m["kind"] === "order-ready-text")
-        .map((m) => ({ id: m.id, kind: m["kind"], status: m["status"], order_id: m["order_id"], due: m["due"], sent_at: m["sent_at"], error: m["error"], skip_reason: m["skip_reason"] })),
+        .map((m) => ({ id: m.id, kind: m["kind"], status: m["status"], order_id: m["order_id"], due: m["due"], sent_at: m["sent_at"], error: m["error"], skip_reason: m["skip_reason"], text_reason: m["text_reason"] })),
       lines: this.world
         .where("order_items", (l) => l["order_id"] === order.id)
         .sort((a, b) => Number(a["position"] ?? 0) - Number(b["position"] ?? 0))
@@ -155,6 +155,13 @@ export class DemoKitchen implements KitchenPort {
 
   async payments(): Promise<KitchenPayments> {
     return { ...this.paymentsOn };
+  }
+
+  /** The demo's kitchen has texts set up (the demo's own provider). */
+  textsOn = true;
+
+  async textsReady(): Promise<boolean> {
+    return this.textsOn;
   }
 
   async refund(payment: { id: Id; orderId: Id }, amount: string, reason: string, clientKey: string): Promise<Row> {

@@ -40,14 +40,14 @@ describe("the ready text in the demo", () => {
     const [held] = texts(id);
     expect([held?.["status"], held?.["to_address"], Date.parse(String(held?.["due"])) - demo.now]).toEqual(["queued", "(555) 019-4471", 20_000]);
     demo.engine.settleText(held!.id);
-    expect(texts(id).map((m) => m["status"])).toEqual(["sent"]);
+    expect(texts(id).map((m) => [m["status"], m["text_reason"]])).toEqual([["sent", "sent"]]);
   });
 
   it("is dropped by an Undo, so nothing is sent; ready again, it is queued and sent afresh", async () => {
     const id = await placed({ phone: "(555) 019-4471", texts_ok: true }, "noor.undo");
     await demo.kitchen.move(id, "preparing", "ready");
     await demo.kitchen.move(id, "ready", "preparing");
-    expect(texts(id).map((m) => [m["status"], m["skip_reason"]])).toEqual([["skipped", "no-longer-needed"]]);
+    expect(texts(id).map((m) => [m["status"], m["skip_reason"], m["text_reason"]])).toEqual([["skipped", "no-longer-needed", "no-longer-needed"]]);
     demo.engine.settleText(texts(id)[0]!.id);
     expect(texts(id).map((m) => m["status"])).toEqual(["skipped"]);
     await demo.kitchen.move(id, "preparing", "ready");
@@ -65,16 +65,17 @@ describe("the ready text in the demo", () => {
     expect(texts(off)).toEqual([]);
   });
 
-  it("goes to the number on the diner's account, and says so when there is none", async () => {
-    // Kwame is on file with his own mobile: a number typed on a later order does not move it.
+  it("goes to the number typed on the order, where the yes was given, for a diner already on file too", async () => {
+    // Kwame is on file with another mobile: the text goes to the one he typed and ticked the box for.
     const kwame = await placed({ email: "kwame.b@mail.example", phone: "(555) 010-9999", texts_ok: true }, "kwame.later");
     await demo.kitchen.move(kwame, "preparing", "ready");
-    expect(texts(kwame).map((m) => m["to_address"])).toEqual(["(555) 019-2205"]);
-    // A diner on file from an order with no mobile: nothing to text.
+    expect(texts(kwame).map((m) => m["to_address"])).toEqual(["(555) 010-9999"]);
+    expect(demo.world.all("customers").find((c) => c["email"] === "kwame.b@mail.example")?.["phone"]).toBe("(555) 019-2205");
+    // A diner on file from an order with no mobile: the number typed now.
     demo.world.insert("customers", { email: "nophone@mail.example", name: "Nils", phone: null, language: "en-US", opt_in: false, forgotten_at: null, created_at: at("09:00") });
     const nils = await placed({ email: "nophone@mail.example", phone: "(555) 010-1234", texts_ok: true }, "nophone");
     await demo.kitchen.move(nils, "preparing", "ready");
-    expect(texts(nils).map((m) => [m["status"], m["error"]])).toEqual([["skipped", "No mobile number on file"]]);
+    expect(texts(nils).map((m) => [m["status"], m["to_address"]])).toEqual([["queued", "(555) 010-1234"]]);
   });
 
   it("plays the sample's kitchen too, and the board reads whether it went, never to whom", async () => {

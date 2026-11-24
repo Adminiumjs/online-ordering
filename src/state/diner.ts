@@ -93,6 +93,8 @@ interface Loaded {
   currency: string;
   /** Whether codes and gift cards are offered (Offers & gift cards is in use for the app). */
   offers: boolean;
+  /** Whether a text can come at all (Adminium has texts set up): the box for the ready text is drawn only then. */
+  textsReady?: boolean;
   settings: Row;
   menu: MenuModel;
   hours: Row[];
@@ -280,6 +282,7 @@ export async function loadDiner(): Promise<void> {
     const [config, settings, menu, hours, closures] = await Promise.all([p.config(), p.settings(), p.menu(), p.hours(), p.closures()]);
     set({ data: { zone: config.timezone, currency: config.currency ?? sources().currency, offers: config.offers === true, settings, menu: menuModel(menu), hours, closures } });
     void readPayments();
+    void readTextsReady();
     await refreshAvailability(sources().clock.now());
     set({ load: "ok" });
   } catch {
@@ -827,10 +830,20 @@ export function setOptIn(on: boolean): void {
   set({ form: { ...get().form, optIn: on } });
 }
 
-/** Whether the kitchen offers "Text me when my order is ready" at all: off until it has texts set up. */
-export function textsOffered(settings: Row | undefined = get().data?.settings): boolean {
-  const on = settings?.["ready_text_on"];
-  return on === true || on === 1;
+/**
+ * Whether checkout offers "Text me when my order is ready": only while Adminium has texts set up (`textsReady`),
+ * and the kitchen has not switched its ready text off.
+ */
+export function textsOffered(data: Pick<Loaded, "settings" | "textsReady"> | null | undefined = get().data): boolean {
+  const on = data?.settings["ready_text_on"];
+  return data?.textsReady === true && (on === true || on === 1);
+}
+
+/** Asks Adminium whether a text can come at all; no answer is no. */
+export async function readTextsReady(): Promise<void> {
+  const ready = await port().textsReady().catch(() => false);
+  const d = get().data;
+  if (d !== null) set({ data: { ...d, textsReady: ready } });
 }
 
 /** Whether the box for texts can be ticked for a number: one typed, and not in mainland China. */

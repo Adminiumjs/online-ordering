@@ -97,12 +97,12 @@ async function textsCheckout(phone: string, tick = false): Promise<void> {
 }
 
 /** An order of today's board made ready a while ago, its diner having asked for a text, and how that text went. */
-function readyWithText(number: string, minutesAgo: number, outcome: { status: string; error: string | null } | null): void {
+function readyWithText(number: string, minutesAgo: number, outcome: { status: string; error: string | null; code: string } | null): void {
   const o = numbered(number);
   const when = new Date(demo().now - minutesAgo * 60_000).toISOString();
   demo().world.update("orders", o.id, { status: "ready", texts_ok: true, confirmed_at: o["confirmed_at"] ?? when, preparing_at: o["preparing_at"] ?? when, ready_at: when, ready_by: "Sam" });
   if (outcome !== null) {
-    demo().world.insert("messages", { kind: "order-ready-text", status: outcome.status, to_address: null, language: "en-US", order_id: o.id, enquiry_id: null, customer_id: null, due: when, created_at: when, sent_at: outcome.status === "sent" ? when : null, error: outcome.error, skip_reason: null, repeat_key: null });
+    demo().world.insert("messages", { kind: "order-ready-text", status: outcome.status, to_address: null, language: "en-US", order_id: o.id, enquiry_id: null, customer_id: null, due: when, created_at: when, sent_at: outcome.status === "sent" ? when : null, error: outcome.error, text_reason: outcome.code, skip_reason: null, repeat_key: null });
   }
 }
 
@@ -272,11 +272,11 @@ const PRESETS: Record<string, Preset> = {
   "j10-results": {
     kitchen: true,
     world: () => {
-      readyWithText("2114", 2, { status: "sent", error: null });
-      readyWithText("2115", 3, { status: "skipped", error: "No mobile number on file" });
-      readyWithText("2116", 4, { status: "skipped", error: "Not sent: this person replied STOP" });
-      readyWithText("2117", 5, { status: "skipped", error: "Not sent: the daily text limit is reached" });
-      readyWithText("2113", 6, { status: "sent", error: "Unknown: check with the provider before resending" });
+      readyWithText("2114", 2, { status: "sent", error: null, code: "sent" });
+      readyWithText("2115", 3, { status: "skipped", error: "No mobile number on file", code: "no-number" });
+      readyWithText("2116", 4, { status: "skipped", error: "Not sent: this person replied STOP", code: "stopped" });
+      readyWithText("2117", 5, { status: "skipped", error: "Not sent: the daily text limit is reached", code: "daily-limit" });
+      readyWithText("2113", 6, { status: "sent", error: "Unknown: check with the provider before resending", code: "unknown" });
     },
   },
   // States 6 — the kitchen board

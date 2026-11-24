@@ -508,7 +508,7 @@ export class Engine {
     // and the board shows how a ready text went: those it plays as Juniper's own provider would send them.
     const sample = this.world.isSample(table, after.id);
     for (const producer of MANIFEST_RULES.producers as readonly Record<string, unknown>[]) {
-      if (sample && (MANIFEST_RULES.channels as Record<string, string>)[String(producer["kind"])] !== "sms") continue;
+      if (sample && !isText(String(producer["kind"]))) continue;
       const source = (producer["onCreate"] ?? producer["onChange"]) as { table: string; via?: string; column?: string; to?: unknown; where?: { column: string; eq: unknown } };
       if (source.table !== table) continue;
       if (producer["onCreate"] !== undefined && before !== null) continue;
@@ -531,9 +531,9 @@ export class Engine {
       if (this.world.where("messages", sent).length > 0) continue;
       const recipient = producer["recipient"] as { column: string } | undefined;
       const customer = aboutTable === "orders" && !empty(about["customer_id"]) ? this.world.get("customers", Number(about["customer_id"])) : undefined;
-      // A text goes to the diner's own mobile, as Adminium reads it: their account's, or the one typed on an order linked to nobody.
-      const text = (MANIFEST_RULES.channels as Record<string, string>)[kind] === "sms";
-      const to = text ? (customer !== undefined ? customer["phone"] : about["phone"]) : recipient !== undefined ? about[recipient.column] : (customer?.["email"] ?? about["email"]);
+      // A text goes to the mobile typed on the order (`textPhone`), the number the diner's yes was given for; else their account's.
+      const text = isText(kind);
+      const to = text ? (empty(about["phone"]) ? customer?.["phone"] : about["phone"]) : recipient !== undefined ? about[recipient.column] : (customer?.["email"] ?? about["email"]);
       const hold = typeof producer["holdSeconds"] === "number" ? producer["holdSeconds"] * 1000 : 0;
       const message = this.world.insert("messages", {
         kind,
@@ -546,9 +546,10 @@ export class Engine {
         due: iso(this.now + hold),
         created_at: iso(this.now),
         sent_at: null,
-        // A text with no number to go to says so, as Adminium's sentence does.
+        // A text with no number to go to says so, as Adminium's sentence and code do.
         error: empty(to) && text ? "No mobile number on file" : null,
         skip_reason: empty(to) && !text ? "no-longer-needed" : null,
+        text_reason: text ? (empty(to) ? "no-number" : null) : null,
         repeat_key: repeatKey,
       });
       if (text && !empty(to) && hold > 0) this.onHeldText?.(message.id, hold);
@@ -570,8 +571,8 @@ export class Engine {
     const order = message["order_id"] === null ? undefined : this.world.get("orders", Number(message["order_id"]));
     const producer = (MANIFEST_RULES.producers as readonly Record<string, unknown>[]).find((p) => p["kind"] === message["kind"]);
     const drop = order === undefined ? undefined : ((producer?.["dropWhen"] ?? []) as readonly DropWhen[]).find((d) => dropHolds(d, order));
-    if (drop !== undefined) this.world.update("messages", id, { status: "skipped", skip_reason: drop.reason });
-    else this.world.update("messages", id, { status: "sent", sent_at: iso(this.now) });
+    if (drop !== undefined) this.world.update("messages", id, { status: "skipped", skip_reason: drop.reason, text_reason: drop.reason });
+    else this.world.update("messages", id, { status: "sent", sent_at: iso(this.now), text_reason: "sent" });
   }
 
   /** Sends what has come due; a waiting message whose row meets its producer's `dropWhen` is dropped. */
@@ -581,11 +582,12 @@ export class Engine {
       const producer = (MANIFEST_RULES.producers as readonly Record<string, unknown>[]).find((p) => p["kind"] === message["kind"]);
       const drops = (producer?.["dropWhen"] ?? []) as readonly DropWhen[];
       const drop = order === undefined ? undefined : drops.find((d) => dropHolds(d, order));
+      const text = isText(String(message["kind"]));
       if (drop !== undefined) {
-        this.world.update("messages", message.id, { status: "skipped", skip_reason: drop.reason });
+        this.world.update("messages", message.id, { status: "skipped", skip_reason: drop.reason, ...(text ? { text_reason: drop.reason } : {}) });
         continue;
       }
-      if (toMs(String(message["due"])) <= this.now) this.world.update("messages", message.id, { status: "sent", sent_at: iso(this.now) });
+      if (toMs(String(message["due"])) <= this.now) this.world.update("messages", message.id, { status: "sent", sent_at: iso(this.now), ...(text ? { text_reason: "sent" } : {}) });
     }
   }
 
@@ -661,6 +663,9 @@ export class Engine {
     return venueMinutes(this.now, this.world.zone);
   }
 }
+
+/** Whether an outbox kind is sent as a text (`outbox.channels`). */
+const isText = (kind: string): boolean => (MANIFEST_RULES.channels as Record<string, string>)[kind] === "sms";
 
 type DropWhen = { column: string; in?: readonly unknown[]; eq?: unknown; isNull?: boolean; gte?: number; lte?: number; reason: string };
 

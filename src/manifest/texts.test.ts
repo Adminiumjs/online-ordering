@@ -44,9 +44,17 @@ describe("the ready text", () => {
     expect(manifest.emailTemplates.map((t) => t.key)).not.toContain("ordering-order-ready-text");
   });
 
-  it("goes to the diner's own mobile, or the one typed on an order nobody is signed in for", () => {
+  it("goes to the mobile typed on the order, where the diner's yes was given; the account's only when the order holds none", () => {
+    expect(manifest.outbox.recipient["textPhone"]).toEqual({ via: "order_id", column: "phone" });
     expect(manifest.outbox.recipient["phone"]).toBe("phone");
     expect(manifest.outbox.recipient.fallback["phone"]).toBe("phone");
+  });
+
+  it("ends with Adminium's code on the outbox row, which the board reads, and is signed with the kitchen's name", () => {
+    expect((manifest.outbox["columns"] as Record<string, string>)["textReason"]).toBe("text_reason");
+    const c = column("messages", "text_reason")!;
+    expect([c.type, c["maxLength"], c.nullable]).toEqual(["text", 40, true]);
+    expect((manifest.outbox["settings"] as Record<string, string>)["textName"]).toBe("venue_name");
   });
 
   it("is queued only for an order whose diner ticked the box, waits out the Undo, and is dropped by an Undo", () => {
@@ -54,7 +62,7 @@ describe("the ready text", () => {
     expect(producers).toHaveLength(1);
     const p = producers[0]!;
     expect(p["onChange"]).toEqual({ table: "orders", column: "status", to: "ready", where: { column: "texts_ok", eq: true } });
-    // Behind the kitchen's own switch for texts (off until it has texts set up), never the ready email's.
+    // Behind the kitchen's own switch for its ready text (on by default), never the ready email's.
     expect(p["gate"]).toEqual({ setting: { table: "settings", column: "ready_text_on" } });
     // The same wait as the ready email, which the board counts down.
     const email = manifest.outbox.producers.find((x) => x["kind"] === "order-ready")!;
@@ -90,6 +98,12 @@ describe("the ready text", () => {
       expect([tag, short.encoding, short.segments <= (latin ? 1 : 2)]).toEqual([tag, latin ? "gsm-7" : "ucs-2", true]);
       expect([tag, long.segments <= (latin ? 1 : 2)]).toEqual([tag, true]);
     }
+  });
+});
+
+describe("the kitchen's switch for its ready text", () => {
+  it("is on for a new install: the box shows as soon as Adminium has texts set up, and a kitchen may turn it off", () => {
+    expect(column("settings", "ready_text_on")?.default).toBe(true);
   });
 });
 
@@ -159,6 +173,7 @@ describe("the kitchen's read of the outbox", () => {
     const readable = kitchen.limits?.["messages"]?.readable ?? [];
     expect(readable).not.toContain("to_address");
     expect(readable).not.toContain("customer_id");
+    expect(readable).toContain("text_reason");
   });
 
   it("leaves conversations to the manager: replies on, read and answered on Adminium's Texts page", () => {
@@ -182,7 +197,7 @@ const REPLY_STOP: Record<string, string> = {
 };
 
 /** GSM-7's characters (Adminium's `sms/send/length.ts`), and the ones that take two places. */
-const GSM_BASIC = new Set('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà');
+const GSM_BASIC = new Set('@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !"#¤%&\'()*+,-./0123456789:;<=>?¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ\u00a7¿abcdefghijklmnopqrstuvwxyzäöñüà');
 const GSM_ESCAPED = new Set("^{}\\[~]|€\f");
 
 /** The segments a text costs, as Adminium's counter estimates them for most destinations: 160/153 or 70/67. */

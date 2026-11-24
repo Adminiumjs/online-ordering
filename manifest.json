@@ -819,7 +819,7 @@
           {
             "ref": "ready_text_on",
             "type": "bool",
-            "default": false,
+            "default": true,
             "label": {
               "en-US": "Offer a text when an order is ready",
               "de-DE": "SMS anbieten, wenn eine Bestellung fertig ist",
@@ -7332,6 +7332,22 @@
             "nullable": true
           },
           {
+            "ref": "text_reason",
+            "type": "text",
+            "maxLength": 40,
+            "label": {
+              "en-US": "Text outcome",
+              "de-DE": "SMS-Ergebnis",
+              "fr-FR": "Résultat du SMS",
+              "da-DK": "Sms-resultat",
+              "cs-CZ": "Výsledek SMS",
+              "ar-EG": "نتيجة الرسالة النصية",
+              "zh-CN": "短信结果",
+              "zh-TW": "簡訊結果"
+            },
+            "nullable": true
+          },
+          {
             "ref": "skip_reason",
             "type": "enum",
             "enum": [
@@ -10023,7 +10039,8 @@
             "due",
             "sent_at",
             "error",
-            "skip_reason"
+            "skip_reason",
+            "text_reason"
           ]
         }
       },
@@ -11529,7 +11546,8 @@
       "sentAt": "sent_at",
       "error": "error",
       "skipReason": "skip_reason",
-      "repeatKey": "repeat_key"
+      "repeatKey": "repeat_key",
+      "textReason": "text_reason"
     },
     "links": {
       "order": "order_id",
@@ -11545,6 +11563,10 @@
         "column": "language"
       },
       "phone": "phone",
+      "textPhone": {
+        "via": "order_id",
+        "column": "phone"
+      },
       "fallback": {
         "via": "order_id",
         "email": "email",
@@ -11556,7 +11578,8 @@
     "settings": {
       "table": "settings",
       "name": "venue_name",
-      "phone": "phone"
+      "phone": "phone",
+      "textName": "venue_name"
     },
     "pages": {
       "manage": "/o",

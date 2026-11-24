@@ -20,7 +20,7 @@ import { useNow } from "../data/sources.ts";
 import { useI18n, type TFunction } from "../i18n/index.tsx";
 import type { Formatter } from "../lib/format.ts";
 import { storedOptionsText } from "../lib/menu.ts";
-import { BOARD, NEXT, dayOf, kToday, num, owed, owedOrders, refundOwed, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
+import { BOARD, NEXT, dayOf, kToday, num, owed, owedOrders, refundOwed, textsOffered, useKitchen, type BoardState, NO_CARD } from "../state/kitchen.ts";
 import { useUi } from "../state/ui.ts";
 import { useKFmt } from "./fmt.ts";
 import { advance, undo, useRecentMove } from "./moves.ts";
@@ -43,7 +43,7 @@ const TEXT_LOOK: Record<Exclude<TextOutcome, "waiting">, { icon: IconName; color
 export function TextLine({ order }: { order: OrderWithLines }) {
   const { t } = useI18n();
   const recent = useRecentMove();
-  const offered = useKitchen((s) => s.settings?.["ready_text_on"] === true);
+  const offered = useKitchen((s) => textsOffered(s));
   const o = order.order;
   const outcome = textOutcome(o, order.texts, { offered });
   const holding = outcome === "waiting" && recent.id === o.id && recent.to === "ready" && Date.now() < recent.until;

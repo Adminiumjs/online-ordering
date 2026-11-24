@@ -97,6 +97,8 @@ interface KitchenState {
   handoff: { id: Id; paid: "cash" | "card" | "gift" | null; busy: boolean; card: HandoffCard } | null;
   /** Whether gift cards are taken here (Offers & gift cards is in use for the app). */
   giftCards: boolean;
+  /** Whether a text can go at all (Adminium has texts set up): the board speaks of ready texts only then. */
+  textsReady: boolean;
   /** Whether the kitchen takes payments online, and whether this person may give money back. */
   payments: KitchenPayments;
   /** Giving back what a diner paid online: the amount and why (step 1), then the one sentence (step 2). */
@@ -139,6 +141,7 @@ export const useKitchen = create<KitchenState>(() => ({
   cancel: null,
   handoff: null,
   giftCards: false,
+  textsReady: false,
   payments: { on: false, refund: false },
   refund: null,
   tomorrow: false,
@@ -189,7 +192,7 @@ export async function loadKitchen(): Promise<void> {
     const p = port();
     const [person, config, settings, hours, closures, menu, holidays, receipts, menuShared] = await Promise.all([p.me(), p.config(), p.settings(), p.hours(), p.closures(), p.menu(), p.holidays(), p.receipts(), p.menuShared()]);
     // Whether gift cards are taken here; a door that cannot say takes none. Likewise payments, and the right to refund them.
-    set({ giftCards: await p.giftCards().catch(() => false), payments: await p.payments().catch(() => ({ on: false, refund: false })) });
+    set({ giftCards: await p.giftCards().catch(() => false), payments: await p.payments().catch(() => ({ on: false, refund: false })), textsReady: await p.textsReady().catch(() => false) });
     set({ person, zoneUnset: config.zoneSet === false, zone: config.timezone ?? sources().zone, currency: config.currency ?? sources().currency, settings, hours, closures, menuRows: menu, menu: menuModel(menu), holidays, receipts, menuShared, signedOut: false });
     await Promise.all([readOrders(true), readSlots(), readCounts()]);
     set({ load: "ok" });
@@ -286,12 +289,18 @@ async function flush(): Promise<void> {
   }
 }
 
+/** Whether the board speaks of ready texts: Adminium has texts set up, and the kitchen offers its ready text. */
+export function textsOffered(s: Pick<KitchenState, "settings" | "textsReady"> = get()): boolean {
+  const on = s.settings?.["ready_text_on"];
+  return s.textsReady && (on === true || on === 1);
+}
+
 /** Every read again: on reconnecting, on coming back to the tab, when the day turns. */
 export async function refreshAll(): Promise<void> {
   try {
     const p = port();
-    const [settings, hours, closures] = await Promise.all([p.settings(), p.hours(), p.closures(), readOrders(), readSlots(), readCounts(), readMenu()]);
-    set({ settings, hours, closures });
+    const [settings, hours, closures, textsReady] = await Promise.all([p.settings(), p.hours(), p.closures(), p.textsReady().catch(() => false), readOrders(), readSlots(), readCounts(), readMenu()]);
+    set({ settings, hours, closures, textsReady });
   } catch (error) {
     signedOutBy(error);
   }

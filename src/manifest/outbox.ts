@@ -159,6 +159,8 @@ export const OUTBOX = {
     error: "error",
     skipReason: "skip_reason",
     repeatKey: "repeat_key",
+    // Adminium's code for how a text ended: what the board reads, never the English sentence.
+    textReason: "text_reason",
   },
   links: { order: "order_id", enquiry: "enquiry_id", customer: "customer_id" },
   recipient: {
@@ -168,12 +170,15 @@ export const OUTBOX = {
     name: "name",
     // Written in the language the order was placed in, whatever the diner's own row says.
     language: { column: "language" },
-    // The mobile a text goes to: the diner's own, as their first order gave it.
+    // The diner's own mobile, as their first order gave it: a text's number only when the order holds none.
     phone: "phone",
+    // A text goes to the mobile typed on the order it is about: the number the diner's yes was given for.
+    textPhone: { via: "order_id", column: "phone" },
     // An order nobody signed in for — and every phone order — carries its own details.
     fallback: { via: "order_id", email: "email", phone: "phone", name: "name", language: "language" },
   },
-  settings: { table: "settings", name: "venue_name", phone: "phone" },
+  // The kitchen's name signs Adminium's own texts too (the STOP confirmation, "this number is not read").
+  settings: { table: "settings", name: "venue_name", phone: "phone", textName: "venue_name" },
   // An order's own link opens its page on the diner's side; its code rides the fragment.
   pages: { manage: "/o", booking: "/" },
   kinds: Object.fromEntries(ALL_KINDS.map((kind) => [kind, `ordering-${kind}`])),

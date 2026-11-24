@@ -84,6 +84,8 @@ export interface DinerPort {
 
   /** Whether the kitchen takes payments online right now. Never throws: no answer is "not now". */
   payments(): Promise<OnlinePayments>;
+  /** Whether a text can come at all (a provider and a sender set in Adminium, texts not switched off). Never throws: no answer is no. */
+  textsReady(): Promise<boolean>;
   /** The link to pay an order waiting for its payment: the one already open, never a second. */
   payLink(door: OrderDoor, id: Id): Promise<string>;
   /** An order waiting for its payment, made new to be paid at pickup instead. */
@@ -191,6 +193,8 @@ export interface KitchenPort {
   /** Whether a hand-over sends a receipt: Invoices & receipts installed with its receipts on. */
   receipts(): Promise<boolean>;
 
+  /** Whether a text can go at all (a provider and a sender set, texts not switched off). A door that cannot say: no. */
+  textsReady(): Promise<boolean>;
   /** Whether the kitchen takes payments, and whether this person may refund. A door that cannot say: off. */
   payments(): Promise<KitchenPayments>;
   /**

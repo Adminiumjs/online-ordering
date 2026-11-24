@@ -9110,6 +9110,7 @@
         {
           "kind": "order-ready-text",
           "status": "sent",
+          "text_reason": "sent",
           "to_address": "+15550183392",
           "language": "en-US",
           "order_id": {

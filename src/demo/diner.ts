@@ -318,6 +318,14 @@ export class DemoDiner implements DinerPort {
     };
   }
 
+  /** The demo's kitchen has texts set up: its provider is the demo's own, and nothing leaves the page. */
+  textsOn = true;
+
+  async textsReady(): Promise<boolean> {
+    await this.wait(this.latency.read);
+    return this.textsOn;
+  }
+
   // ── paying online ───────────────────────────────────────────────────────────
 
   async payments(): Promise<OnlinePayments> {

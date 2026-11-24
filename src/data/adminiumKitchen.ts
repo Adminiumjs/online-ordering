@@ -512,6 +512,15 @@ export class AdminiumKitchen implements KitchenPort {
 
   // ── paying online ─────────────────────────────────────────────────────────
 
+  /** Whether a text can go at all (`GET /texts/ready`, 0.3.76): the board says how a ready text went only then. */
+  async textsReady(): Promise<boolean> {
+    try {
+      return (await this.t.get<{ data: { ready: boolean } }>("/api/v1/texts/ready")).data.ready === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Whether the app takes payments (switched on in Payments) and whether this person may refund: the staff config says. */
   async payments(): Promise<KitchenPayments> {
     const said = this.cfg.payments ?? null;
