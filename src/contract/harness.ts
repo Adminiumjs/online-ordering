@@ -233,8 +233,10 @@ export async function boot(engine: Engine, port: number, now: number, options: B
     ...process.env,
     ...(options.keep === undefined ? {} : { STUDIO_ADMINIUM: checkout, STUDIO_DIR: options.keep }),
     // An add-on packed from a checkout has no catalogue to vouch for its bytes:
-    // a developer's server runs it by name. Ignored in production.
-    ADMINIUM_ADD_ON_DEV_TRUST: "inventory,offers",
+    // a developer's server runs it by name. Ignored in production. Every add-on
+    // a contract packs is here: one left out never loads its server half, so
+    // Invoices' receipt is never made at install (FEATURE_OFF).
+    ADMINIUM_ADD_ON_DEV_TRUST: "inventory,offers,invoices,holiday-calendars",
     E2E_ENGINE: engine,
     E2E_PORT: String(port),
     E2E_SMTP_PORT: String(port + 1),
