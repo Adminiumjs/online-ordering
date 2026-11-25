@@ -24,7 +24,8 @@ import { textTemplates } from "./texts.ts";
 /**
  * This release: the kitchen's diners, its emails' class and the tick at checkout kept in the consent log, on 0.3.0's tables (0.3.1);
  * and one install per database, each install's screens saying which they are (0.3.2); and orders paid for online at
- * checkout, with an order waiting for its payment, refunds sent back online, and the emails saying what was paid (0.3.3).
+ * checkout, with an order waiting for its payment, refunds sent back online, and the emails saying what was paid; and
+ * the ready text a diner may ask for at checkout, held through the kitchen's Undo (0.3.3).
  */
 export const VERSION = "0.3.3";
 

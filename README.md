@@ -156,15 +156,20 @@ Once installed, the kitchen's screens are served at `/apps/ordering/staff/`
 and the diners' side at `/apps/ordering/customer/`. A kitchen can also give
 the diners' side a domain of its own.
 
-**Moving from 0.3.2.** 0.3.3 adds paying online and updates a 0.3.2 install
-in place: update Adminium to 0.3.62 first, then the app. The update adds
-columns and keeps every row: the settings' two payment settings, an order's
-online money and the state it waits for its payment in, a payment's online
-reference and service, a refund's state. Every gift card payment and refund
-already there stays a gift card's. The update asks you to allow the order
-page's two new doors (placing an order to pay now, and paying at pickup
-instead) and the manager's right to refund. Payments stay off until someone
-switches the app on in Payments.
+**Moving from 0.3.2.** 0.3.3 adds paying online and the ready text, and
+updates a 0.3.2 install in place: update Adminium to 0.3.76 first, then the
+app. The update adds columns and keeps every row: the settings' two payment
+settings and the switch for the ready text (on), an order's online money, the
+state it waits for its payment in and the box for the ready text (unticked on
+every order already there), a diner's mobile (empty for everyone already
+there), a payment's online reference and service, a refund's state, and how
+each text ended. Every gift card payment and refund already there stays a
+gift card's, and nothing is written in the text consent log: no diner was
+asked before. The update asks you to allow the order page's two new doors
+(placing an order to pay now, and paying at pickup instead), the box for
+texts on both, and the manager's rights to refund and to read and answer
+texts. Payments stay off until someone switches the app on in Payments, and
+no box for texts shows until texts are set up in Adminium's Settings → Texts.
 
 **Moving from 0.3.1.** 0.3.2 changes no table and updates a 0.3.1 install in
 place: update Adminium to 0.3.49 first, then the app. A kitchen may then
