@@ -92,14 +92,17 @@ Online Ordering sends one text: "your order is ready", from the business's own
 Twilio or Telnyx account, connected in Adminium's **Settings → Texts**.
 Adminium is never a party to it.
 
-- **Off until you switch it on.** Settings, "Offer a text when an order is
-  ready", is off on a new install, so no diner asks for a text that cannot
-  come. Connect a provider first, then switch it on.
+- **Only while texts can come.** The box shows only while Adminium has texts
+  set up (a provider and a sender, texts not switched off). Settings, "Offer a
+  text when an order is ready", is on by default; switch it off if the
+  kitchen would rather not pay for texts on a provider the server's other apps
+  use.
 - **The diner's own yes.** Once a mobile is typed at checkout, a box of its
   own appears under it: "Text me when my order is ready". It is never
   ticked for them, never needed to order, and apart from the newsletter's
   tick. Adminium keeps the yes in its text consent log with the words shown
-  and their version, for that number. A number in mainland China (+86) takes
+  and their version, for that number, and the text goes to that number,
+  whatever number the diner's account holds. A number in mainland China (+86) takes
   no texts: the box is off there, and the number stays for a call.
 - **After the Undo.** Pressing Ready starts the board's Undo; the text waits
   twenty seconds, past it, and an Undo drops it, so nothing is sent. The
@@ -109,7 +112,8 @@ Adminium is never a party to it.
   STOP" from a number, or the kitchen's phone from a sender name. A STOP
   stops every text from the business.
 - **On the board.** "Text sent", "Not sent: no number", "Not sent: they opted
-  out", "Not sent: today's limit reached", or "Unknown, don't send again".
+  out", "Not sent: today's limit reached", or "Unknown, don't send again", read
+  from Adminium's code for how the text ended.
 - **Replies.** A diner may answer the text; a manager reads and answers it
   on Adminium's Texts page.
 
