@@ -70,28 +70,30 @@ const PREFIX = "ordering_";
 /**
  * What this build adds to 0.3.0's tables, from the manifest: a diner's language and the newsletter's yes, the
  * tick an order was placed with (0.3.1); and what paying online needs (0.3.3) — the kitchen's two payment
- * settings, an order's online money, a payment's online reference and service, a refund's way and state — with the
+ * settings, an order's online money, a payment's online reference and service, a refund's way and state; and the
+ * ready text — a diner's mobile, an order's box for texts, the kitchen's switch and how each text ended — with the
  * values four lists gain. The update's plan must be exactly this.
  */
 const NEW_TABLES: string[] = [];
 const NEW_COLUMNS: Record<string, string[]> = {
-  customers: ["language", "opt_in"],
-  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "opt_in", "paid_as"],
-  settings: ["auto_refund", "pay_hold_minutes"],
+  customers: ["language", "opt_in", "phone"],
+  orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "opt_in", "paid_as", "texts_ok"],
+  settings: ["auto_refund", "pay_hold_minutes", "ready_text_on"],
+  messages: ["text_reason"],
   payments: ["method", "paid_at", "payment_ref", "provider", "refunded_elsewhere"],
   payment_refunds: ["automatic", "counted", "method", "provider_ref", "refund_state"],
 };
 const NEW_ENUM_VALUES: Record<string, Record<string, string[]>> = {
   orders: { status: ["paying"], paid_method: ["online"], cancel_code: ["unpaid"] },
-  messages: { kind: ["order-confirmation-paid", "order-ready-paid", "order-cancelled-paid", "order-cancelled-paid-by-you", "order-refunded"] },
+  messages: { kind: ["order-confirmation-paid", "order-ready-paid", "order-cancelled-paid", "order-cancelled-paid-by-you", "order-refunded", "order-ready-text"] },
 };
 /**
  * The new columns an update fills on the rows already there: a setting's literal default, a payment's and a
  * refund's way (a gift card's: every one before online payments was), and what Adminium works out over them.
- * The rest of the new columns hold nothing on a row that was there (`opt_in` a no).
+ * The rest of the new columns hold nothing on a row that was there (`opt_in` and `texts_ok` a no).
  */
 const FILLED: Record<string, string[]> = {
-  settings: ["auto_refund", "pay_hold_minutes"],
+  settings: ["auto_refund", "pay_hold_minutes", "ready_text_on"],
   orders: ["card_paid", "online_paid", "online_refunded", "online_taken", "online_used", "paid_as"],
   payments: ["method"],
   payment_refunds: ["automatic", "counted"],
@@ -387,7 +389,7 @@ describe.skipIf(why !== null)(`the update of a live ${FROM} kitchen to ${TO}${wh
             // A column the update adds holds, on a row that was there: no to the news (its default), and no language; nothing else.
             for (const column of added[name]!.filter((c) => !(FILLED[name.slice(PREFIX.length)] ?? []).includes(c))) {
               const values = [...new Set(now!.rows.map((found) => found[column] ?? null))];
-              if (column === "opt_in") expect([name, column, values.filter((v) => !NO.includes(String(v)))]).toEqual([name, column, []]);
+              if (column === "opt_in" || column === "texts_ok") expect([name, column, values.filter((v) => !NO.includes(String(v)))]).toEqual([name, column, []]);
               else expect([name, column, values]).toEqual([name, column, now!.rows.length === 0 ? [] : [null]]);
             }
           }
